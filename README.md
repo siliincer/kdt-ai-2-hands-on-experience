@@ -16,6 +16,7 @@ AI Financial Copilot Sandbox는 실제 금융 거래가 아닌 Fake Money 환경
 
 - 서비스 디렉터리 구조 정의
 - 환경변수 템플릿 정리
+- uv 기반 Python workspace 구성
 - Docker Compose 기반 실행 구조 준비
 - GitHub Issue/PR 템플릿 구성
 - DevSecOps 보안 규칙 문서화
@@ -36,6 +37,8 @@ AI Financial Copilot Sandbox는 실제 금융 거래가 아닌 Fake Money 환경
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
 │   └── workflows/
+├── pyproject.toml
+├── uv.lock
 ├── docker-compose.yml
 ├── docker-compose.override.yml
 ├── .env.example
@@ -70,6 +73,8 @@ DevSecOps는 팀 전체가 동일한 방식으로 개발, 실행, 검증할 수 
 - `docs/security-rules.md` 보안 규칙
 - `docs/local-development.md` 로컬 실행 명령 초안
 - `.dockerignore` Docker 빌드 제외 규칙
+- 루트 `uv` workspace 및 Python 서비스 의존성 관리 기준
+- Conda, uv, pre-commit 기반 개발환경 세팅
 - 서비스별 기본 디렉터리 README
 - GitHub Issue/PR 템플릿 구조
 - Docker Compose, CI, 보안 스캔, 모니터링 확장 기반 관리
@@ -89,6 +94,15 @@ cp .env.example .env
 ## 로컬 실행
 
 현재는 기본 구조 개발 단계이므로 전체 서비스 실행은 아직 준비 중입니다.
+
+Python 서비스 의존성은 `uv`로 관리합니다.
+
+```bash
+conda env create -f environment.yml
+conda activate kdt-ai-2-hands-on-experience
+uv sync
+uv run pre-commit install
+```
 
 Docker Compose 실행 명령 초안:
 

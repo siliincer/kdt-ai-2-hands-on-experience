@@ -1,0 +1,7 @@
+name: kdt-ai-2-hands-on-experience
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
