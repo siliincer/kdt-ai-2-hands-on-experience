@@ -2,7 +2,7 @@
 name = "kdt-ai-2-hands-on-experience"
 version = "0.1.0"
 description = "AI Financial Copilot Sandbox monorepo"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "agent",
     "backend",
@@ -32,7 +32,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

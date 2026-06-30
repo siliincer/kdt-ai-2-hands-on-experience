@@ -3,7 +3,7 @@ name = "agent"
 version = "0.1.0"
 description = "LangGraph Agent runtime for the financial copilot"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "fastapi[standard]>=0.115.0",
     "httpx>=0.28.0",
