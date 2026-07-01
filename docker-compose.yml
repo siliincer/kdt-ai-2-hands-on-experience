@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
@@ -21,7 +21,7 @@ services:
     image: redis:7-alpine
     container_name: kdt-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -37,6 +37,10 @@ services:
       - .env
     ports:
       - "8000:8000"
+    networks:
+      default:
+        aliases:
+          - backend-gateway
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,6 +56,10 @@ services:
       - .env
     ports:
       - "8001:8001"
+    networks:
+      default:
+        aliases:
+          - agent-service
     depends_on:
       backend:
         condition: service_started
