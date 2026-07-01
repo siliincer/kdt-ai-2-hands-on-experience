@@ -243,6 +243,17 @@ __marimo__/
 # claude code
 claude.local.md
 
+# secret
+*.pem
+*.key
+*.crt
+
+# db
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
 # Custom
 AI_CONTEXT/
 # AI_CONTEXT: 개인적으로 바이브 코딩 간 작업 상황 기록한 폴더임
