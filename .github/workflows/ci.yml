@@ -139,5 +139,5 @@ jobs:
           for dockerfile in ${dockerfiles}; do
             context=$(dirname "${dockerfile}")
             image_name=$(echo "${context}" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')
-            docker build -t "ci-${image_name}:latest" -f "${dockerfile}" "${context}"
+            docker build -t "ci-${image_name}:latest" -f "${dockerfile}" .
           done
