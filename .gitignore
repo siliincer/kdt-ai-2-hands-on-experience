@@ -219,6 +219,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# ios
+.DS_Store
+
 # claude code
 claude.local.md
 
