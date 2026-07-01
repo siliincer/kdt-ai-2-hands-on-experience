@@ -115,6 +115,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare Docker Compose env
+        run: cp .env.example .env
+
       - name: Docker Compose syntax check
         run: |
           if [ ! -s docker-compose.yml ]; then
