@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-quality:
+    name: Python quality checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync --frozen --python 3.11
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Backend tests or import check
+        run: |
+          if find backend -path "*/tests/test_*.py" -print -quit | grep -q .; then
+            uv run pytest backend
+          else
+            uv run python -c "import backend; print('backend import ok')"
+          fi
+
+      - name: Agent tests or import check
+        run: |
+          if find agent -path "*/tests/test_*.py" -print -quit | grep -q .; then
+            uv run pytest agent
+          else
+            uv run python -c "import agent; print('agent import ok')"
+          fi
+
+      - name: Validate env example
+        run: |
+          required_keys=(
+            APP_ENV
+            LOG_LEVEL
+            DATABASE_URL
+            REDIS_URL
+            JWT_SECRET_KEY
+            JWT_ALGORITHM
+            ACCESS_TOKEN_EXPIRE_MINUTES
+            LLM_PROVIDER
+            BACKEND_BASE_URL
+            AGENT_SERVICE_URL
+            MOCK_FINANCIAL_SERVICE_URL
+            VITE_API_BASE_URL
+          )
+
+          for key in "${required_keys[@]}"; do
+            if ! grep -q "^${key}=" .env.example; then
+              echo "Missing required key in .env.example: ${key}"
+              exit 1
+            fi
+          done
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        if: hashFiles('frontend/package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend or skip
+        run: |
+          if [ ! -f frontend/package.json ]; then
+            echo "frontend/package.json not found; skipping frontend build"
+            exit 0
+          fi
+
+          cd frontend
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+          npm run build
+
+  docker-check:
+    name: Docker checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker Compose syntax check
+        run: |
+          if [ ! -s docker-compose.yml ]; then
+            echo "docker-compose.yml is empty or missing; skipping compose syntax check"
+            exit 0
+          fi
+
+          docker compose -f docker-compose.yml config
+
+      - name: Docker image build or skip
+        run: |
+          dockerfiles=$(find . -path "*/Dockerfile" -type f)
+
+          if [ -z "${dockerfiles}" ]; then
+            echo "No Dockerfile found; skipping Docker image build"
+            exit 0
+          fi
+
+          for dockerfile in ${dockerfiles}; do
+            context=$(dirname "${dockerfile}")
+            image_name=$(echo "${context}" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')
+            docker build -t "ci-${image_name}:latest" -f "${dockerfile}" "${context}"
+          done
