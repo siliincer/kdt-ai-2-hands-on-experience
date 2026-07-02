@@ -1,3 +1,5 @@
+import { APIError } from '../error/APIError';
+
 /**
  * 백엔드 API 예외 응답 타입 정의
  */
@@ -54,7 +56,9 @@ export function failureResponse<T = unknown>(
 /**
  * 에러 응답이 백엔드 에러 형식인지 확인
  */
-function isBackendErrorResponse(error: unknown): error is BackendErrorResponse {
+export function isBackendErrorResponse(
+  error: unknown,
+): error is BackendErrorResponse {
   return (
     error !== null &&
     typeof error === 'object' &&
@@ -108,4 +112,25 @@ export function handleRequestError(error: unknown): CommonResponse {
   }
 
   return failureResponse('요청 처리 중 오류가 발생했습니다.');
+}
+
+/**
+ * API 요청 실패 시 tanstack query 연계 처리 (네트워크 에러, 타임아웃 등)
+ * APIError를 throw 한다.
+ * TanStack Query는 기본적으로 fetch나 axios가 에러를 throw(던지기) 해야 에러 상태(isError)로 인식합니다.
+ * 사용 예시: queryFn: () => customFetch<User>(`/api/users/${userId}`),
+ * @param error - 발생한 에러
+ */
+export function handleRequestErrorForTanstackQuery(
+  error: unknown,
+): CommonResponse {
+  if (error instanceof TypeError && error.message === 'Failed to fetch') {
+    throw new APIError('네트워크 연결을 확인해주세요.');
+  }
+
+  if (error instanceof Error) {
+    throw new APIError(error.message);
+  }
+
+  throw new APIError('요청 처리 중 오류가 발생했습니다.');
 }
