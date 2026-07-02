@@ -17,6 +17,7 @@ CORS_OPTIONS = {
         "https://smishing-detect-kdt2.cloud",
     ],
     "allow_credentials": True,
+    # 로그인 쿠키나 Authorization 헤더를 포함한 요청 허용
     "allow_methods": ["*"],
     "allow_headers": ["*"],
 }
@@ -38,6 +39,9 @@ CORS_OPTIONS = {
 #         _rate_limit_exceeded_handler,  # type: ignore
 #     )
 #     app.add_middleware(SlowAPIMiddleware)
+# 그 외, TrustedHostMiddleWare, GZipMiddleware, Custom Auth Middleware
+# (전역 유저 인증 관리) 등 필요한 미들웨어 추가하기
+# 로그인은 FastAPI의 Depends를 활용한 jwt + redis session 기반 인증하기
 
 #     # 라우터 일괄등록
 #     app.include_router(root.router)
