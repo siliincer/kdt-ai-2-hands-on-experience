@@ -5,6 +5,7 @@ description = "FastAPI Backend Gateway for the financial copilot"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "alembic>=1.18.5",
     "asyncpg>=0.30.0",
     "fastapi[standard]>=0.115.0",
     "httpx>=0.28.0",

@@ -23,12 +23,16 @@ backend = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "deptry>=0.25.1",
     "pre-commit>=4.0.0",
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
     "python-dotenv>=1.0.0",
     "ruff>=0.8.0",
 ]
+
+# deptry 관해선 아래 참조하세요. deptry . 명령어도 써보는 거 추천드립니다.
+# https://deptry.com/rules-violations/#standard-library-dependencies-dep005
 
 [tool.ruff]
 line-length = 88
