@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  Bot, Menu, Send, Mic, Edit2, Check, AlertTriangle, X, Bell,
+  Bot, Menu, Send, Mic, Edit2, Check, AlertTriangle, X, Bell, Trash2,
   Wallet, BarChart2, CreditCard, FileText, RotateCcw, Settings,
   Tag, ToggleLeft, ToggleRight, Clock, Banknote, Plus, ChevronDown, ChevronUp,
 } from "lucide-react";
@@ -96,6 +96,7 @@ type ChatMsg =
   | { id: number; from: "ai-greet" }
   | { id: number; from: "ai-text"; text: string; chips?: string[] }
   | { id: number; from: "ai-guardrail" }
+  | { id: number; from: "ai-error"; text: string }
   | { id: number; from: "ai-transfer"; prefill?: TransferPrefill }
   | { id: number; from: "ai-transfer-confirm"; recipient: string; bank: string; account: string; amount: number; scheduled?: string }
   | { id: number; from: "ai-feature-list"; topic: string; features: FeatureItem[] }
@@ -774,6 +775,16 @@ function GuardrailCard({ onAddMsg }: { onAddMsg: (m: ChatMsg) => void }) {
   );
 }
 
+// ── Error message (Section 9) ──────────────────────────────────────────────────
+function ErrorMessageCard({ text }: { text: string }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2"><X size={15} color="#FF4D4F" /><p className="text-sm font-semibold" style={{ color: "#FF4D4F", fontFamily: F }}>처리 실패</p></div>
+      <p className="text-xs leading-relaxed" style={{ color: "#7F1D1D", fontFamily: F }}>{text}</p>
+    </div>
+  );
+}
+
 // ── Auto transfer (Section 9) ─────────────────────────────────────────────────
 function AutoTransferCard({ onAddMsg }: { onAddMsg: (m: ChatMsg) => void }) {
   const [toggles, setToggles] = useState(autoTxItems.map(a => a.active));
@@ -1075,6 +1086,7 @@ function MsgRenderer({ msg, onAddMsg, onApproval, onConfirmSheet }: {
     </AIBubble>
   );
   if (msg.from === "ai-guardrail") return <AIBubble><GuardrailCard onAddMsg={onAddMsg} /></AIBubble>;
+  if (msg.from === "ai-error") return <AIBubble><ErrorMessageCard text={msg.text} /></AIBubble>;
   if (msg.from === "ai-transfer") return <AIBubble><TransferCard prefill={msg.prefill} onApproval={onApproval} /></AIBubble>;
   if (msg.from === "ai-balance") return <AIBubble><BalanceCard onAddMsg={onAddMsg} /></AIBubble>;
   if (msg.from === "ai-account-detail") return <AIBubble><AccountDetailCard accountId={msg.accountId} /></AIBubble>;
@@ -1120,7 +1132,13 @@ function MsgRenderer({ msg, onAddMsg, onApproval, onConfirmSheet }: {
 // ── App root ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => sessionStorage.getItem('rf_logged_in') === '1');
-  const [msgs, setMsgs] = useState<ChatMsg[]>([{ id: 0, from: "ai-greet" }]);
+  const [msgs, setMsgs] = useState<ChatMsg[]>(() => {
+    const saved = sessionStorage.getItem('rf_chat_msgs');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* fall through to default */ }
+    }
+    return [{ id: 0, from: "ai-greet" }];
+  });
   const [input, setInput] = useState("");
   const [approval, setApproval] = useState<ApprovalData | null>(null);
   const [confirmSheet, setConfirmSheet] = useState<ConfirmSheetData | null>(null);
@@ -1130,6 +1148,10 @@ export default function App() {
   // 미해결 인라인 송금 확인이 있으면 입력 비활성화
   const inputBlocked = msgs.some(m => m.from === "ai-transfer-confirm")
     && !msgs.some(m => m.from === "ai-text" && (m as any).text?.includes("완료"));
+
+  useEffect(() => {
+    sessionStorage.setItem('rf_chat_msgs', JSON.stringify(msgs));
+  }, [msgs]);
 
   const addMsg = (m: ChatMsg) => setMsgs(prev => [...prev, m]);
 
@@ -1159,6 +1181,17 @@ export default function App() {
       const discoveryKW = ["뭐 할 수 있", "어떤 기능", "할 수 있어", "뭐가 있", "관련해서"];
       const isDiscovery = discoveryKW.some(k => text.includes(k));
 
+      // 에러 메시지 UI 데모 호출 — 구체적인 실패 시나리오 키워드 매칭
+      const errorKW = ["에러", "오류", "실패", "안 돼", "안돼", "부족", "잘못", "틀", "한도", "네트워크", "연결"];
+      const isErrorDemo = errorKW.some(k => text.includes(k));
+      const resolveErrorText = (t: string): string => {
+        if (t.includes("잔액") && t.includes("부족")) return "잔액이 부족합니다.";
+        if (t.includes("계좌") && (t.includes("잘못") || t.includes("틀"))) return "잘못된 계좌번호입니다.";
+        if (t.includes("한도")) return "1회 송금 한도를 초과했습니다.";
+        if (t.includes("네트워크") || t.includes("연결")) return "네트워크 연결을 확인해주세요.";
+        return "요청을 처리하지 못했습니다. 다시 시도해주세요.";
+      };
+
       if (isDiscovery) {
         let topic = "금융 서비스";
         let features = CARD_FEATURES;
@@ -1166,6 +1199,8 @@ export default function App() {
         else if (text.includes("송금") || text.includes("이체")) { topic = "이체/송금"; features = TRANSFER_FEATURES; }
         else if (text.includes("계좌") || text.includes("잔액") || text.includes("조회")) { topic = "계좌"; features = ACCOUNT_FEATURES; }
         aiMsg = { id: aid, from: "ai-feature-list", topic, features };
+      } else if (isErrorDemo) {
+        aiMsg = { id: aid, from: "ai-error", text: resolveErrorText(text) };
       } else if (type === "ai-text") {
         aiMsg = { id: aid, from: "ai-text", text: "네, 무엇을 도와드릴까요? 아래에서 선택해주세요.", chips: ["잔액 확인", "소비 분석", "송금하기", "카드 청구서", "거래 내역"] };
       } else if (type === "ai-transfer") {
@@ -1215,9 +1250,21 @@ export default function App() {
             <span className="font-bold text-white text-lg" style={{ fontFamily: "'DM Sans',sans-serif" }}>RealFinance</span>
           </button>
           {/* 햄버거 — 모바일·PC 모두 표시 */}
-          <button onClick={() => setShowSidebar(true)} className="text-white/70 hover:text-white transition-colors" aria-label="메뉴 열기">
-            <Menu size={22} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('rf_chat_msgs');
+                setMsgs([{ id: mid(), from: "ai-greet" }]);
+              }}
+              className="text-white/70 hover:text-white transition-colors"
+              aria-label="채팅 로그 지우기"
+            >
+              <Trash2 size={20} />
+            </button>
+            <button onClick={() => setShowSidebar(true)} className="text-white/70 hover:text-white transition-colors" aria-label="메뉴 열기">
+              <Menu size={22} />
+            </button>
+          </div>
         </div>
 
         {/* Chat stream */}

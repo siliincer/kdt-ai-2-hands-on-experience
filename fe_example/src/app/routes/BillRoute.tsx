@@ -118,7 +118,7 @@ export default function BillRoute() {
             채팅으로 돌아가기
           </button>
           <button
-            onClick={() => { /* stub: 채팅 초기화 — no persistence wired */ }}
+            onClick={() => { sessionStorage.removeItem('rf_chat_msgs'); navigate("/"); }}
             className="flex-1 py-2 rounded-xl text-xs font-medium"
             style={{ background: "#F4F6FA", color: "#6B7A99", fontFamily: F }}
           >

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Fingerprint } from "lucide-react";
 import svgPaths from "../../imports/SideBar-1/svg-jp1mz49a91";
 
 const NAVY = "#0F1E3D";
@@ -28,6 +28,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const handleLogin = () => {
     if (!email || !password) return;
@@ -38,11 +39,36 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     }, 800);
   };
 
+  const handleBiometricLogin = () => {
+    setScanning(true);
+    setTimeout(() => {
+      setScanning(false);
+      onLogin();
+    }, 1200);
+  };
+
   return (
     <div
-      className="flex flex-col items-center justify-center h-full px-6"
+      className="relative flex flex-col items-center justify-center h-full px-6"
       style={{ background: NAVY, fontFamily: F }}
     >
+      {/* 생체 인증 모달 */}
+      {scanning && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4"
+          style={{ background: "rgba(15,30,61,0.92)" }}
+        >
+          <div
+            className="flex items-center justify-center rounded-full animate-pulse"
+            style={{ width: 88, height: 88, background: "rgba(45,212,191,0.15)", border: `2px solid ${MINT}` }}
+          >
+            <Fingerprint size={40} color={MINT} />
+          </div>
+          <p className="text-white text-base font-semibold" style={{ fontFamily: F }}>지문을 인식해주세요</p>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)", fontFamily: F }}>센서에 손가락을 올려주세요</p>
+        </div>
+      )}
+
       {/* Logo */}
       <div className="flex flex-col items-center mb-10">
         <div
@@ -141,6 +167,23 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           }}
         >
           {loading ? "로그인 중..." : "로그인"}
+        </button>
+
+        {/* Biometric login */}
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px" style={{ background: "rgba(15,30,61,0.1)" }} />
+          <span className="text-xs" style={{ color: "#6B7A99", fontFamily: F }}>또는</span>
+          <div className="flex-1 h-px" style={{ background: "rgba(15,30,61,0.1)" }} />
+        </div>
+        <button
+          type="button"
+          onClick={handleBiometricLogin}
+          disabled={scanning}
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-opacity"
+          style={{ background: "#F4F6FA", color: NAVY, fontFamily: F, opacity: scanning ? 0.7 : 1 }}
+        >
+          <Fingerprint size={18} color={NAVY} />
+          생체 인증으로 로그인
         </button>
 
         {/* Sign up link */}
