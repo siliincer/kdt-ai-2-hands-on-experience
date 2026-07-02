@@ -4,7 +4,6 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-# from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from backend.core.exceptions import exception_handlers
 
 
@@ -40,6 +39,7 @@ class TestValueErrorHandler:
 
         assert response.status_code == 400
         data = response.json()
+        assert data["success"] is False
         assert data["error"]["code"] == "BAD_REQUEST"
         assert "잘못된 입력값입니다" in data["error"]["message"]
         assert "Invalid input" in data["error"]["message"]
@@ -59,6 +59,7 @@ class TestRuntimeErrorHandler:
 
         assert response.status_code == 500
         data = response.json()
+        assert data["success"] is False
         assert data["error"]["code"] == "RUNTIME_ERROR"
         assert data["error"]["message"] == "서버 오류가 발생했습니다."
 
@@ -77,6 +78,7 @@ class TestHTTPExceptionHandler:
 
         assert response.status_code == 404
         data = response.json()
+        assert data["success"] is False
         assert data["error"]["code"] == "HTTP_ERROR"
         assert data["error"]["message"] == "Resource not found"
 
@@ -91,6 +93,7 @@ class TestHTTPExceptionHandler:
 
         assert response.status_code == 403
         data = response.json()
+        assert data["success"] is False
         assert data["error"]["code"] == "HTTP_ERROR"
         assert data["error"]["message"] == "Access denied"
 
@@ -105,6 +108,7 @@ class TestHTTPExceptionHandler:
 
         assert response.status_code == 500
         data = response.json()
+        assert data["success"] is False
         assert data["error"]["code"] == "HTTP_ERROR"
         assert data["error"]["message"] == "Internal server error"
 
@@ -131,6 +135,7 @@ class TestRequestValidationErrorHandler:
 
         assert response.status_code == 422
         data = response.json()
+        assert data["success"] is False
         assert data["error"]["code"] == "REQUEST_VALIDATION_ERROR"
         assert data["error"]["message"] == "요청 형식이 올바르지 않습니다."
         assert "details" in data["error"]
@@ -157,6 +162,7 @@ class TestResponseValidationErrorHandler:
 
         assert response.status_code == 500
         data = response.json()
+        assert data["success"] is False
         assert data["error"]["code"] == "RESPONSE_VALIDATION_ERROR"
         assert (
             data["error"]["message"]
@@ -178,6 +184,7 @@ class TestExceptionResponseStructure:
         response = client.get("/test-error")
         data = response.json()
 
+        assert "success" in data
         assert "error" in data
         assert "code" in data["error"]
         assert "message" in data["error"]

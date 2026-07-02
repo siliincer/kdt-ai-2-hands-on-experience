@@ -9,11 +9,12 @@ def error_response(status_code: int, code: str, message: str, **extra):
     return JSONResponse(
         status_code=status_code,
         content={
+            "success": False,
             "error": {
                 "code": code,
                 "message": message,
                 **extra,
-            }
+            },
         },
     )
 
