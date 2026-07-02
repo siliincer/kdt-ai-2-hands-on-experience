@@ -1,6 +1,7 @@
 #  테스트 전반에 공유되는 설정과 Fixture(준비물)를 넣는 곳
-import pytest
+
 from fastapi.testclient import TestClient
+import pytest
 
 from backend.main import app as fastapi_app  # 실제 FastAPI 인스턴스 위치
 

@@ -1,8 +1,8 @@
 """Test exception handlers to verify they return correct response format."""
 
-import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+import pytest
 
 from backend.core.exceptions import exception_handlers
 

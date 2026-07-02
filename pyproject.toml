@@ -41,6 +41,9 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

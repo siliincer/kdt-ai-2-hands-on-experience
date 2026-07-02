@@ -16,3 +16,7 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+
+# 간혹, 오류나면 캐시 초기화해보세요
+# pre-commit clean
+# pre-commit run --all-files
