@@ -11,6 +11,7 @@ user_router = APIRouter(prefix="/users", tags=["Users"])
 FAKE_USER_DB = {
     1: {"id": 1, "name": "김철수", "email": "chulsoo@example.com"},
     2: {"id": 2, "name": "이영희", "email": "younghee@example.com"},
+    3: {"id": 3, "name": "이영희", "email": "younghee@example.com"},
 }
 
 

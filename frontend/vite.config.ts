@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         // 프론트엔드에서 '/api'로 시작하는 요청을 감지하면 아래 설정을 적용합니다.
-        '/api': {
+        '/backendApi': {
           // 실제 백엔드 API 서버 주소 (본인의 백엔드 포트에 맞게 수정하세요)
           target: String(env.VITE_API_BASE_URL),
           // 만약 백엔드 주소가 로컬환경이 아닌 실제 배포된 서버 주소
@@ -30,9 +30,8 @@ export default defineConfig(({ mode }) => {
           // 대상 서버(target)의 호스트 헤더가 변경되도록 허용 (CORS 예방 필수 설정)
           changeOrigin: true,
 
-          // 필요 시 URL 주소 변환 (예: 프론트 /api/users -> 백엔드 /users로 /api를 제거하고 싶을 때 사용)
-          // 만약 백엔드 엔드포인트 자체에도 /api가 포함되어 있다면 아래 주석을 풀지 마세요.
-          // rewrite: (path) => path.replace(/^\/api/, ''),
+          // 필요 시 URL 주소 변환 (예: 프론트 /backendApi/users -> 백엔드 /users로 /api를 제거하고 싶을 때 사용)
+          rewrite: (path) => path.replace(/^\/backendApi/, ''),
 
           // 보안 연결(https) 검증 여부 (로컬 http 환경이므로 false)
           secure: isProd,
