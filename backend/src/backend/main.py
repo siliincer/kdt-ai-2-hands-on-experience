@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from .api.test_api import user_router
 from .core.exceptions import exception_handlers
 
 
@@ -19,8 +20,9 @@ app = FastAPI(
     version="0.1.0",
 )
 
+app.include_router(user_router, prefix="/api/v1")
+
 
 @app.get("/")
 def read_root():
-    raise RuntimeError("This is a test ValueError")  # 테스트용 ValueError 발생
     return {"message": "안녕하세요!"}
