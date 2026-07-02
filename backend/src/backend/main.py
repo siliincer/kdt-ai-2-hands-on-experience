@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from .core.exceptions import exception_handlers
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -10,4 +12,15 @@ async def lifespan(app: FastAPI):
     # Perform shutdown tasks here (e.g., close database connections, cleanup resources)
 
 
-app = FastAPI(lifespan=lifespan, title="RealFinancial Backend", version="0.1.0")
+app = FastAPI(
+    lifespan=lifespan,
+    exception_handlers=exception_handlers,
+    title="RealFinancial Backend",
+    version="0.1.0",
+)
+
+
+@app.get("/")
+def read_root():
+    raise RuntimeError("This is a test ValueError")  # 테스트용 ValueError 발생
+    return {"message": "안녕하세요!"}
