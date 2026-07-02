@@ -115,6 +115,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
+      - name: Prepare Docker Compose env
+        run: cp .env.example .env
+
       - name: Docker Compose syntax check
         run: |
           if [ ! -s docker-compose.yml ]; then
@@ -134,7 +137,6 @@ jobs:
           fi
 
           for dockerfile in ${dockerfiles}; do
-            context=$(dirname "${dockerfile}")
-            image_name=$(echo "${context}" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')
-            docker build -t "ci-${image_name}:latest" -f "${dockerfile}" "${context}"
+            image_name=$(dirname "${dockerfile}" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')
+            docker build -t "ci-${image_name}:latest" -f "${dockerfile}" .
           done
