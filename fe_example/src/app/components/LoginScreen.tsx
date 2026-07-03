@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Fingerprint } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import svgPaths from "../../imports/SideBar-1/svg-jp1mz49a91";
 
 const NAVY = "#0F1E3D";
@@ -8,13 +8,53 @@ const F = "'Noto Sans KR',sans-serif";
 
 function RobotIcon() {
   return (
-    <svg fill="none" viewBox="0 0 18 18" style={{ width: "100%", height: "100%" }}>
-      <path d="M9 6V3H6" stroke={NAVY} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-      <path d={svgPaths.p3e254b00} stroke={NAVY} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-      <path d="M1.5 10.5H3" stroke={NAVY} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-      <path d="M15 10.5H16.5" stroke={NAVY} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-      <path d="M11.25 9.75V11.25" stroke={NAVY} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-      <path d="M6.75 9.75V11.25" stroke={NAVY} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+    <svg
+      fill="none"
+      viewBox="0 0 18 18"
+      style={{ width: "100%", height: "100%" }}
+    >
+      <path
+        d="M9 6V3H6"
+        stroke={NAVY}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d={svgPaths.p3e254b00}
+        stroke={NAVY}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M1.5 10.5H3"
+        stroke={NAVY}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M15 10.5H16.5"
+        stroke={NAVY}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M11.25 9.75V11.25"
+        stroke={NAVY}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M6.75 9.75V11.25"
+        stroke={NAVY}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
@@ -28,7 +68,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [scanning, setScanning] = useState(false);
 
   const handleLogin = () => {
     if (!email || !password) return;
@@ -39,36 +78,11 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     }, 800);
   };
 
-  const handleBiometricLogin = () => {
-    setScanning(true);
-    setTimeout(() => {
-      setScanning(false);
-      onLogin();
-    }, 1200);
-  };
-
   return (
     <div
-      className="relative flex flex-col items-center justify-center h-full px-6"
+      className="flex flex-col items-center justify-center h-full px-6"
       style={{ background: NAVY, fontFamily: F }}
     >
-      {/* 생체 인증 모달 */}
-      {scanning && (
-        <div
-          className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4"
-          style={{ background: "rgba(15,30,61,0.92)" }}
-        >
-          <div
-            className="flex items-center justify-center rounded-full animate-pulse"
-            style={{ width: 88, height: 88, background: "rgba(45,212,191,0.15)", border: `2px solid ${MINT}` }}
-          >
-            <Fingerprint size={40} color={MINT} />
-          </div>
-          <p className="text-white text-base font-semibold" style={{ fontFamily: F }}>지문을 인식해주세요</p>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)", fontFamily: F }}>센서에 손가락을 올려주세요</p>
-        </div>
-      )}
-
       {/* Logo */}
       <div className="flex flex-col items-center mb-10">
         <div
@@ -91,14 +105,23 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       </div>
 
       {/* Card */}
-      <div className="w-full bg-white rounded-3xl px-6 py-8" style={{ boxShadow: "0 24px 60px rgba(0,0,0,0.3)" }}>
-        <h2 className="text-xl font-bold mb-6" style={{ color: NAVY, fontFamily: "'DM Sans',sans-serif" }}>
+      <div
+        className="w-full bg-white rounded-3xl px-6 py-8"
+        style={{ boxShadow: "0 24px 60px rgba(0,0,0,0.3)" }}
+      >
+        <h2
+          className="text-xl font-bold mb-6"
+          style={{ color: NAVY, fontFamily: "'DM Sans',sans-serif" }}
+        >
           로그인
         </h2>
 
         {/* Email */}
         <div className="mb-4">
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6B7A99", fontFamily: F }}>
+          <label
+            className="block text-xs font-semibold mb-1.5"
+            style={{ color: "#6B7A99", fontFamily: F }}
+          >
             이메일
           </label>
           <input
@@ -112,16 +135,19 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             }}
             placeholder="example@email.com"
             value={email}
-            onChange={e => setEmail(e.target.value)}
-            onFocus={e => (e.target.style.borderColor = MINT)}
-            onBlur={e => (e.target.style.borderColor = "transparent")}
-            onKeyDown={e => e.key === "Enter" && handleLogin()}
+            onChange={(e) => setEmail(e.target.value)}
+            onFocus={(e) => (e.target.style.borderColor = MINT)}
+            onBlur={(e) => (e.target.style.borderColor = "transparent")}
+            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
           />
         </div>
 
         {/* Password */}
         <div className="mb-6">
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6B7A99", fontFamily: F }}>
+          <label
+            className="block text-xs font-semibold mb-1.5"
+            style={{ color: "#6B7A99", fontFamily: F }}
+          >
             비밀번호
           </label>
           <div className="relative">
@@ -136,20 +162,21 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               }}
               placeholder="비밀번호를 입력하세요"
               value={password}
-              onChange={e => setPassword(e.target.value)}
-              onFocus={e => (e.target.style.borderColor = MINT)}
-              onBlur={e => (e.target.style.borderColor = "transparent")}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
+              onChange={(e) => setPassword(e.target.value)}
+              onFocus={(e) => (e.target.style.borderColor = MINT)}
+              onBlur={(e) => (e.target.style.borderColor = "transparent")}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             />
             <button
               type="button"
-              onClick={() => setShowPw(v => !v)}
+              onClick={() => setShowPw((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
             >
-              {showPw
-                ? <EyeOff size={18} color="#6B7A99" />
-                : <Eye size={18} color="#6B7A99" />
-              }
+              {showPw ? (
+                <EyeOff size={18} color="#6B7A99" />
+              ) : (
+                <Eye size={18} color="#6B7A99" />
+              )}
             </button>
           </div>
         </div>
@@ -169,27 +196,16 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           {loading ? "로그인 중..." : "로그인"}
         </button>
 
-        {/* Biometric login */}
-        <div className="flex items-center gap-3 my-5">
-          <div className="flex-1 h-px" style={{ background: "rgba(15,30,61,0.1)" }} />
-          <span className="text-xs" style={{ color: "#6B7A99", fontFamily: F }}>또는</span>
-          <div className="flex-1 h-px" style={{ background: "rgba(15,30,61,0.1)" }} />
-        </div>
-        <button
-          type="button"
-          onClick={handleBiometricLogin}
-          disabled={scanning}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-opacity"
-          style={{ background: "#F4F6FA", color: NAVY, fontFamily: F, opacity: scanning ? 0.7 : 1 }}
-        >
-          <Fingerprint size={18} color={NAVY} />
-          생체 인증으로 로그인
-        </button>
-
         {/* Sign up link */}
-        <p className="text-center text-sm mt-4" style={{ color: "#6B7A99", fontFamily: F }}>
+        <p
+          className="text-center text-sm mt-4"
+          style={{ color: "#6B7A99", fontFamily: F }}
+        >
           계정이 없으신가요?{" "}
-          <button className="font-semibold hover:opacity-70 transition-opacity" style={{ color: MINT }}>
+          <button
+            className="font-semibold hover:opacity-70 transition-opacity"
+            style={{ color: MINT }}
+          >
             회원가입
           </button>
         </p>
