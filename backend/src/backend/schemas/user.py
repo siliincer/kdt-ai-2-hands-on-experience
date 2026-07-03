@@ -1,8 +1,10 @@
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserReadSchema(BaseModel):
-    id: str
+    id: UUID
     email: EmailStr
     name: str | None = None
 
