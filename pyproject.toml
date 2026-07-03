@@ -43,7 +43,7 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend"]
+known-first-party = ["backend", "agent"]
 
 [tool.ruff.format]
 quote-style = "double"
