@@ -5,8 +5,8 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import ENUM, UUID
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..db.postgres import Base
@@ -45,12 +45,12 @@ class Transaction(Base):
     )
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     status: Mapped[TransactionStatus] = mapped_column(
-        ENUM(TransactionStatus, name="transaction_status", native_enum=False),
+        Enum(TransactionStatus, name="transaction_status"),
         nullable=False,
         default=TransactionStatus.PENDING,
     )
     tx_type: Mapped[TransactionType] = mapped_column(
-        ENUM(TransactionType, name="transaction_type", native_enum=False),
+        Enum(TransactionType, name="transaction_type"),
         nullable=False,
         default=TransactionType.INQUIRY,
     )

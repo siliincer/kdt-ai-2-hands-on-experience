@@ -5,8 +5,8 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, String, func
-from sqlalchemy.dialects.postgresql import ENUM, UUID
+from sqlalchemy import DateTime, Enum, String, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..db.postgres import Base
@@ -32,7 +32,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     role: Mapped[UserRole] = mapped_column(
-        ENUM(UserRole, name="user_role", native_enum=False),
+        Enum(UserRole, name="user_role"),
         nullable=False,
         default=UserRole.USER,
     )

@@ -5,8 +5,8 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import ENUM, UUID
+from sqlalchemy import DateTime, Enum, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..db.postgres import Base
@@ -36,7 +36,7 @@ class Approval(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     status: Mapped[ApprovalStatus] = mapped_column(
-        ENUM(ApprovalStatus, name="approval_status", native_enum=False),
+        Enum(ApprovalStatus, name="approval_status"),
         nullable=False,
         default=ApprovalStatus.PENDING,
     )

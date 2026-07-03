@@ -5,8 +5,8 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
+from sqlalchemy import DateTime, Enum, ForeignKey, String, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..db.postgres import Base
@@ -38,7 +38,7 @@ class AgentExecution(Base):
     risk_score: Mapped[int | None] = mapped_column(nullable=True)
     state: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[AgentExecutionStatus] = mapped_column(
-        ENUM(AgentExecutionStatus, name="agent_execution_status", native_enum=False),
+        Enum(AgentExecutionStatus, name="agent_execution_status"),
         nullable=False,
         default=AgentExecutionStatus.CREATED,
     )

@@ -31,7 +31,7 @@ class Account(Base):
 
     user: Mapped["User"] = relationship(
         back_populates="accounts",
-        lazy="selectin",
+        lazy="selectin",  # eager loading
     )
     sent_transactions: Mapped[list["Transaction"]] = relationship(
         back_populates="sender_account",

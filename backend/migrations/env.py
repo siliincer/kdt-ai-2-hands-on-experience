@@ -14,7 +14,7 @@ from backend.db.postgres import Base
 # access to the values within the .ini file in use.
 config = context.config
 
-# # 🌟 pydantic-settings에서 읽어온 실제 DB URL을 Alembic 설정에 강제로 주입합니다.
+# 🌟 pydantic-settings에서 읽어온 실제 DB URL을 Alembic 설정에 강제로 주입합니다.
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.

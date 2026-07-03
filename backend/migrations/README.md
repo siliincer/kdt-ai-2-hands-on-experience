@@ -1,5 +1,13 @@
 # Alembic 초기화 및 SQL 파일 위치 지정, 마이그레이션 실행 자동화
 
+한 줄 요약)
+
+적용하려면 alembic upgrade head
+
+롤백하려면 alembic downgrade -1
+
+자세한 건 https://github.com/siliincer/kdt-ai-2-hands-on-experience/wiki/Wiki_BE_Alembic 참조
+
 1. Alembic 초기화 (완료)
 
 $ cd backend

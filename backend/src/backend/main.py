@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.healthcheck import health_router
-from .api.test_api import user_router
+from .api.user_api import user_router
 from .core.config import CORS_OPTIONS
 from .core.exceptions import exception_handlers
 

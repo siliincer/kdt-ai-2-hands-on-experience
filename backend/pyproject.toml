@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.30.0", # pg 비동기식 드라이버
     "fastapi[standard]>=0.115.0",
     "httpx>=0.28.0",
+    "passlib[argon2]>=1.7.4",
     "psycopg2-binary>=2.9.12", # pg 동기식 드라이버
     "pydantic>=2.7.0",
     "pydantic-settings>=2.7.0",

@@ -1,8 +1,8 @@
 """create first table
 
-Revision ID: 21c9fb07e81e
+Revision ID: edf3288029e1
 Revises:
-Create Date: 2026-07-03 11:50:14.526118
+Create Date: 2026-07-03 13:21:13.469300
 
 """
 
@@ -13,7 +13,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "21c9fb07e81e"
+revision: str = "edf3288029e1"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -28,9 +28,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("password_hash", sa.String(), nullable=False),
         sa.Column("name", sa.String(length=100), nullable=True),
-        sa.Column(
-            "role", postgresql.ENUM("USER", "ADMIN", name="user_role"), nullable=False
-        ),
+        sa.Column("role", sa.Enum("USER", "ADMIN", name="user_role"), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -81,7 +79,7 @@ def upgrade() -> None:
         sa.Column("state", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "status",
-            postgresql.ENUM(
+            sa.Enum(
                 "CREATED",
                 "RUNNING",
                 "SUCCESS",
@@ -129,7 +127,7 @@ def upgrade() -> None:
         sa.Column("amount", sa.BigInteger(), nullable=False),
         sa.Column(
             "status",
-            postgresql.ENUM(
+            sa.Enum(
                 "PENDING",
                 "APPROVED",
                 "COMPLETED",
@@ -141,7 +139,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "tx_type",
-            postgresql.ENUM(
+            sa.Enum(
                 "DEPOSIT", "WITHDRAWAL", "TRANSFER", "INQUIRY", name="transaction_type"
             ),
             nullable=False,
@@ -169,7 +167,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column(
             "status",
-            postgresql.ENUM(
+            sa.Enum(
                 "PENDING", "APPROVED", "REJECTED", "TIMEOUT", name="approval_status"
             ),
             nullable=False,
@@ -217,4 +215,12 @@ def downgrade() -> None:
     op.drop_table("chat_sessions")
     op.drop_table("accounts")
     op.drop_table("users")
-    # ### end Alembic commands ###
+
+    # [추가] 롤백(downgrade) 시 커스텀 ENUM 타입들도 순서대로 안전하게 삭제합니다.
+    bind = op.get_bind()
+    bind.execute(sa.text("DROP TYPE IF EXISTS approval_status CASCADE;"))
+    bind.execute(sa.text("DROP TYPE IF EXISTS transaction_type CASCADE;"))
+    bind.execute(sa.text("DROP TYPE IF EXISTS transaction_status CASCADE;"))
+    bind.execute(sa.text("DROP TYPE IF EXISTS agent_execution_status CASCADE;"))
+    bind.execute(sa.text("DROP TYPE IF EXISTS user_role CASCADE;"))
+    ### end Alembic commands ###
