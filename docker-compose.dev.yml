@@ -1,5 +1,43 @@
 services:
-  backend:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kdt-dev-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-financial_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local}
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
-      - ./backend:/app/backend
-    command: uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+      - dev-postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-app} -d $${POSTGRES_DB:-financial_agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis_cache:
+    image: redis:7-alpine
+    container_name: kdt-dev-redis-cache
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis_stream:
+    image: redis:7-alpine
+    container_name: kdt-dev-redis-stream
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  dev-postgres-data:
