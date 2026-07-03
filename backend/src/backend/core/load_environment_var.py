@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = Field(default="myuser")
     POSTGRES_PASSWORD: SecretStr = SecretStr("mypassword")
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://myuser:mypassword@postgres:5432/financial_agent",
+        default="postgresql://myuser:mypassword@postgres:5432/financial_agent",
         description="SQLAlchemy 비동기 연결 URL",
     )
 
