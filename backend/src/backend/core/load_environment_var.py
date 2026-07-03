@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     )
 
     # Cache Configuration
-    REDIS_URL: AnyUrl = AnyUrl("redis://redis:6379/0")
+    REDIS_CACHE_URL: AnyUrl = AnyUrl("redis://redis:6379/0")
+    REDIS_STREAM_URL: AnyUrl = AnyUrl("redis://redis:6380/0")
     # redis://[호스트이름]:[포트번호]/[데이터베이스_번호]
 
     # Auth Configuration

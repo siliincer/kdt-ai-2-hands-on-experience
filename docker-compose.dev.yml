@@ -1,0 +1,51 @@
+#  개발 환경에서 필요한 db를 띄우는 역할
+# 실행 방법: docker compose -f docker-compose.dev.yml up --build -d
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kdt-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-financial_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-myuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mypassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-myuser} -d $${POSTGRES_DB:-financial_agent}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis_cache:
+    image: redis:7-alpine
+    container_name: kdt-redis-cache
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis_stream:
+    image: redis:7-alpine
+    container_name: kdt-redis-stream
+    ports:
+      - "6380:6379" # 호스트의 6380 포트 매핑
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
