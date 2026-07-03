@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.7.0",
     "python-dotenv>=1.0.0",
+    "python-jose>=3.5.0",
     "redis>=5.2.0", # redis 연결 드라이버
     "sqlalchemy>=2.0.0",
     "uvicorn>=0.34.0",
