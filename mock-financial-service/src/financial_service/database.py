@@ -1,5 +1,6 @@
 """Database engine and session configuration."""
-from sqlalchemy import create_engine, event, text
+
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL = "sqlite:///./financial.db"

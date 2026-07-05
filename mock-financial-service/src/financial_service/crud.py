@@ -1,16 +1,16 @@
 """CRUD operations via SQLAlchemy ORM only — no raw SQL."""
+
 import hashlib
 import json
-from datetime import timezone
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .models import Account, AuditLog, LedgerEntry, Transaction
 from .schemas import AccountCreate, TransferRequest
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _payload_hash(data: dict) -> str:
     canonical = json.dumps(data, sort_keys=True, ensure_ascii=False)
@@ -62,6 +62,7 @@ def _append_audit(
 
 # ── Account ───────────────────────────────────────────────────────────────────
 
+
 def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
     acct = Account(owner=payload.owner)
     db.add(acct)
@@ -71,7 +72,9 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
     if payload.initial_balance > 0:
         # Seed credit (initial deposit has no counterpart — system account)
         entry = LedgerEntry(
-            transaction_id=_create_seed_transaction(db, acct.account_id, payload.initial_balance),
+            transaction_id=_create_seed_transaction(
+                db, acct.account_id, payload.initial_balance
+            ),
             account_id=acct.account_id,
             entry_type="CREDIT",
             amount=payload.initial_balance,
@@ -86,7 +89,9 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
         action="ACCOUNT_CREATE",
         reason=f"New account created for {payload.owner}",
         status="success",
-        payload_snapshot=json.dumps({"owner": payload.owner, "initial_balance": payload.initial_balance}),
+        payload_snapshot=json.dumps(
+            {"owner": payload.owner, "initial_balance": payload.initial_balance}
+        ),
     )
     db.commit()
     db.refresh(acct)
@@ -95,7 +100,7 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
 
 def _create_seed_transaction(db: Session, account_id: str, amount: int) -> str:
     """Synthetic transaction for initial deposit (system→account)."""
-    import uuid
+
     txn = Transaction(
         idempotency_key=f"__seed__{account_id}",
         payload_hash=_payload_hash({"seed": account_id, "amount": amount}),
@@ -122,17 +127,22 @@ def get_balance(db: Session, account_id: str) -> int:
 def get_ledger_entries(
     db: Session, account_id: str, limit: int = 50, offset: int = 0
 ) -> list[LedgerEntry]:
-    result = db.execute(
-        select(LedgerEntry)
-        .where(LedgerEntry.account_id == account_id)
-        .order_by(LedgerEntry.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    ).scalars().all()
+    result = (
+        db.execute(
+            select(LedgerEntry)
+            .where(LedgerEntry.account_id == account_id)
+            .order_by(LedgerEntry.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        .scalars()
+        .all()
+    )
     return list(result)
 
 
 # ── Transfer ──────────────────────────────────────────────────────────────────
+
 
 def _write_failure_audit(
     db: Session,
@@ -192,7 +202,9 @@ def transfer(
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
-            raise ConflictError("IDEMPOTENCY_CONFLICT", "Idempotency key reused with different payload")
+            raise ConflictError(
+                "IDEMPOTENCY_CONFLICT", "Idempotency key reused with different payload"
+            )
         return existing  # safe replay
 
     try:
@@ -202,18 +214,24 @@ def transfer(
 
         sender = get_account(db, payload.sender_account_id)
         if sender is None:
-            raise NotFoundError("ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_id} not found")
+            raise NotFoundError(
+                "ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_id} not found"
+            )
 
         receiver = get_account(db, payload.receiver_account_id)
         if receiver is None:
-            raise NotFoundError("ACCOUNT_NOT_FOUND", f"Receiver {payload.receiver_account_id} not found")
+            raise NotFoundError(
+                "ACCOUNT_NOT_FOUND", f"Receiver {payload.receiver_account_id} not found"
+            )
 
         if payload.amount <= 0:
             raise ValidationError("INVALID_AMOUNT", "Amount must be positive integer")
 
         sender_balance = _get_balance(db, payload.sender_account_id)
         if sender_balance < payload.amount:
-            raise ValidationError("INSUFFICIENT_BALANCE", f"Balance {sender_balance} < {payload.amount}")
+            raise ValidationError(
+                "INSUFFICIENT_BALANCE", f"Balance {sender_balance} < {payload.amount}"
+            )
 
         receiver_balance = _get_balance(db, payload.receiver_account_id)
 
@@ -295,6 +313,7 @@ def transfer(
 
 
 # ── Custom exceptions ─────────────────────────────────────────────────────────
+
 
 class ServiceError(Exception):
     def __init__(self, error_code: str, message: str):

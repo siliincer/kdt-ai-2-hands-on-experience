@@ -1,4 +1,5 @@
 """FastAPI routers — 5 endpoints."""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -36,6 +37,7 @@ def _err(status: int, code: str, msg: str):
 
 # ── 1. POST /accounts — create account ───────────────────────────────────────
 
+
 @router.post(
     "/accounts",
     response_model=AccountResponse,
@@ -54,6 +56,7 @@ def create_account_endpoint(payload: AccountCreate, db: DbDep):
 
 
 # ── 2. GET /accounts/{account_id} — get account ──────────────────────────────
+
 
 @router.get(
     "/accounts/{account_id}",
@@ -76,6 +79,7 @@ def get_account_endpoint(account_id: str, db: DbDep):
 
 # ── 3. GET /accounts/{account_id}/balance — balance ──────────────────────────
 
+
 @router.get(
     "/accounts/{account_id}/balance",
     response_model=BalanceResponse,
@@ -86,10 +90,13 @@ def get_balance_endpoint(account_id: str, db: DbDep):
     if acct is None:
         _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
-    return BalanceResponse(account_id=account_id, balance=balance, currency=acct.currency)
+    return BalanceResponse(
+        account_id=account_id, balance=balance, currency=acct.currency
+    )
 
 
 # ── 4. GET /accounts/{account_id}/transactions — ledger history ───────────────
+
 
 @router.get(
     "/accounts/{account_id}/transactions",
@@ -120,6 +127,7 @@ def get_transactions_endpoint(
 
 
 # ── 5. POST /transfers — transfer ────────────────────────────────────────────
+
 
 @router.post(
     "/transfers",

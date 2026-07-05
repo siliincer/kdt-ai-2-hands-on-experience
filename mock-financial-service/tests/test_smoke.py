@@ -5,14 +5,17 @@ Smoke tests — 9 cases:
   + Idempotency key conflict (409)
   + Audit log immutability (DB trigger)
 """
+
 import pytest
 from sqlalchemy import text
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def make_account(client, owner="Alice", initial_balance=100_000):
-    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
+    r = client.post(
+        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
+    )
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -21,9 +24,12 @@ def make_account(client, owner="Alice", initial_balance=100_000):
 # Happy-path tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def test_create_account(client):
     """AC Sub-1: POST /accounts → 201, schema fields present."""
-    r = client.post("/api/v1/accounts", json={"owner": "Alice", "initial_balance": 50_000})
+    r = client.post(
+        "/api/v1/accounts", json={"owner": "Alice", "initial_balance": 50_000}
+    )
     assert r.status_code == 201
     body = r.json()
     assert "account_id" in body
@@ -98,8 +104,12 @@ def test_transfer_happy(client):
     assert body["amount"] == 100_000
 
     # Verify balance preservation
-    s_bal = client.get(f"/api/v1/accounts/{sender['account_id']}/balance").json()["balance"]
-    r_bal = client.get(f"/api/v1/accounts/{receiver['account_id']}/balance").json()["balance"]
+    s_bal = client.get(f"/api/v1/accounts/{sender['account_id']}/balance").json()[
+        "balance"
+    ]
+    r_bal = client.get(f"/api/v1/accounts/{receiver['account_id']}/balance").json()[
+        "balance"
+    ]
     assert s_bal == 400_000
     assert r_bal == 100_000
     # Total preserved
@@ -109,6 +119,7 @@ def test_transfer_happy(client):
 # ═══════════════════════════════════════════════════════════════════════════════
 # Edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def test_transfer_insufficient_balance(client):
     """422 + INSUFFICIENT_BALANCE when sender has less than amount."""
@@ -185,6 +196,7 @@ def test_transfer_self_transfer(client):
 # Idempotency
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def test_idempotency_key_conflict(client):
     """409 when same Idempotency-Key reused with different payload."""
     sender = make_account(client, "IdemSender", 500_000)
@@ -238,13 +250,16 @@ def test_idempotency_safe_replay(client):
     assert r1.json()["transfer_id"] == r2.json()["transfer_id"]
 
     # Balance unchanged after replay
-    s_bal = client.get(f"/api/v1/accounts/{sender['account_id']}/balance").json()["balance"]
+    s_bal = client.get(f"/api/v1/accounts/{sender['account_id']}/balance").json()[
+        "balance"
+    ]
     assert s_bal == 450_000  # only deducted once
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Audit log immutability
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def test_audit_log_immutable(client, db_engine):
     """DB trigger rejects UPDATE/DELETE on audit_logs."""
@@ -260,6 +275,7 @@ def test_audit_log_immutable(client, db_engine):
 
         # UPDATE must fail (SQLite RAISE(ABORT) → IntegrityError or OperationalError)
         from sqlalchemy.exc import DBAPIError
+
         with pytest.raises(DBAPIError):
             conn.execute(
                 text("UPDATE audit_logs SET actor = 'hacker' WHERE audit_log_id = :id"),

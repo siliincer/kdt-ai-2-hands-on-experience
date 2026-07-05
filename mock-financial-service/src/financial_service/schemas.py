@@ -1,10 +1,11 @@
 """Pydantic schemas for request/response."""
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ── Error schema (fixed contract) ────────────────────────────────────────────
+
 
 class ErrorResponse(BaseModel):
     error_code: str
@@ -12,6 +13,7 @@ class ErrorResponse(BaseModel):
 
 
 # ── Account ───────────────────────────────────────────────────────────────────
+
 
 class AccountCreate(BaseModel):
     owner: str = Field(..., min_length=1, max_length=255)
@@ -30,6 +32,7 @@ class AccountResponse(BaseModel):
 
 # ── Balance ───────────────────────────────────────────────────────────────────
 
+
 class BalanceResponse(BaseModel):
     account_id: str
     balance: int
@@ -38,10 +41,11 @@ class BalanceResponse(BaseModel):
 
 # ── Ledger / Transaction history ──────────────────────────────────────────────
 
+
 class LedgerEntryResponse(BaseModel):
     entry_id: str
     transaction_id: str
-    entry_type: str   # DEBIT / CREDIT
+    entry_type: str  # DEBIT / CREDIT
     amount: int
     running_balance: int
     created_at: datetime
@@ -50,6 +54,7 @@ class LedgerEntryResponse(BaseModel):
 
 
 # ── Transfer ──────────────────────────────────────────────────────────────────
+
 
 class TransferRequest(BaseModel):
     sender_account_id: str

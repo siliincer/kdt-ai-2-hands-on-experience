@@ -5,15 +5,16 @@ AC: 이중기입 원장 원자성 + 잔액보존 검증
 - Failure → full rollback (no partial ledger entries)
 - Post-commit: sender.balance + receiver.balance == pre-transfer total
 """
-import pytest
-from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 
+from sqlalchemy import text
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
-    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
+    r = client.post(
+        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
+    )
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -52,6 +53,7 @@ def _ledger_entries(db_engine, account_id: str) -> list:
 # Balance preservation (runtime assert path)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestBalancePreservation:
     """Post-commit: sender.balance + receiver.balance == pre-transfer total."""
 
@@ -61,11 +63,17 @@ class TestBalancePreservation:
 
         pre_total = 300_000 + 50_000
 
-        r = _transfer(client, sender["account_id"], receiver["account_id"], 100_000, "bp-001")
+        r = _transfer(
+            client, sender["account_id"], receiver["account_id"], 100_000, "bp-001"
+        )
         assert r.status_code == 200
 
-        post_total = _balance(client, sender["account_id"]) + _balance(client, receiver["account_id"])
-        assert post_total == pre_total, f"Balance leaked: pre={pre_total}, post={post_total}"
+        post_total = _balance(client, sender["account_id"]) + _balance(
+            client, receiver["account_id"]
+        )
+        assert post_total == pre_total, (
+            f"Balance leaked: pre={pre_total}, post={post_total}"
+        )
 
     def test_total_preserved_multiple_transfers(self, client):
         """Multiple sequential transfers: sum invariant holds after each."""
@@ -91,7 +99,9 @@ class TestBalancePreservation:
         receiver = _make_account(client, "Exact_R", 0)
         amount = 123_456
 
-        _transfer(client, sender["account_id"], receiver["account_id"], amount, "exact-001")
+        _transfer(
+            client, sender["account_id"], receiver["account_id"], amount, "exact-001"
+        )
 
         assert _balance(client, sender["account_id"]) == 400_000 - amount
         assert _balance(client, receiver["account_id"]) == amount
@@ -101,7 +111,9 @@ class TestBalancePreservation:
         sender = _make_account(client, "Fail_S", 1_000)
         receiver = _make_account(client, "Fail_R", 0)
 
-        r = _transfer(client, sender["account_id"], receiver["account_id"], 999_999, "fail-001")
+        r = _transfer(
+            client, sender["account_id"], receiver["account_id"], 999_999, "fail-001"
+        )
         assert r.status_code == 422
 
         assert _balance(client, sender["account_id"]) == 1_000
@@ -112,6 +124,7 @@ class TestBalancePreservation:
 # Double-entry ledger pair atomicity
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestDoubleEntryAtomicity:
     """DEBIT and CREDIT entries must be written together or not at all."""
 
@@ -120,7 +133,9 @@ class TestDoubleEntryAtomicity:
         receiver = _make_account(client, "DE_R1", 0)
         amount = 75_000
 
-        r = _transfer(client, sender["account_id"], receiver["account_id"], amount, "de-pair-001")
+        r = _transfer(
+            client, sender["account_id"], receiver["account_id"], amount, "de-pair-001"
+        )
         assert r.status_code == 200
         txn_id = r.json()["transfer_id"]
 
@@ -142,7 +157,9 @@ class TestDoubleEntryAtomicity:
         sender = _make_account(client, "DE_S2", 100_000)
         receiver = _make_account(client, "DE_R2", 0)
 
-        r = _transfer(client, sender["account_id"], receiver["account_id"], 10_000, "de-debit-001")
+        r = _transfer(
+            client, sender["account_id"], receiver["account_id"], 10_000, "de-debit-001"
+        )
         txn_id = r.json()["transfer_id"]
 
         with db_engine.connect() as conn:
@@ -161,7 +178,13 @@ class TestDoubleEntryAtomicity:
         sender = _make_account(client, "DE_S3", 100_000)
         receiver = _make_account(client, "DE_R3", 0)
 
-        r = _transfer(client, sender["account_id"], receiver["account_id"], 10_000, "de-credit-001")
+        r = _transfer(
+            client,
+            sender["account_id"],
+            receiver["account_id"],
+            10_000,
+            "de-credit-001",
+        )
         txn_id = r.json()["transfer_id"]
 
         with db_engine.connect() as conn:
@@ -182,7 +205,9 @@ class TestDoubleEntryAtomicity:
         receiver = _make_account(client, "DE_R4", 0)
         amount = 88_888
 
-        r = _transfer(client, sender["account_id"], receiver["account_id"], amount, "de-eq-001")
+        r = _transfer(
+            client, sender["account_id"], receiver["account_id"], amount, "de-eq-001"
+        )
         txn_id = r.json()["transfer_id"]
 
         with db_engine.connect() as conn:
@@ -203,7 +228,9 @@ class TestDoubleEntryAtomicity:
         sender = _make_account(client, "DE_Fail", 500)
         receiver = _make_account(client, "DE_FailR", 0)
 
-        r = _transfer(client, sender["account_id"], receiver["account_id"], 999_999, "de-fail-001")
+        r = _transfer(
+            client, sender["account_id"], receiver["account_id"], 999_999, "de-fail-001"
+        )
         assert r.status_code == 422
 
         with db_engine.connect() as conn:
@@ -216,4 +243,6 @@ class TestDoubleEntryAtomicity:
                 {"aid": sender["account_id"]},
             ).scalar()
 
-        assert count == 0, f"No DEBIT entries expected after failed transfer, got {count}"
+        assert count == 0, (
+            f"No DEBIT entries expected after failed transfer, got {count}"
+        )

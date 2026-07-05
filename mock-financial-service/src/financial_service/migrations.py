@@ -2,10 +2,12 @@
 DB-level audit log immutability triggers.
 
 SQLite:  CREATE TRIGGER ... RAISE(ABORT, ...)
-Postgres: BEFORE UPDATE/DELETE trigger function (DDL executed when dialect is postgresql)
+Postgres: BEFORE UPDATE/DELETE trigger function
+(DDL executed when dialect is postgresql)
 
 Called once at startup after Base.metadata.create_all().
 """
+
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 

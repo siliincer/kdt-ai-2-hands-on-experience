@@ -1,8 +1,9 @@
 """SQLAlchemy ORM models for double-entry ledger."""
+
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -33,10 +34,15 @@ class Account(Base):
 
 class Transaction(Base):
     """송금 거래 헤더 — 멱등성 키 추적."""
+
     __tablename__ = "transactions"
 
-    transaction_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    transaction_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=_uuid
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, index=True
+    )
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     sender_account_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("accounts.account_id"), nullable=False
@@ -59,6 +65,7 @@ class Transaction(Base):
 
 class LedgerEntry(Base):
     """이중기입 원장 항목 — 차변/대변 쌍."""
+
     __tablename__ = "ledger_entries"
 
     entry_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -78,15 +85,22 @@ class LedgerEntry(Base):
         DateTime(timezone=True), nullable=False, default=_now
     )
 
-    account: Mapped["Account"] = relationship("Account", back_populates="ledger_entries")
-    transaction: Mapped["Transaction"] = relationship("Transaction", back_populates="ledger_entries")
+    account: Mapped["Account"] = relationship(
+        "Account", back_populates="ledger_entries"
+    )
+    transaction: Mapped["Transaction"] = relationship(
+        "Transaction", back_populates="ledger_entries"
+    )
 
 
 class AuditLog(Base):
     """감사로그 — append-only, DB 트리거로 UPDATE/DELETE 거부."""
+
     __tablename__ = "audit_logs"
 
-    audit_log_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    audit_log_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=_uuid
+    )
     transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     actor: Mapped[str] = mapped_column(String(255), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
