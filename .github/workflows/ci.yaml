@@ -69,6 +69,8 @@ jobs:
             AGENT_SERVICE_URL
             MOCK_FINANCIAL_SERVICE_URL
             VITE_API_BASE_URL
+            PORT
+            CORS_ORIGINS
           )
 
           for key in "${required_keys[@]}"; do
