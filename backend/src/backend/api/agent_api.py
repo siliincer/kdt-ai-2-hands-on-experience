@@ -34,6 +34,8 @@ class AgentChatData(BaseModel):
     status: Literal["completed", "waiting_input", "blocked", "no_match", "failed"]
     thread_id: str
     prompt_for: str | None = None
+    # waiting_input일 때 agent가 내려주는 구조화 UI 힌트 (opaque 전달)
+    ui: dict | None = None
 
 
 @agent_router.post("/chat", response_model=CommonResponse[AgentChatData])

@@ -41,6 +41,7 @@ SYSTEM_KEYS = {
     "final_response",
     "prompt_for",
     "prompt_message",
+    "prompt_ui",
     "guardrail_result",
     "log_id",
     "logs",
@@ -200,11 +201,21 @@ def _make_input_node(step: dict, step_routes: dict[str, str]) -> Callable:
         # tool이 준비한 동적 메시지(prompt_message)가 있으면 우선 사용한다.
         # (예: verify_account가 만든 계좌 선택지 목록) 없으면 스텝의 정적 메시지.
         prompt = state.get("prompt_message") or message
+        payload: dict = {"prompt": prompt, "prompt_for": out_key}
+        # tool이 준비한 구조화 UI 힌트(prompt_ui)가 있으면 함께 전달한다.
+        # (frontend가 계좌 카드 목록 같은 컴포넌트를 렌더링하는 데 사용)
+        ui = state.get("prompt_ui")
+        if ui:
+            payload["ui"] = ui
         # 여기서 멈춘다. 재개되면 user_reply에 사용자 답이 담긴다.
-        user_reply = interrupt({"prompt": prompt, "prompt_for": out_key})
+        user_reply = interrupt(payload)
 
-        # 소비한 prompt_message는 비워서 다음 input 스텝을 오염시키지 않는다.
-        updates: dict = {"current_step_id": step_id, "prompt_message": None}
+        # 소비한 prompt_message/prompt_ui는 비워서 다음 input 스텝 오염 방지.
+        updates: dict = {
+            "current_step_id": step_id,
+            "prompt_message": None,
+            "prompt_ui": None,
+        }
         reply = str(user_reply).strip()
 
         if has_cancel and _is_cancel_reply(reply):

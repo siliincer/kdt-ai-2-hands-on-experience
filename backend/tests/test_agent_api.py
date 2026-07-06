@@ -35,6 +35,26 @@ def test_agent_chat_success_envelope(client, monkeypatch):
     assert body["data"]["thread_id"] == "abc123"
 
 
+def test_agent_chat_passes_through_ui(client, monkeypatch):
+    """agent가 내려준 구조화 ui 힌트가 봉투 안에 그대로 전달된다."""
+
+    async def fake_call(payload: dict) -> dict:
+        return {
+            "reply": "[송금 확인] ...",
+            "status": "waiting_input",
+            "thread_id": "t1",
+            "prompt_for": "transfer.approval_decision",
+            "ui": {"type": "confirm_modal", "actions": ["송금하기", "취소"]},
+        }
+
+    monkeypatch.setattr(agent_api, "call_agent_chat", fake_call)
+
+    response = client.post("/api/v1/agent/chat", json={"message": "송금해줘"})
+    data = response.json()["data"]
+    assert data["ui"]["type"] == "confirm_modal"
+    assert data["ui"]["actions"] == ["송금하기", "취소"]
+
+
 def test_agent_chat_forwards_thread_id(client, monkeypatch):
     captured = {}
 

@@ -69,6 +69,7 @@ def run_chat(message: str, user_id: str, thread_id: str | None) -> dict:
             "status": "waiting_input",
             "thread_id": thread_id,
             "prompt_for": payload.get("prompt_for"),
+            "ui": payload.get("ui"),
         }
 
     return {
@@ -76,4 +77,5 @@ def run_chat(message: str, user_id: str, thread_id: str | None) -> dict:
         "status": _STATUS_MAP.get(result.get("status"), "failed"),
         "thread_id": thread_id,
         "prompt_for": None,
+        "ui": None,
     }

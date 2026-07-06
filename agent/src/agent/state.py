@@ -46,6 +46,7 @@ class AgentState(TypedDict, total=False):
     final_response: str | None
     prompt_for: str | None
     prompt_message: str | None
+    prompt_ui: dict | None
     guardrail_result: dict | None
     log_id: str | None
     logs: list

@@ -47,3 +47,12 @@ class ChatResponse(BaseModel):
             "클라이언트는 opaque 문자열로 취급하면 된다."
         ),
     )
+    ui: dict | None = Field(
+        None,
+        description=(
+            "waiting_input일 때 구조화 UI 힌트 (시트 UI Spec 계약). "
+            '{"type": "account_card_list" | "search_select" | "number_input" '
+            '| "confirm_modal" | "auth_request", "display"?, "options"?, '
+            '"actions"?}. 없으면 reply 텍스트로 렌더링한다 (폴백).'
+        ),
+    )

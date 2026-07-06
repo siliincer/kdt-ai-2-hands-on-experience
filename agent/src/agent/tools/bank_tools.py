@@ -172,6 +172,7 @@ def verify_account(state: dict) -> dict:
             "balance.selected_accounts": [],
             "balance.account_candidates": candidates,
             "prompt_message": prompt,
+            "prompt_ui": _account_card_ui(candidates, multi=True),
             "route_key": "select_needed",
         }
     except Exception:
@@ -432,6 +433,44 @@ def _recipient_catalog(user_id: str) -> str:
     )
 
 
+# ── UI 힌트 빌더 (시트 UI Spec 탭의 ui_type) ─────────────────────────────────
+
+
+def _account_card_ui(accounts: list[dict], multi: bool = False) -> dict:
+    """account_card_list — 계좌 카드 목록에서 선택하는 UI."""
+    ui: dict = {
+        "type": "account_card_list",
+        "options": [
+            {
+                "account_id": a.get("account_id"),
+                "account_name": a.get("account_name"),
+                "balance": a.get("balance"),
+            }
+            for a in accounts
+        ],
+    }
+    if multi:
+        ui["multi"] = True
+    return ui
+
+
+def _recipient_select_ui(user_id: str) -> dict:
+    """search_select — 수취인 검색/선택 UI. 조회 실패 시 options 생략."""
+    try:
+        options = [
+            {
+                "recipient_id": r.get("recipient_id"),
+                "name": r.get("name"),
+                "bank": r.get("bank"),
+                "account_number": r.get("account_number"),
+            }
+            for r in _recipients(user_id)
+        ]
+    except BankClientError:
+        options = []
+    return {"type": "search_select", "options": options}
+
+
 # ── 슬롯 추출 / 입력 확인 ──────────────────────────────────────────────────────
 
 
@@ -479,6 +518,7 @@ def check_recipient_input(state: dict) -> dict:
     return {
         "route_key": "missing",
         "prompt_message": "누구에게 보낼까요? 이름 또는 계좌번호를 입력해주세요.",
+        "prompt_ui": _recipient_select_ui(state.get("user_id")),
     }
 
 
@@ -500,6 +540,7 @@ def resolve_recipient_input(state: dict) -> dict:
             "이름 또는 계좌번호를 다시 입력해주세요.\n"
             f"등록된 수취인:\n{catalog}"
         ),
+        "prompt_ui": _recipient_select_ui(user_id),
     }
 
 
@@ -524,6 +565,7 @@ def verify_recipient_account(state: dict) -> dict:
             "수취인 계좌를 확인할 수 없어요. 다시 입력해주세요.\n"
             f"등록된 수취인:\n{catalog}"
         ),
+        "prompt_ui": _recipient_select_ui(user_id),
     }
 
 
@@ -531,7 +573,7 @@ def check_amount_input(state: dict) -> dict:
     """송금 금액 입력 유무 확인. 없으면 ask_amount_input으로 되묻는다."""
     if _data(state).get("transfer.amount") is not None:
         return {"route_key": "exists"}
-    return {"route_key": "missing"}
+    return {"route_key": "missing", "prompt_ui": {"type": "number_input"}}
 
 
 # ── 검증 ──────────────────────────────────────────────────────────────────────
@@ -551,6 +593,7 @@ def verify_amount(state: dict) -> dict:
             "prompt_message": (
                 "금액을 확인하지 못했어요. 다시 입력해주세요 (예: 5만원)."
             ),
+            "prompt_ui": {"type": "number_input"},
         }
     if amount > _TRANSFER_LIMIT:
         return {
@@ -582,6 +625,7 @@ def verify_from_account(state: dict) -> dict:
             "prompt_message": (
                 f"어느 계좌에서 송금할까요?\n{_account_options(candidates)}"
             ),
+            "prompt_ui": _account_card_ui(candidates),
         }
     except Exception:
         return {
@@ -605,13 +649,15 @@ def check_balance(state: dict) -> dict:
             }
         if live["balance"] >= amount:
             return {"transfer.from_account": live, "route_key": "sufficient"}
+        candidates = _accounts(user_id)
         return {
             "route_key": "insufficient",
             "prompt_message": (
                 f"{live['account_name']} 잔액({live['balance']:,}원)이 송금 "
                 f"금액({amount:,}원)보다 부족해요. 다른 계좌를 선택해주세요.\n"
-                f"{_account_options(_accounts(user_id))}"
+                f"{_account_options(candidates)}"
             ),
+            "prompt_ui": _account_card_ui(candidates),
         }
     except Exception:
         return {
@@ -684,12 +730,14 @@ def run_pre_execution_guardrail(state: dict) -> dict:
                 "final_response": "실행 직전 검사 중 문제가 발생했습니다.",
             }
         if live["balance"] < amount:
+            candidates = _accounts(user_id)
             return {
                 "route_key": "insufficient_balance",
                 "prompt_message": (
                     "승인 이후 잔액이 부족해졌어요. 다른 계좌를 선택해주세요.\n"
-                    f"{_account_options(_accounts(user_id))}"
+                    f"{_account_options(candidates)}"
                 ),
+                "prompt_ui": _account_card_ui(candidates),
             }
         return {"route_key": "allowed"}
     except Exception:
@@ -707,10 +755,22 @@ def transfer_warning(state: dict) -> dict:
     prompt = state.get("prompt_message") or (
         "주의가 필요한 송금입니다. 진행하려면 '확인', 중단하려면 '취소'를 입력해주세요."
     )
-    reply = interrupt({"prompt": prompt, "prompt_for": "transfer.warning_confirm"})
+    amount = _data(state).get("transfer.amount")
+    reply = interrupt(
+        {
+            "prompt": prompt,
+            "prompt_for": "transfer.warning_confirm",
+            "ui": {
+                "type": "confirm_modal",
+                "variant": "warning",
+                "display": {"amount": amount},
+                "actions": ["확인", "취소"],
+            },
+        }
+    )
 
     route = _parse_warning_reply(str(reply))
-    updates: dict = {"route_key": route, "prompt_message": None}
+    updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
     if route == "cancelled":
         updates["final_response"] = "송금을 취소했습니다."
     return updates
@@ -736,10 +796,32 @@ def create_approval(state: dict) -> dict:
         "진행하려면 '승인', 중단하려면 '취소',\n"
         "수정하려면 '수취인 수정' / '금액 수정' / '계좌 수정'을 입력해주세요."
     )
-    reply = interrupt({"prompt": card, "prompt_for": "transfer.approval_decision"})
+    reply = interrupt(
+        {
+            "prompt": card,
+            "prompt_for": "transfer.approval_decision",
+            "ui": {
+                "type": "confirm_modal",
+                "display": {
+                    "recipient_name": recipient.get("name"),
+                    "bank": recipient.get("bank"),
+                    "account_number": recipient.get("account_number"),
+                    "from_account_name": account.get("account_name"),
+                    "amount": amount,
+                },
+                "actions": [
+                    "송금하기",
+                    "취소",
+                    "수취인 수정",
+                    "금액 수정",
+                    "계좌 수정",
+                ],
+            },
+        }
+    )
 
     route = _parse_approval_reply(str(reply))
-    updates: dict = {"route_key": route, "prompt_message": None}
+    updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
     if route == "approved":
         updates["transfer.approval"] = {
             "recipient_id": recipient.get("recipient_id"),
@@ -756,12 +838,18 @@ def create_approval(state: dict) -> dict:
     elif route == "edit_amount":
         updates["transfer.amount"] = None
         updates["prompt_message"] = "새 송금 금액을 입력해주세요 (예: 3만원)."
+        updates["prompt_ui"] = {"type": "number_input"}
     elif route == "edit_recipient":
         updates["transfer.recipient"] = None
         updates["prompt_message"] = "새 수취인을 입력해주세요 (이름 또는 계좌번호)."
+        updates["prompt_ui"] = _recipient_select_ui(state.get("user_id"))
     elif route == "edit_from_account":
         updates["transfer.from_account"] = None
         updates["prompt_message"] = "어느 계좌에서 송금할까요?"
+        try:
+            updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+        except BankClientError:
+            pass
     return updates
 
 
@@ -774,10 +862,16 @@ def request_user_authentication(state: dict) -> dict:
                 "완료 후 '인증완료'를 입력해주세요."
             ),
             "prompt_for": "transfer.auth_result",
+            # auth_request는 시트 UI Spec에 없는 타입 — 시트 추가 요청 대상
+            "ui": {
+                "type": "auth_request",
+                "methods": ["지문", "Face ID", "비밀번호"],
+                "actions": ["인증완료", "취소"],
+            },
         }
     )
     route = _parse_auth_reply(str(reply))
-    updates: dict = {"route_key": route, "prompt_message": None}
+    updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
     if route == "not_authenticated":
         updates["final_response"] = (
             "본인 인증이 완료되지 않아 송금을 진행할 수 없습니다."
