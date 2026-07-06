@@ -104,6 +104,9 @@ def _make_tool_node(step: dict) -> Callable:
             result = tool_fn(state)
             if isinstance(result, dict):
                 updates.update(_split_updates(result))
+                # route_key 누락 dict는 이전 스텝 route를 재사용하는 조용한
+                # 오동작 대신 error로 시끄럽게 실패시킨다 (tool 작성 규칙).
+                updates.setdefault("route_key", "error")
             elif result is not None:
                 if out_key:
                     _store_output(updates, out_key, result)
@@ -120,7 +123,13 @@ def _make_tool_node(step: dict) -> Callable:
 
 
 def _make_response_node(step: dict) -> Callable:
-    """tool이 있으면 호출, 없으면 step_message를 final_response로 설정하는 노드."""
+    """tool이 있으면 호출, 없으면 step_message를 final_response로 설정하는 노드.
+
+    tool_id가 미등록이어도 메시지 분기로 폴백한다 — 시트가 response 스텝에
+    'final_response' 같은 실존하지 않는 tool_id를 적는 경우를 흡수한다.
+    이때 state에 이미 final_response가 있으면 그것을 우선한다
+    (차단 사유 등 앞 스텝이 만든 구체 메시지 > 정적 step_message).
+    """
     step_id = step["step_id"]
     message = step.get("step_message") or ""
     tool_id = step.get("tool_id", "")
@@ -128,27 +137,26 @@ def _make_response_node(step: dict) -> Callable:
 
     def node_fn(state: dict) -> dict:
         updates: dict = {"current_step_id": step_id}
+        tool_fn = TOOL_REGISTRY.get(tool_id) if tool_id else None
 
-        if tool_id:
-            tool_fn = TOOL_REGISTRY.get(tool_id)
-            if tool_fn:
-                result = tool_fn(state)
-                if isinstance(result, dict):
-                    updates.update(_split_updates(result))
-                elif result is not None:
-                    if out_key:
-                        _store_output(updates, out_key, result)
-                    updates.setdefault("route_key", "success")
-                else:
-                    updates.setdefault("route_key", "failed")
+        if tool_fn:
+            result = tool_fn(state)
+            if isinstance(result, dict):
+                updates.update(_split_updates(result))
+                updates.setdefault("route_key", "failed")
+            elif result is not None:
+                if out_key:
+                    _store_output(updates, out_key, result)
+                updates.setdefault("route_key", "success")
             else:
-                updates["route_key"] = "error"
+                updates.setdefault("route_key", "failed")
         else:
-            # tool 없음 → step_message를 그대로 사용자에게 노출
-            if message:
-                updates["final_response"] = message
+            # tool 없음/미등록 → 앞 스텝이 만든 final_response 우선, 없으면 정적 메시지
+            final = state.get("final_response") or message
+            if final:
+                updates["final_response"] = final
                 if out_key and out_key != "final_response":
-                    _store_output(updates, out_key, message)
+                    _store_output(updates, out_key, final)
             updates.setdefault("route_key", "completed")
 
         updates.update(
@@ -159,16 +167,34 @@ def _make_response_node(step: dict) -> Callable:
     return node_fn
 
 
-def _make_input_node(step: dict) -> Callable:
+# 취소로 인식하는 답변: "취소" 포함, 또는 아래 표현과 정확 일치.
+# "아니"는 제외한다 — "아니 3만원으로 해줘" 같은 정정 답변을 오탐하지 않기 위해.
+_CANCEL_EXACT = {"그만", "그만할래", "안할래", "안 할래", "됐어", "관둘래"}
+
+
+def _is_cancel_reply(reply: str) -> bool:
+    text = reply.strip()
+    return "취소" in text or text in _CANCEL_EXACT
+
+
+def _make_input_node(step: dict, step_routes: dict[str, str]) -> Callable:
     """사용자 입력 대기 스텝: interrupt로 그래프를 멈추고 사용자 답을 기다린다.
 
     처음 실행: interrupt(payload)가 그래프를 정지시킨다(GraphInterrupt).
     재개(Command(resume=답)): interrupt()가 그 답을 반환하며 아래 코드가 이어진다.
-    → 사용자 답을 output_data_key에 저장하고 route_key='submitted'로 다음 스텝으로.
+
+    route 결정 (시트의 스텝별 route_key 정의를 따른다):
+      - 취소 답변 + cancelled 라우트 존재 → cancelled
+      - 그 외 → cancelled를 제외한 단일 진행 라우트 (resolved/submitted 등),
+        없거나 복수면 기본 "submitted"
     """
     step_id = step["step_id"]
     message = step.get("step_message") or "선택해 주세요."
     out_key = step.get("output_data_key")
+
+    proceed_routes = [k for k in step_routes if k != "cancelled"]
+    proceed_key = proceed_routes[0] if len(proceed_routes) == 1 else "submitted"
+    has_cancel = "cancelled" in step_routes
 
     def node_fn(state: dict) -> dict:
         # tool이 준비한 동적 메시지(prompt_message)가 있으면 우선 사용한다.
@@ -177,10 +203,21 @@ def _make_input_node(step: dict) -> Callable:
         # 여기서 멈춘다. 재개되면 user_reply에 사용자 답이 담긴다.
         user_reply = interrupt({"prompt": prompt, "prompt_for": out_key})
 
-        updates: dict = {"current_step_id": step_id, "route_key": "submitted"}
-        if out_key:
-            _store_output(updates, out_key, user_reply)
-        updates.update(_append_trace({**state, **updates}, step_id, "submitted"))
+        # 소비한 prompt_message는 비워서 다음 input 스텝을 오염시키지 않는다.
+        updates: dict = {"current_step_id": step_id, "prompt_message": None}
+        reply = str(user_reply).strip()
+
+        if has_cancel and _is_cancel_reply(reply):
+            updates["route_key"] = "cancelled"
+            updates["final_response"] = "요청을 취소했습니다."
+        else:
+            updates["route_key"] = proceed_key
+            if out_key:
+                _store_output(updates, out_key, user_reply)
+
+        updates.update(
+            _append_trace({**state, **updates}, step_id, updates["route_key"])
+        )
         return updates
 
     return node_fn
@@ -269,7 +306,7 @@ def build_workflow_graph(wf_id: str, workflow: dict):
         step_type = step.get("step_type", "tool")
 
         if step_type == "input":
-            node_fn = _make_input_node(step)
+            node_fn = _make_input_node(step, route_map.get(step_id, {}))
         elif step_type in ("response", "block"):
             node_fn = _make_response_node(step)
         elif step_type == "log":

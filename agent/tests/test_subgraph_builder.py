@@ -96,6 +96,54 @@ def test_tool_returns_go_to_data_bucket(mini_workflow, monkeypatch):
     assert "balance.x" not in result  # 미선언 top-level 키로 새지 않음
 
 
+def test_tool_dict_without_route_key_becomes_error(mini_workflow, monkeypatch):
+    """route_key 없는 dict 반환은 이전 route 재사용 대신 error로 실패한다."""
+    monkeypatch.setitem(TOOL_REGISTRY, "mixed_tool", lambda state: {"balance.x": 1})
+    monkeypatch.setitem(TOOL_REGISTRY, "scalar_tool", lambda state: "값")
+
+    graph = build_workflow_graph("wf_test", mini_workflow)
+    result = graph.invoke({"data": {}})
+
+    # error는 route 맵에 없으므로 첫 스텝에서 END로 조기 종료된다
+    assert result["execution_trace"][0]["route_key"] == "error"
+    assert len(result["execution_trace"]) == 1
+
+
+def test_response_node_unregistered_tool_falls_back_to_message():
+    """response 스텝의 tool_id가 미등록이면 step_message로 폴백한다.
+
+    (시트가 'final_response' 같은 실존하지 않는 tool_id를 적는 경우 흡수)
+    """
+    from agent.subgraph_builder import _make_response_node
+
+    node = _make_response_node(
+        {
+            "step_id": "show_blocked",
+            "step_type": "response",
+            "tool_id": "final_response",  # 미등록
+            "step_message": "정책상 진행할 수 없습니다.",
+        }
+    )
+    result = node({"data": {}})
+    assert result["route_key"] == "completed"
+    assert result["final_response"] == "정책상 진행할 수 없습니다."
+
+    # 앞 스텝이 만든 구체 사유가 있으면 그것을 우선한다
+    result = node({"data": {}, "final_response": "한도 초과로 차단되었습니다."})
+    assert result["final_response"] == "한도 초과로 차단되었습니다."
+
+
+def test_is_cancel_reply_keywords():
+    from agent.subgraph_builder import _is_cancel_reply
+
+    assert _is_cancel_reply("취소")
+    assert _is_cancel_reply("송금 취소할래")
+    assert _is_cancel_reply("그만")
+    # "아니"로 시작하는 정정 답변은 취소가 아니다
+    assert not _is_cancel_reply("아니 3만원으로 해줘")
+    assert not _is_cancel_reply("1번")
+
+
 def test_existing_data_preserved_across_steps(mini_workflow, monkeypatch):
     """reducer 병합: 이전 스텝의 data가 다음 스텝 업데이트에 지워지지 않는다."""
     monkeypatch.setitem(
