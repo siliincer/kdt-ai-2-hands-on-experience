@@ -1,9 +1,19 @@
 """LLM 클라이언트.
 
-OpenAI 기반 LLM을 한 곳에서 만들어 재사용한다.
-- .env의 OPENAI_API_KEY / LLM_MODEL을 읽는다.
-- 구조화 출력(structured output)이 필요하면 with_structured_output(스키마)로 쓴다.
-- 온도(temperature)는 기본 0.0 — 금융 도메인이라 재현성/일관성을 우선한다.
+LLM 인스턴스를 한 곳에서 만들어 재사용한다. 제공자는 환경변수로 선택한다:
+
+  LLM_PROVIDER=openai (기본): OPENAI_API_KEY 필요
+  LLM_PROVIDER=vertex:        Google Cloud Vertex AI (Gemini).
+                              ADC 인증(gcloud auth application-default login)
+                              또는 GOOGLE_APPLICATION_CREDENTIALS(서비스 계정
+                              JSON 경로) 필요. GOOGLE_CLOUD_PROJECT로 프로젝트,
+                              VERTEX_LOCATION으로 리전 지정(기본 us-central1).
+
+공통:
+  - LLM_MODEL로 모델 지정 (미지정 시 제공자별 기본값)
+  - 구조화 출력이 필요하면 with_structured_output(스키마)로 쓴다
+  - 온도(temperature)는 기본 0.0 — 금융 도메인이라 재현성/일관성 우선
+  - 생성/호출 실패는 호출부(tool/matcher)가 잡아 규칙 기반으로 폴백한다
 """
 
 from __future__ import annotations
@@ -12,22 +22,51 @@ import os
 from functools import lru_cache
 
 from dotenv import load_dotenv
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
-_DEFAULT_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+# 제공자별 기본 모델 (LLM_MODEL 미지정 시)
+_DEFAULT_MODELS = {
+    "openai": "gpt-4o-mini",
+    "vertex": "gemini-2.5-flash",
+}
+
+
+def _provider() -> str:
+    return os.getenv("LLM_PROVIDER", "openai").strip().lower()
 
 
 @lru_cache(maxsize=4)
-def get_llm(temperature: float = 0.0, model: str | None = None) -> ChatOpenAI:
-    """설정된 모델의 ChatOpenAI 인스턴스를 반환한다(같은 설정은 캐시 재사용).
+def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel:
+    """LLM_PROVIDER에 맞는 챗 모델 인스턴스를 반환한다 (같은 설정은 캐시).
 
-    OPENAI_API_KEY가 없으면 첫 호출 시 명확한 에러를 던진다.
+    환경변수를 바꿨다면 get_llm.cache_clear()를 호출해야 반영된다.
     """
+    provider = _provider()
+    resolved_model = (
+        model
+        or os.getenv("LLM_MODEL")
+        or _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
+    )
+
+    if provider == "vertex":
+        # vertex 미사용 환경에서 import 비용/의존 문제를 피하려고 지연 import
+        from langchain_google_vertexai import ChatVertexAI
+
+        return ChatVertexAI(
+            model=resolved_model,
+            temperature=temperature,
+            project=os.getenv("GOOGLE_CLOUD_PROJECT") or None,
+            location=os.getenv("VERTEX_LOCATION", "us-central1"),
+        )
+
+    # 기본: openai (LLM_PROVIDER 미지정 포함 — 기존 동작 유지)
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError(
             "OPENAI_API_KEY가 설정되지 않았습니다. "
-            ".env.example을 .env로 복사하고 키를 입력하세요."
+            ".env.example을 .env로 복사하고 키를 입력하거나, "
+            "LLM_PROVIDER=vertex로 Vertex AI를 사용하세요."
         )
-    return ChatOpenAI(model=model or _DEFAULT_MODEL, temperature=temperature)
+    return ChatOpenAI(model=resolved_model, temperature=temperature)

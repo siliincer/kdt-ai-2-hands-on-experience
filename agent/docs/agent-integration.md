@@ -266,8 +266,16 @@ cp .env.example .env   # OPENAI_API_KEY 입력 시 LLM 의도분류/응답생성
 docker compose up -d --build
 ```
 
-관련 환경변수 (`.env.example`): `OPENAI_API_KEY`(선택), `LLM_MODEL`(기본
-gpt-4o-mini), `AGENT_SERVICE_URL`(backend가 agent를 찾는 주소).
+관련 환경변수 (`.env.example`):
+
+- `LLM_PROVIDER`: `openai`(기본) | `vertex` — LLM 제공자 선택
+- `LLM_MODEL`: 모델 지정 (미지정 시 openai=gpt-4o-mini, vertex=gemini-2.5-flash)
+- `OPENAI_API_KEY`: openai 사용 시 필요 (없으면 규칙 기반 폴백으로 완주)
+- `GOOGLE_CLOUD_PROJECT` / `VERTEX_LOCATION`: vertex 사용 시. 인증은 로컬
+  ADC(`gcloud auth application-default login`) 또는
+  `GOOGLE_APPLICATION_CREDENTIALS`(서비스 계정 JSON — 컨테이너용)
+- `AGENT_SERVICE_URL`: backend가 agent를 찾는 주소
+- `BANK_CLIENT`: `local`(기본) | `http` — 은행 원장 접근 방식
 
 ## 7. 향후 과제
 
@@ -275,8 +283,7 @@ gpt-4o-mini), `AGENT_SERVICE_URL`(backend가 agent를 찾는 주소).
 - [ ] 송금 답변 파싱(승인/금액 등)을 키워드에서 LLM 보강으로 확장
 - [ ] `data/mock_bank.py` → `mock-financial-service`(8002) HTTP 연동으로 교체
 - [ ] MemorySaver → persistent checkpointer (Redis/Postgres)
-- [ ] `LLM_PROVIDER` 환경변수 지원 (현재 OpenAI 고정, `.env.example`의
-      `LLM_PROVIDER=mock`은 아직 미사용)
+- [x] `LLM_PROVIDER` 환경변수 지원 — 완료 (openai/vertex 전환, 6절)
 - [ ] frontend 채팅 UI를 `useAgentChat` 훅에 연결 (fe_example의 카드형 채팅 UI
       참고 — 현재는 API 계층만 존재)
 - [ ] 가드레일 `expression` 조건 타입 구현 (현재 `contains_any`만 평가됨)

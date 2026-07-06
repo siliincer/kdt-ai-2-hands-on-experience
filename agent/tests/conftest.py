@@ -19,8 +19,13 @@ from agent.data.mock_bank import AUDIT_LOG, MOCK_ACCOUNTS
 
 @pytest.fixture(autouse=True)
 def no_openai_key(monkeypatch):
-    """LLM 경로를 강제로 실패시켜 키워드/규칙 폴백만 타게 한다."""
+    """LLM 경로를 강제로 실패시켜 키워드/규칙 폴백만 타게 한다.
+
+    로컬 .env가 LLM_PROVIDER=vertex 등으로 설정돼 있어도 테스트가
+    네트워크를 타지 않도록 provider도 기본값(openai)으로 되돌린다.
+    """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
     agent.llm.get_llm.cache_clear()
     yield
     agent.llm.get_llm.cache_clear()
