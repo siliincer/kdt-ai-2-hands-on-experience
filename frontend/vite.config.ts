@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import path from 'path';
+import path, { resolve } from 'path';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -36,6 +36,11 @@ export default defineConfig(({ mode }) => {
           // 보안 연결(https) 검증 여부 (로컬 http 환경이므로 false)
           secure: isProd,
         },
+      },
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
       },
     },
   };
