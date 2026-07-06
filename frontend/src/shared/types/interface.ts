@@ -1,3 +1,4 @@
+import type { ThemeMode } from './types';
 interface BarCatData {
   name: string;
   change: number;
@@ -39,4 +40,16 @@ interface PieClickEntry {
   color: string;
 }
 
-export type { BarCatData, TxItem, PieClickEntry, ChartTooltipPayload };
+interface ThemeContextValue {
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
+  toggleTheme: () => void;
+}
+
+export type {
+  BarCatData,
+  TxItem,
+  PieClickEntry,
+  ChartTooltipPayload,
+  ThemeContextValue,
+};

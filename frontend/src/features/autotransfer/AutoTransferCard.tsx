@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { autoTxItems } from '@/features/mockData/mockData';
-import { NAVY } from '@/shared/constants/color';
 import { F, M } from '@/shared/constants/font';
 
 export function AutoTransferCard({ onShowForm }: { onShowForm: () => void }) {
@@ -14,8 +13,8 @@ export function AutoTransferCard({ onShowForm }: { onShowForm: () => void }) {
       <div className="mb-4 flex items-center gap-2">
         <span className="text-lg">🔄</span>
         <p
-          className="text-sm font-semibold"
-          style={{ color: NAVY, fontFamily: F }}
+          className="text-sm font-semibold text-foreground"
+          style={{ fontFamily: F }}
         >
           자동 이체 목록
         </p>
@@ -24,17 +23,17 @@ export function AutoTransferCard({ onShowForm }: { onShowForm: () => void }) {
         {autoTxItems.map((item, index) => (
           <div
             key={item.name}
-            className="flex items-center justify-between rounded-3xl border border-slate-200 px-3 py-3"
+            className="flex items-center justify-between rounded-3xl border border-border bg-card px-3 py-3 shadow-xs"
           >
             <div>
               <p
-                className="text-xs font-semibold"
-                style={{ color: NAVY, fontFamily: F }}
+                className="text-xs font-semibold text-foreground"
+                style={{ fontFamily: F }}
               >
                 {item.name}
               </p>
               <p
-                className="text-[10px] text-slate-500"
+                className="text-[10px] text-muted-foreground"
                 style={{ fontFamily: F }}
               >
                 {item.cycle}
@@ -42,8 +41,8 @@ export function AutoTransferCard({ onShowForm }: { onShowForm: () => void }) {
             </div>
             <div className="flex items-center gap-3">
               <p
-                className="text-xs font-bold"
-                style={{ color: NAVY, fontFamily: M }}
+                className="text-xs font-bold text-foreground"
+                style={{ fontFamily: M }}
               >
                 {item.amount.toLocaleString()}원
               </p>
@@ -56,10 +55,12 @@ export function AutoTransferCard({ onShowForm }: { onShowForm: () => void }) {
                     return next;
                   })
                 }
-                className="rounded-full px-3 py-1 text-[10px] font-semibold"
+                className="rounded-full px-3 py-1 text-[10px] font-semibold transition-all"
                 style={{
-                  background: toggles[index] ? '#D1FAE5' : '#F8FAFC',
-                  color: toggles[index] ? '#047857' : '#6B7280',
+                  background: toggles[index] ? 'var(--accent)' : 'var(--muted)',
+                  color: toggles[index]
+                    ? 'var(--primary-foreground)'
+                    : 'var(--muted-foreground)',
                   fontFamily: F,
                 }}
               >
@@ -72,7 +73,7 @@ export function AutoTransferCard({ onShowForm }: { onShowForm: () => void }) {
       <button
         type="button"
         onClick={onShowForm}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 py-2.5 text-sm font-semibold text-emerald-700"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-transparent py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted/30 hover:text-foreground"
         style={{ fontFamily: F }}
       >
         <Plus size={14} /> 자동 이체 추가

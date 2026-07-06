@@ -1,6 +1,5 @@
 import { Check, Clock } from 'lucide-react';
 
-import { NAVY, MINT, GRAY_BG } from '@/shared/constants/color';
 import { M, F } from '@/shared/constants/font';
 import { BANKS } from '@/features/mockData/mockData';
 
@@ -52,16 +51,20 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
   if (done) {
     return (
       <div className="flex flex-col items-center gap-2 py-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500">
-          <Check size={22} color="#fff" strokeWidth={3} />
+        {/* 완료 아이콘 배경은 시스템 파괴/경고와 대비되는 에메랄드/차트 컬러 매핑 */}
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-chart-2">
+          <Check size={22} color="var(--card)" strokeWidth={3} />
         </div>
         <p
           className="text-sm font-semibold"
-          style={{ color: NAVY, fontFamily: F }}
+          style={{ color: 'var(--foreground)', fontFamily: F }}
         >
           송금이 완료되었습니다 ✓
         </p>
-        <p className="text-xs" style={{ color: '#6B7A99', fontFamily: F }}>
+        <p
+          className="text-xs"
+          style={{ color: 'var(--muted-foreground)', fontFamily: F }}
+        >
           {name}님께 {amtNum.toLocaleString()}원 전송됨
         </p>
       </div>
@@ -73,8 +76,8 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
       <div className="mb-4 flex items-center gap-2">
         <span className="text-lg">💸</span>
         <p
-          className="text-sm font-semibold"
-          style={{ color: NAVY, fontFamily: F }}
+          className="text-sm font-semibold text-foreground"
+          style={{ fontFamily: F }}
         >
           송금 확인
         </p>
@@ -92,7 +95,11 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
           <input
             autoFocus
             className="w-full border-b-2 bg-transparent text-sm outline-none"
-            style={{ color: NAVY, fontFamily: F, borderColor: MINT }}
+            style={{
+              color: 'var(--foreground)',
+              fontFamily: F,
+              borderColor: 'var(--accent)',
+            }}
             value={name}
             onChange={(event) => setName(event.target.value)}
             onBlur={() => setEditingField(null)}
@@ -113,8 +120,8 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
       >
         <div className="pl-21 pr-2">
           <div
-            className="overflow-hidden rounded-2xl bg-white shadow-sm"
-            style={{ border: '1px solid rgba(15,30,61,0.08)' }}
+            className="overflow-hidden rounded-2xl bg-card shadow-sm"
+            style={{ border: '1px solid var(--border)' }}
           >
             {BANKS.map((bankName) => (
               <button
@@ -126,10 +133,11 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
                 }}
                 className="w-full border-b px-3 py-2 text-left text-xs hover:opacity-80 last:border-0"
                 style={{
-                  color: bank === bankName ? MINT : NAVY,
+                  color:
+                    bank === bankName ? 'var(--accent)' : 'var(--foreground)',
                   fontFamily: F,
                   fontWeight: bank === bankName ? 600 : 400,
-                  borderColor: 'rgba(15,30,61,0.05)',
+                  borderColor: 'var(--border)',
                 }}
               >
                 {bankName}
@@ -151,8 +159,8 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
         <div className="pl-21 pr-2">
           <input
             autoFocus
-            className="w-full border-b-2 bg-transparent text-sm text-slate-50 placeholder:text-slate-500 outline-none"
-            style={{ fontFamily: M, borderColor: MINT }}
+            className="w-full border-b-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+            style={{ fontFamily: M, borderColor: 'var(--accent)' }}
             placeholder="계좌번호 입력"
             value={account}
             onChange={(event) => setAccount(event.target.value)}
@@ -177,8 +185,8 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
         <div className="pl-21 pr-2">
           <input
             autoFocus
-            className="w-full border-b-2 bg-transparent text-sm text-slate-50 placeholder:text-slate-500 outline-none"
-            style={{ fontFamily: M, borderColor: MINT }}
+            className="w-full border-b-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+            style={{ fontFamily: M, borderColor: 'var(--accent)' }}
             inputMode="numeric"
             placeholder="0"
             value={fmtAmt(amtRaw)}
@@ -189,7 +197,10 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
             }
           />
           {amtNum > 0 ? (
-            <p className="mt-2 text-xs" style={{ color: MINT, fontFamily: F }}>
+            <p
+              className="mt-2 text-xs"
+              style={{ color: 'var(--accent)', fontFamily: F }}
+            >
               {kor(amtNum)}
             </p>
           ) : null}
@@ -199,7 +210,7 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
                 key={amount}
                 type="button"
                 onClick={() => setAmtRaw(amount.replace(/,/g, ''))}
-                className="flex-1 rounded-lg bg-slate-100 py-1 text-[10px] font-medium text-slate-700"
+                className="flex-1 rounded-lg bg-secondary py-1 text-[10px] font-medium text-secondary-foreground"
                 style={{ fontFamily: F }}
               >
                 {amount}
@@ -233,10 +244,14 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
                 key={option.key}
                 type="button"
                 onClick={() => setTimeOpt(option.key)}
-                className="flex-1 rounded-lg py-1.5 text-[10px] font-medium"
+                className="flex-1 rounded-lg py-1.5 text-[10px] font-medium transition-colors"
                 style={{
-                  background: timeOpt === option.key ? NAVY : GRAY_BG,
-                  color: timeOpt === option.key ? '#fff' : NAVY,
+                  background:
+                    timeOpt === option.key ? 'var(--primary)' : 'var(--muted)',
+                  color:
+                    timeOpt === option.key
+                      ? 'var(--primary-foreground)'
+                      : 'var(--foreground)',
                   fontFamily: F,
                 }}
               >
@@ -250,8 +265,8 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
           {timeOpt === 'schedule' ? (
             <input
               type="datetime-local"
-              className="w-full rounded-lg border border-transparent bg-slate-100 px-3 py-2 text-xs outline-none"
-              style={{ color: NAVY, fontFamily: M }}
+              className="w-full rounded-lg border border-transparent bg-input-background px-3 py-2 text-xs text-foreground outline-none"
+              style={{ fontFamily: M }}
               value={schedDT}
               onChange={(event) => setSchedDT(event.target.value)}
             />
@@ -259,14 +274,17 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
         </div>
       </ERow>
 
-      <p className="mt-3 text-[10px] text-slate-400" style={{ fontFamily: F }}>
+      <p
+        className="mt-3 text-[10px] text-muted-foreground"
+        style={{ fontFamily: F }}
+      >
         💡 클립보드 텍스트 붙여넣기 자동인식 지원
       </p>
 
       <div className="mt-4 flex gap-2">
         <button
           type="button"
-          className="flex-1 rounded-xl border border-slate-300 py-2.5 text-sm text-slate-200 hover:bg-white/5"
+          className="flex-1 rounded-xl border border-border bg-transparent py-2.5 text-sm text-foreground hover:bg-muted/30 transition-colors"
           style={{ fontFamily: F }}
         >
           취소
@@ -274,7 +292,7 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
         <button
           type="button"
           onClick={() => setDone(true)}
-          className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+          className="flex-1 rounded-xl bg-chart-1 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
           style={{ fontFamily: F }}
         >
           송금하기 →

@@ -12,12 +12,12 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
+    <section className="rounded-3xl border border-border bg-card p-6 shadow-xl">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-white">{title}</h2>
+          <h2 className="text-xl font-semibold text-foreground">{title}</h2>
           {description ? (
-            <p className="mt-1 text-sm text-slate-400">{description}</p>
+            <p className="mt-1 text-sm text-slate-600">{description}</p>
           ) : null}
         </div>
       </div>

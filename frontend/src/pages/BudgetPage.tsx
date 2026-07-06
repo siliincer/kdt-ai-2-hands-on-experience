@@ -4,7 +4,8 @@ import BudgetFeature from '../features/budget/BudgetFeature';
 
 export default function BudgetPage() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
+    // 전체 레이아웃의 시맨틱 컬러 구조 유지
+    <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <NavigationBar />
         <PageShell

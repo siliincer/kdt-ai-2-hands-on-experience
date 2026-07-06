@@ -5,21 +5,36 @@ import { RobotIcon } from '@/shared/ui/robotIcon';
 import { NAVY, MINT } from '@/shared/constants/color';
 import { F } from '@/shared/constants/font';
 
+import { useUserStore } from '@/entities/user';
+
 interface LoginScreenProps {
   onLogin: () => void;
 }
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
+  // Zustand 스토어에서 login 액션 가져오기
+  const login = useUserStore((state) => state.login);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = () => {
     if (!email || !password) return;
-    setLoading(true);
+    setIsLoading(true);
+
+    // API 통신을 모킹한 타이머
     setTimeout(() => {
-      setLoading(false);
+      setIsLoading(false);
+
+      // 1. Zustand 전역 스토어에 유저 정보 저장
+      login({
+        id: 'user_01',
+        name: email.split('@')[0], // 이메일 앞부분을 임시 이름으로 사용
+      });
+
+      // 2. 부모 컴포넌트의 화면 전환 콜백 실행
       onLogin();
     }, 800);
   };
@@ -130,7 +145,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         {/* Login button */}
         <button
           onClick={handleLogin}
-          disabled={!email || !password || loading}
+          disabled={!email || !password || isLoading}
           className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-opacity"
           style={{
             background: MINT,
@@ -139,7 +154,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             opacity: !email || !password ? 0.5 : 1,
           }}
         >
-          {loading ? '로그인 중...' : '로그인'}
+          {isLoading ? '로그인 중...' : '로그인'}
         </button>
 
         {/* Sign up link */}

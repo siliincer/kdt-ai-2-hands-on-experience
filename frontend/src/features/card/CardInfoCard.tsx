@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-import { NAVY, MINT } from '@/shared/constants/color';
 import { F } from '@/shared/constants/font';
 import { cards } from '@/features/mockData/mockData';
 
@@ -35,12 +34,14 @@ export function CardInfoCard({
       <div className="mb-4 flex items-center gap-2">
         <span className="text-lg">💳</span>
         <p
-          className="text-sm font-semibold"
-          style={{ color: NAVY, fontFamily: F }}
+          className="text-sm font-semibold text-foreground"
+          style={{ fontFamily: F }}
         >
           내 카드
         </p>
       </div>
+
+      {/* 카드 덱 레이아웃 높이 및 적층 구조 유지 */}
       <div className="relative mb-4 h-32.5">
         {cards.map((card, index) => (
           <button
@@ -49,7 +50,7 @@ export function CardInfoCard({
             onClick={() => setActiveCard(index)}
             className="absolute left-0 top-0 w-full rounded-3xl p-4 text-left text-white shadow-xl transition-all"
             style={{
-              background: card.bg,
+              background: card.bg || 'var(--primary)',
               top: index * 12,
               zIndex: activeCard === index ? 10 : 9 - index,
               transform: activeCard === index ? 'scale(1)' : 'scale(0.96)',
@@ -69,37 +70,44 @@ export function CardInfoCard({
                 <p>VALID THRU</p>
                 <p className="font-mono">{card.exp}</p>
               </div>
-              <p>REALFINANCE</p>
+              <p className="font-medium tracking-wider">REALFINANCE</p>
             </div>
           </button>
         ))}
       </div>
+
+      {/* 페이지네이션 도트의 하드코딩 색상을 accent 및 muted 시스템 변수로 맵핑 */}
       <div className="mb-4 flex justify-center gap-2">
         {cards.map((_, index) => (
           <button
             key={index}
             type="button"
             onClick={() => setActiveCard(index)}
-            className="rounded-full transition-all"
+            className="rounded-full transition-all duration-200"
             style={{
               width: activeCard === index ? 16 : 6,
               height: 6,
-              background: activeCard === index ? MINT : '#CBD5E1',
+              background:
+                activeCard === index
+                  ? 'var(--accent)'
+                  : 'var(--muted-foreground)',
             }}
           />
         ))}
       </div>
+
+      {/* 하단 액션 버튼들의 고정 회색 스킨을 테마 세컨더리 시스템 스펙으로 전환 */}
       <div className="grid grid-cols-4 gap-2">
         {actions.map((action) => (
           <button
             key={action.label}
             type="button"
             onClick={action.fn}
-            className="rounded-3xl bg-slate-100 py-3 text-[10px] font-medium hover:opacity-90"
+            className="rounded-3xl bg-secondary py-3 text-[10px] font-medium text-secondary-foreground transition-all hover:bg-muted active:scale-95"
             style={{ fontFamily: F }}
           >
             <div className="text-xl">{action.emoji}</div>
-            <div className="mt-2">{action.label}</div>
+            <div className="mt-2 text-foreground/90">{action.label}</div>
           </button>
         ))}
       </div>

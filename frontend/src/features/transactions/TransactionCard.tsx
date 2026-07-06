@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Bell, X, ChevronDown, ChevronUp } from 'lucide-react';
 
-import { NAVY, MINT } from '@/shared/constants/color';
 import { F, M } from '@/shared/constants/font';
 import { ALL_TX_ITEM as ALL_TX } from '@/features/mockData/mockData';
 import { detectRecurring } from '@/shared/lib/utils';
@@ -70,8 +69,8 @@ export function TransactionsCard() {
       <div className="mb-4 flex items-center gap-2">
         <span className="text-lg">📋</span>
         <p
-          className="text-sm font-semibold"
-          style={{ color: NAVY, fontFamily: F }}
+          className="text-sm font-semibold text-foreground"
+          style={{ fontFamily: F }}
         >
           거래 내역
         </p>
@@ -86,10 +85,14 @@ export function TransactionsCard() {
               setSelectedMonth(month);
               setExpandedId(null);
             }}
-            className="shrink-0 rounded-full px-3 py-1 text-[10px] font-medium"
+            className="shrink-0 rounded-full px-3 py-1 text-[10px] font-medium transition-colors"
             style={{
-              background: selectedMonth === month ? NAVY : '#E8EDF5',
-              color: selectedMonth === month ? '#fff' : '#6B7A99',
+              background:
+                selectedMonth === month ? 'var(--primary)' : 'var(--muted)',
+              color:
+                selectedMonth === month
+                  ? 'var(--primary-foreground)'
+                  : 'var(--muted-foreground)',
               fontFamily: F,
             }}
           >
@@ -101,11 +104,11 @@ export function TransactionsCard() {
       {toasts.map((toast) => (
         <div
           key={toast}
-          className="mb-2 rounded-xl px-3 py-2 text-[10px] font-medium"
+          className="mb-2 rounded-xl px-3 py-2 text-[10px] font-medium border"
           style={{
-            background: `${MINT}15`,
-            border: `1px solid ${MINT}30`,
-            color: MINT,
+            background: 'var(--accent)/15',
+            borderColor: 'var(--accent)/30',
+            color: 'var(--accent)',
             fontFamily: F,
           }}
         >
@@ -114,13 +117,20 @@ export function TransactionsCard() {
       ))}
 
       {suggestions.length > 0 ? (
-        <div className="mb-3 overflow-hidden rounded-2xl bg-emerald-50 border border-emerald-200">
+        // 고정비 제안 박스를 시스템 시맨틱 토글에 맞춘 차트 컬러(에메랄드/민트 성격) 및 변수 결합으로 보정
+        <div
+          className="mb-3 overflow-hidden rounded-2xl border"
+          style={{
+            backgroundColor: 'var(--accent)/5',
+            borderColor: 'var(--accent)/30',
+          }}
+        >
           <div className="flex items-center justify-between px-3 py-2">
             <div className="flex items-center gap-1.5">
-              <Bell size={13} color={MINT} />
+              <Bell size={13} color="var(--accent)" />
               <p
                 className="text-xs font-semibold"
-                style={{ color: NAVY, fontFamily: F }}
+                style={{ color: 'var(--foreground)', fontFamily: F }}
               >
                 고정비 제안
               </p>
@@ -134,16 +144,19 @@ export function TransactionsCard() {
                 ])
               }
             >
-              <X size={13} color="#6B7A99" />
+              <X size={13} className="text-muted-foreground" />
             </button>
           </div>
           {suggestions.map((item) => (
             <div
               key={item.name}
               className="flex flex-col gap-2 border-t px-3 py-2"
-              style={{ borderColor: `${MINT}30` }}
+              style={{ borderColor: 'var(--accent)/20' }}
             >
-              <p className="text-[10px]" style={{ color: NAVY, fontFamily: F }}>
+              <p
+                className="text-[10px]"
+                style={{ color: 'var(--foreground)', fontFamily: F }}
+              >
                 {item.name}가(이) 고정비로 등록 가능한 거래입니다. 매월{' '}
                 {item.day}일에 {item.amount.toLocaleString()}원씩 발생합니다.
               </p>
@@ -151,7 +164,7 @@ export function TransactionsCard() {
                 <button
                   type="button"
                   onClick={() => registerFixedCost(item)}
-                  className="rounded-xl bg-emerald-500 px-2 py-1 text-[10px] font-semibold text-emerald-950"
+                  className="rounded-xl bg-chart-2 px-2 py-1 text-[10px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                   style={{ fontFamily: F }}
                 >
                   고정비 등록
@@ -159,7 +172,7 @@ export function TransactionsCard() {
                 <button
                   type="button"
                   onClick={() => setDismissed((prev) => [...prev, item.name])}
-                  className="rounded-xl bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600"
+                  className="rounded-xl bg-secondary px-2 py-1 text-[10px] font-medium text-secondary-foreground transition-colors hover:bg-muted"
                   style={{ fontFamily: F }}
                 >
                   닫기
@@ -179,24 +192,24 @@ export function TransactionsCard() {
             <div
               key={tx.id}
               className="border-b"
-              style={{ borderColor: 'rgba(15,30,61,0.06)' }}
+              style={{ borderColor: 'var(--border)' }}
             >
               <button
                 type="button"
                 onClick={() => setExpandedId(isExpanded ? null : tx.id)}
-                className="w-full flex items-center gap-2 py-2.5 text-left"
+                className="w-full flex items-center gap-2 py-2.5 text-left transition-colors hover:bg-muted/20"
               >
                 <span className="text-sm shrink-0">{tx.emoji}</span>
                 <div className="min-w-0 flex-1">
                   <p
                     className="truncate text-xs font-medium"
-                    style={{ color: NAVY, fontFamily: F }}
+                    style={{ color: 'var(--foreground)', fontFamily: F }}
                   >
                     {tx.name}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <p
-                      className="text-[10px] text-slate-500"
+                      className="text-[10px] text-muted-foreground"
                       style={{ fontFamily: M }}
                     >
                       {tx.date}
@@ -217,7 +230,9 @@ export function TransactionsCard() {
                 <p
                   className="shrink-0 text-xs font-bold"
                   style={{
-                    color: tx.type === 'in' ? '#52C41A' : NAVY,
+                    // 입금(+)의 경우 시스템 긍정 지표인 var(--chart-2) 매핑, 출금은 var(--foreground) 매핑
+                    color:
+                      tx.type === 'in' ? 'var(--chart-2)' : 'var(--foreground)',
                     fontFamily: M,
                   }}
                 >
@@ -225,26 +240,32 @@ export function TransactionsCard() {
                   {Math.abs(tx.amount).toLocaleString()}원
                 </p>
                 {isExpanded ? (
-                  <ChevronUp size={13} color="#6B7A99" />
+                  <ChevronUp size={13} className="text-muted-foreground" />
                 ) : (
-                  <ChevronDown size={13} color="#6B7A99" />
+                  <ChevronDown size={13} className="text-muted-foreground" />
                 )}
               </button>
               {isExpanded ? (
                 <div
-                  className="mx-2 mb-2 rounded-2xl bg-white px-4 py-2 text-[10px]"
-                  style={{ border: '1px solid rgba(15,30,61,0.08)' }}
+                  className="mx-2 mb-2 rounded-2xl bg-secondary px-4 py-2 text-[10px]"
+                  style={{ border: '1px solid var(--border)' }}
                 >
-                  <div className="flex justify-between">
-                    <span style={{ color: '#6B7A99', fontFamily: F }}>
+                  <div className="flex justify-between py-1">
+                    <span
+                      className="text-muted-foreground"
+                      style={{ fontFamily: F }}
+                    >
                       거래처
                     </span>
-                    <span style={{ color: NAVY, fontFamily: F }}>
+                    <span style={{ color: 'var(--foreground)', fontFamily: F }}>
                       {tx.name}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span style={{ color: '#6B7A99', fontFamily: F }}>
+                  <div className="flex justify-between items-center py-1">
+                    <span
+                      className="text-muted-foreground"
+                      style={{ fontFamily: F }}
+                    >
                       카테고리
                     </span>
                     <CatBadge
@@ -254,11 +275,14 @@ export function TransactionsCard() {
                       }
                     />
                   </div>
-                  <div className="flex justify-between">
-                    <span style={{ color: '#6B7A99', fontFamily: F }}>
+                  <div className="flex justify-between py-1">
+                    <span
+                      className="text-muted-foreground"
+                      style={{ fontFamily: F }}
+                    >
                       날짜/시간
                     </span>
-                    <span style={{ color: NAVY, fontFamily: M }}>
+                    <span style={{ color: 'var(--foreground)', fontFamily: M }}>
                       {tx.date}
                     </span>
                   </div>

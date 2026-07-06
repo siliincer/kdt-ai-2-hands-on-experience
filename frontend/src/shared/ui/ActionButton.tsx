@@ -14,8 +14,8 @@ export default function ActionButton({
   const baseClassName = 'rounded-full px-3 py-1.5 text-sm transition';
   const variantClassName =
     variant === 'primary'
-      ? 'border border-emerald-400/40 bg-emerald-500/15 text-emerald-200 hover:border-emerald-300 hover:text-emerald-100'
-      : 'border border-white/10 bg-slate-800/70 text-slate-300 hover:border-emerald-400/40 hover:text-emerald-200';
+      ? 'border border-emerald-400/40 bg-accent/15 text-accent-foreground hover:border-accent hover:text-foreground'
+      : 'border border-border bg-card/90 text-foreground hover:border-emerald-400/40 hover:text-foreground';
 
   return (
     <button

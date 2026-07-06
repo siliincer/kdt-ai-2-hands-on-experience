@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './pages/ErrorFallback.tsx';
 import './styles/index.css';
+import { ThemeProvider } from './app/providers/ThemeProvider.tsx';
 import App from './app/App.tsx';
 
 const queryClient = new QueryClient({
@@ -30,7 +31,9 @@ createRoot(document.getElementById('root')!).render(
           queryClient.resetQueries();
         }}
       >
-        <App />
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
       </ErrorBoundary>
     </QueryClientProvider>
   </StrictMode>,

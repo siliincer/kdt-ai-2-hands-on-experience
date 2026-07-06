@@ -14,12 +14,12 @@ export default function SectionCard({
   children,
 }: SectionCardProps) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-800/70 p-4">
+    <div className="rounded-2xl border border-border bg-card/95 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-white">{title}</p>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
           {description ? (
-            <p className="mt-1 text-xs text-slate-400">{description}</p>
+            <p className="mt-1 text-xs text-slate-600">{description}</p>
           ) : null}
         </div>
         {action}

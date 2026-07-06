@@ -1,4 +1,6 @@
 import { Link, useLocation } from 'react-router';
+import { Moon, SunMedium } from 'lucide-react';
+import { useTheme } from '@/shared/hooks/useTheme';
 
 const links = [
   { path: '/', label: '홈' },
@@ -14,22 +16,34 @@ const links = [
 
 export default function NavigationBar() {
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <nav className="flex flex-wrap gap-2">
+    <nav className="flex flex-wrap items-center gap-2">
       {links.map((link) => (
         <Link
           key={link.path}
           to={link.path}
           className={`rounded-full border px-3 py-2 text-sm transition ${
             location.pathname === link.path
-              ? 'border-emerald-400 bg-emerald-500/10 text-emerald-200'
-              : 'border-white/10 text-slate-300 hover:border-emerald-400/40 hover:text-emerald-200'
+              ? 'border-accent bg-accent/10 text-accent-foreground font-medium'
+              : 'border-border text-muted-foreground hover:border-accent/40 hover:text-foreground'
           }`}
         >
           {link.label}
         </Link>
       ))}
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card/90 px-3 text-sm text-foreground transition hover:border-emerald-400/40 hover:text-foreground"
+      >
+        {theme === 'dark' ? (
+          <SunMedium className="h-4 w-4" />
+        ) : (
+          <Moon className="h-4 w-4" />
+        )}
+      </button>
     </nav>
   );
 }
