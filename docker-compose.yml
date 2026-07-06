@@ -54,6 +54,9 @@ services:
     container_name: kdt-agent
     env_file:
       - .env
+    environment:
+      # compose 스택에서는 실제 서비스 간 통신을 검증하도록 http 모드
+      BANK_CLIENT: http
     ports:
       - "8001:8001"
     networks:
@@ -65,6 +68,22 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      mock-financial-service:
+        condition: service_started
+
+  mock-financial-service:
+    build:
+      context: .
+      dockerfile: mock-financial-service/Dockerfile
+    container_name: kdt-mock-financial-service
+    env_file:
+      - .env
+    ports:
+      - "8002:8002"
+    networks:
+      default:
+        aliases:
+          - mock-financial-service
 
   nginx:
     image: nginx:1.27-alpine

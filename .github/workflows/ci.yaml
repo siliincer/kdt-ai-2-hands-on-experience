@@ -54,6 +54,14 @@ jobs:
             uv run python -c "import agent; print('agent import ok')"
           fi
 
+      - name: Mock financial service tests or import check
+        run: |
+          if find mock-financial-service -path "*/tests/test_*.py" -print -quit | grep -q .; then
+            uv run pytest mock-financial-service
+          else
+            uv run python -c "import mock_financial_service; print('mock_financial_service import ok')"
+          fi
+
       - name: Validate env example
         run: |
           required_keys=(
