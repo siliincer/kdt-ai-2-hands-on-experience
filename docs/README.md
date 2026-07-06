@@ -4,7 +4,7 @@
 
 ## 예정 문서
 
-- 로컬 실행 가이드
-- 환경변수 설명
-- 배포 절차
+- `local-development.md`: 로컬 개발 환경과 Docker Compose 실행 방법
+- `security-rules.md`: Secret, 로그, PR 보안 규칙
+- `aws-ec2-deploy.md`: AWS EC2, ECR, Docker Compose 기반 배포 방향
 - 장애 대응 Runbook

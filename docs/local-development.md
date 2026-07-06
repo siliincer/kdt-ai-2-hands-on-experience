@@ -85,17 +85,29 @@ uv run uvicorn agent.main:app --reload --host 0.0.0.0 --port 8001
 
 ## 8. Docker Compose
 
-기본 실행은 PostgreSQL, Redis, Backend, Nginx를 실행합니다.
+### 통합 실행
+
+기본 Compose는 PostgreSQL, Redis, Backend, Nginx를 함께 실행합니다.
 
 ```bash
 docker compose up -d --build
 docker compose ps
 ```
 
-Backend 코드를 컨테이너에 bind mount하고 `uvicorn --reload`로 실행하려면 개발용 override를 함께 사용합니다.
+### Backend 개발용 인프라 실행
+
+Backend를 호스트에서 `uvicorn --reload`로 실행하면서 PostgreSQL과 Redis만 컨테이너로 사용할 때는 개발용 Compose를 사용합니다.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+docker compose -f docker-compose.dev.yml up -d
+cd backend
+uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+`docker-compose.dev.yml`은 `postgres`, `redis_cache`, `redis_stream` 인프라만 실행합니다. 기존 통합 실행 컨테이너가 같은 포트(`5432`, `6379`)를 사용 중이면 먼저 중지합니다.
+
+```bash
+docker compose down
 ```
 
 Agent는 `agent.main:app`이 추가된 뒤 profile을 지정해 실행합니다.
