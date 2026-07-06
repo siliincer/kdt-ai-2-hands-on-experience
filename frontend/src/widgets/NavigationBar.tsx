@@ -7,7 +7,7 @@ const links = [
   { path: '/transactions', label: '거래내역' },
   { path: '/budget', label: '예산관리' },
   { path: '/balance', label: '잔액조회' },
-  { path: '/autotransfer', label: '자동이체' },
+  { path: '/autotransfer', label: '자동이체등록' },
   { path: '/card', label: '카드관리' },
   //{ path: '/logout  ', label: '로그아웃' },
 ];
