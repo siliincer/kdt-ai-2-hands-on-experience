@@ -16,18 +16,27 @@ state 규약 (시트 v2 / Tool_v2 계약):
 from __future__ import annotations
 
 import re
-import uuid
 
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
-from agent.data.mock_bank import MOCK_ACCOUNTS, MOCK_RECIPIENTS
+from agent.bank_client import BankClientError, get_bank_client
 from agent.llm import get_llm
 
 
 def _data(state: dict) -> dict:
     """AgentState의 업무 데이터 버킷(data)을 반환한다."""
     return state.get("data") or {}
+
+
+def _accounts(user_id: str) -> list[dict]:
+    """BankClient 경유 계좌 목록 조회 (원장 직접 접근 금지)."""
+    return get_bank_client().get_accounts(user_id)
+
+
+def _recipients(user_id: str) -> list[dict]:
+    """BankClient 경유 수취인 목록 조회."""
+    return get_bank_client().get_recipients(user_id)
 
 
 # ── 공통 조회 ──────────────────────────────────────────────────────────────────
@@ -43,15 +52,22 @@ def get_balance(state: dict) -> dict:
     if not accounts:
         return {"route_key": "failed"}
 
-    results = [
-        {
-            "account_id": a["account_id"],
-            "account_name": a["account_name"],
-            "balance": a["balance"],
-            "currency": a.get("currency", "KRW"),
-        }
-        for a in accounts
-    ]
+    user_id = state.get("user_id")
+    results = []
+    for a in accounts:
+        # 원장 실시간 재조회 — 실패 시 선택 시점 스냅샷으로 폴백
+        try:
+            live = _live_account(user_id, a.get("account_id")) or a
+        except BankClientError:
+            live = a
+        results.append(
+            {
+                "account_id": live["account_id"],
+                "account_name": live["account_name"],
+                "balance": live["balance"],
+                "currency": live.get("currency", "KRW"),
+            }
+        )
     return {"balance.balance_results": results, "route_key": "success"}
 
 
@@ -115,7 +131,7 @@ def verify_account(state: dict) -> dict:
     """
     try:
         user_id = state.get("user_id")
-        accounts = MOCK_ACCOUNTS.get(user_id, [])
+        accounts = _accounts(user_id)
         if not accounts:
             return {
                 "balance.selected_accounts": [],
@@ -299,7 +315,7 @@ def _resolve_recipient(user_id: str, raw) -> tuple[dict | None, list[dict]]:
 
     반환: (단건 매칭된 수취인 dict 또는 None, 매칭 후보 리스트)
     """
-    recipients = MOCK_RECIPIENTS.get(user_id, [])
+    recipients = _recipients(user_id)
     if isinstance(raw, dict):
         if raw.get("account_number") and raw.get("bank"):
             return raw, [raw]
@@ -320,12 +336,12 @@ def _resolve_recipient(user_id: str, raw) -> tuple[dict | None, list[dict]]:
 
 
 def _live_account(user_id: str, account_id: str | None) -> dict | None:
-    """MOCK_ACCOUNTS에서 계좌를 실시간 재조회한다 (state 복사본의 잔액은
-    오래됐을 수 있으므로 잔액 확인/차감은 반드시 이 원본으로 한다)."""
-    for account in MOCK_ACCOUNTS.get(user_id, []):
-        if account.get("account_id") == account_id:
-            return account
-    return None
+    """원장에서 계좌를 실시간 재조회한다 (state 복사본의 잔액은
+    오래됐을 수 있으므로 잔액 확인은 반드시 이 결과로 한다)."""
+    if not account_id:
+        return None
+    accounts = get_bank_client().get_accounts(user_id, account_id=account_id)
+    return accounts[0] if accounts else None
 
 
 def _resolve_from_account(user_id: str, raw) -> tuple[dict | None, list[dict]]:
@@ -334,7 +350,7 @@ def _resolve_from_account(user_id: str, raw) -> tuple[dict | None, list[dict]]:
     입력이 없으면 기본 계좌(is_default)를 쓴다.
     반환: (해석된 계좌 dict 또는 None, 선택지 후보 리스트)
     """
-    accounts = MOCK_ACCOUNTS.get(user_id, [])
+    accounts = _accounts(user_id)
     if not accounts:
         return None, []
     if isinstance(raw, dict):
@@ -379,6 +395,10 @@ def _parse_approval_reply(reply: str) -> str:
     approve_keywords = ("승인", "확인", "네", "응", "보내", "진행", "예")
     if any(keyword in text for keyword in approve_keywords):
         return "approved"
+    # UI 승인 버튼 라벨("송금하기")이 그대로 회신되는 경우 — 정확 일치만
+    # 허용한다 ("송금 안 할래" 같은 부정 표현의 오판 방지).
+    if text.replace(" ", "") in {"송금하기", "송금"}:
+        return "approved"
     return "cancelled"
 
 
@@ -408,7 +428,7 @@ def _account_options(accounts: list[dict]) -> str:
 def _recipient_catalog(user_id: str) -> str:
     return "\n".join(
         f"  {i}. {r['name']} ({r['bank']} {r['account_number']})"
-        for i, r in enumerate(MOCK_RECIPIENTS.get(user_id, []), 1)
+        for i, r in enumerate(_recipients(user_id), 1)
     )
 
 
@@ -466,15 +486,19 @@ def resolve_recipient_input(state: dict) -> dict:
     """수취인 입력값을 등록 수취인 단건으로 해석한다."""
     user_id = state.get("user_id")
     raw = _data(state).get("transfer.recipient")
-    resolved, _matches = _resolve_recipient(user_id, raw)
-    if resolved:
-        return {"transfer.recipient": resolved, "route_key": "resolved"}
+    try:
+        resolved, _matches = _resolve_recipient(user_id, raw)
+        if resolved:
+            return {"transfer.recipient": resolved, "route_key": "resolved"}
+        catalog = _recipient_catalog(user_id)
+    except BankClientError:
+        resolved, catalog = None, "(수취인 목록을 불러오지 못했습니다)"
     return {
         "route_key": "failed",
         "prompt_message": (
             "수취인을 하나로 확정하지 못했어요. "
             "이름 또는 계좌번호를 다시 입력해주세요.\n"
-            f"등록된 수취인:\n{_recipient_catalog(user_id)}"
+            f"등록된 수취인:\n{catalog}"
         ),
     }
 
@@ -487,14 +511,18 @@ def verify_recipient_account(state: dict) -> dict:
     """
     user_id = state.get("user_id")
     raw = _data(state).get("transfer.recipient")
-    resolved, _matches = _resolve_recipient(user_id, raw)
-    if resolved and resolved.get("account_number") and resolved.get("bank"):
-        return {"transfer.recipient": resolved, "route_key": "verified"}
+    try:
+        resolved, _matches = _resolve_recipient(user_id, raw)
+        if resolved and resolved.get("account_number") and resolved.get("bank"):
+            return {"transfer.recipient": resolved, "route_key": "verified"}
+        catalog = _recipient_catalog(user_id)
+    except BankClientError:
+        catalog = "(수취인 목록을 불러오지 못했습니다)"
     return {
         "route_key": "not_verified",
         "prompt_message": (
             "수취인 계좌를 확인할 수 없어요. 다시 입력해주세요.\n"
-            f"등록된 수취인:\n{_recipient_catalog(user_id)}"
+            f"등록된 수취인:\n{catalog}"
         ),
     }
 
@@ -582,7 +610,7 @@ def check_balance(state: dict) -> dict:
             "prompt_message": (
                 f"{live['account_name']} 잔액({live['balance']:,}원)이 송금 "
                 f"금액({amount:,}원)보다 부족해요. 다른 계좌를 선택해주세요.\n"
-                f"{_account_options(MOCK_ACCOUNTS.get(user_id, []))}"
+                f"{_account_options(_accounts(user_id))}"
             ),
         }
     except Exception:
@@ -660,7 +688,7 @@ def run_pre_execution_guardrail(state: dict) -> dict:
                 "route_key": "insufficient_balance",
                 "prompt_message": (
                     "승인 이후 잔액이 부족해졌어요. 다른 계좌를 선택해주세요.\n"
-                    f"{_account_options(MOCK_ACCOUNTS.get(user_id, []))}"
+                    f"{_account_options(_accounts(user_id))}"
                 ),
             }
         return {"route_key": "allowed"}
@@ -761,35 +789,52 @@ def request_user_authentication(state: dict) -> dict:
 
 
 def transfer_money(state: dict) -> dict:
-    """Fake Money 송금을 실행한다. 잔액을 실제로 차감한다."""
+    """Fake Money 송금을 실행한다. 원장 차감은 BankClient가 담당한다."""
     user_id = state.get("user_id")
     data = _data(state)
     recipient = data.get("transfer.recipient") or {}
     account = data.get("transfer.from_account") or {}
     amount = data.get("transfer.amount")
 
-    live = _live_account(user_id, account.get("account_id"))
-    if not live or not recipient.get("recipient_id") or not isinstance(amount, int):
+    if not recipient.get("recipient_id") or not isinstance(amount, int):
         return {
             "route_key": "failed",
             "final_response": "송금 처리 중 문제가 발생했습니다.",
         }
-    if live["balance"] < amount:
+
+    try:
+        live = _live_account(user_id, account.get("account_id"))
+        if not live:
+            return {
+                "route_key": "failed",
+                "final_response": "송금 처리 중 문제가 발생했습니다.",
+            }
+        if live["balance"] < amount:
+            return {
+                "route_key": "failed",
+                "final_response": "잔액이 부족해 송금하지 못했습니다.",
+            }
+        result = get_bank_client().transfer(
+            user_id=user_id,
+            from_account_id=live["account_id"],
+            to_recipient_id=recipient["recipient_id"],
+            amount=amount,
+            memo=data.get("transfer.memo"),
+        )
+    except BankClientError:
         return {
             "route_key": "failed",
-            "final_response": "잔액이 부족해 송금하지 못했습니다.",
+            "final_response": "송금 처리 중 문제가 발생했습니다.",
         }
-
-    live["balance"] -= amount  # mock 은행 원장의 유일한 승인된 변형
 
     return {
         "transfer.transfer_result": {
-            "transaction_id": f"txn_{uuid.uuid4().hex[:8]}",
+            "transaction_id": result.get("transaction_id"),
             "from_account_id": live["account_id"],
             "to_recipient_id": recipient["recipient_id"],
             "to_recipient_name": recipient.get("name"),
             "amount": amount,
-            "status": "completed",
+            "status": result.get("status", "completed"),
         },
         "route_key": "success",
     }
@@ -853,4 +898,19 @@ def write_audit_log(state: dict) -> dict:
             }
         ),
     }
+    # 원장 서비스에도 best-effort 전송 — 실패해도 사용자 흐름을 막지 않는다
+    # (시트 규칙: "로그 실패는 사용자 흐름을 막지 않는다")
+    try:
+        get_bank_client().post_audit_log(
+            event_type="workflow_completed",
+            workflow_id=state.get("workflow_id"),
+            tool_id="write_audit_log",
+            result={
+                "log_id": log_id,
+                "final_response": state.get("final_response"),
+            },
+        )
+    except Exception:  # noqa: BLE001 - 감사 로그 전송 실패는 흐름 무영향
+        pass
+
     return {"log_id": log_id, "logs": logs + [entry], "route_key": "logged"}

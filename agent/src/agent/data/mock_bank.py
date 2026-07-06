@@ -1,7 +1,8 @@
 """Mock 은행 데이터.
 
 DB 도입 전 단계라 Python dict/list로만 계좌·감사로그를 보관한다.
-추후 PostgreSQL/Redis 연동 시 이 모듈만 교체하면 된다.
+tool은 이 모듈을 직접 import하지 않고 BankClient(agent/src/agent/bank_client.py)를
+경유한다. 추후 실제 원장 연동 시 클라이언트 구현만 교체하면 된다.
 """
 
 # user_id -> 계좌 목록
