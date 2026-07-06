@@ -16,8 +16,9 @@ state 규약 (시트 v2 / Tool_v2 계약):
 from __future__ import annotations
 
 import re
-import time
+import uuid
 
+from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
 from agent.data.mock_bank import MOCK_ACCOUNTS, MOCK_RECIPIENTS
@@ -30,30 +31,6 @@ def _data(state: dict) -> dict:
 
 
 # ── 공통 조회 ──────────────────────────────────────────────────────────────────
-
-
-def get_accounts(state: dict) -> list | None:
-    """user_id 기준 계좌 목록을 반환한다."""
-    user_id = state.get("user_id")
-    accounts = MOCK_ACCOUNTS.get(user_id, [])
-    return accounts if accounts else None
-
-
-def resolve_account(state: dict) -> dict | None:
-    """조회/출금 계좌를 결정한다.
-
-    계좌가 1개면 그것을, 여러 개면 기본 계좌(is_default=True)를 선택한다.
-    기본 계좌도 없으면 None 반환 → on_fail로 사용자에게 선택 요청.
-    """
-    accounts = state.get("accounts") or []
-    if not accounts:
-        return None
-    if len(accounts) == 1:
-        return accounts[0]
-    for account in accounts:
-        if account.get("is_default"):
-            return account
-    return None
 
 
 def get_balance(state: dict) -> dict:
@@ -262,302 +239,577 @@ def apply_account_selection(state: dict) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 레거시 송금 tool (Tool_v2 이전 스펙 — 재작성 예정)
+# 타인 송금 (wf_external_transfer) — Tool_v2 계약 구현
 #
-# 아래 함수들은 구버전 시트 기준으로 작성되어 flat top-level 키
-# (recipient_name, selected_account, amount 등)를 읽는다. state 개편 이후
-# 이 키들은 data 버킷에 네임스페이스(transfer.*)로 들어오므로 이 함수들은
-# 값을 찾지 못해 None을 반환하고, 엔진이 error 라우팅한다 (안전하게 실패).
-# wf_external_transfer 구현 시 Tool_v2의 input_state_keys/write_state_keys
-# 계약대로 재작성한다. 목록: docs/agent-sheet-v2-review.md 참조.
-#
-# 알려진 잠재 버그: create_approval은 state를 in-place로 수정한다
-# (state["approval_prompt"] = ...) — 재작성 시 delta 반환으로 교체할 것.
-#
-# 예외: 맨 아래 '감사 로그' 섹션(write_audit_log)은 시스템 키만 다루므로
-# 레거시가 아니며 balance/transfer 양쪽에서 그대로 사용된다.
+# 규칙:
+#   - 업무 키는 transfer.* 네임스페이스로 읽고(_data) 쓴다(반환 dict)
+#   - 모든 tool은 route_key를 명시적으로 반환한다
+#   - 승인/인증/경고확인 tool은 직접 interrupt()를 호출한다 (대화형).
+#     재개 시 노드가 처음부터 재실행되므로 interrupt 이전 코드는
+#     프롬프트 조립 같은 멱등 작업만 둔다. 한 노드 실행에서 interrupt를
+#     두 번 호출하지 않는다 (재개 매칭이 위치 기반이라 깨지기 쉬움).
+#   - 승인 게이트에서 해석 불가능한 답변은 보수적으로 '취소' 처리한다
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── 타인 송금 슬롯 추출 ────────────────────────────────────────────────────────
+# ── 파싱/해석 헬퍼 (순수 함수) ─────────────────────────────────────────────────
+
+_AMOUNT_MAN = re.compile(r"(\d[\d,]*)\s*만\s*원?")
+_AMOUNT_WON = re.compile(r"(\d[\d,]*)\s*원")
+_RECIPIENT_PATTERN = re.compile(r"(\S+?)(?:에게|한테|께)")
+_FROM_ACCOUNT_PATTERN = re.compile(r"(\S+?)\s*(?:통장|계좌)\s*에서")
+_ACCOUNT_KEYWORDS = ["생활비", "입출금", "저축", "적금", "주거래"]
+
+# 취소로 인식하는 답변 (subgraph_builder._is_cancel_reply와 동일 기준 —
+# import하면 순환 참조가 생겨 여기 별도로 둔다)
+_CANCEL_EXACT = {"그만", "그만할래", "안할래", "안 할래", "됐어", "관둘래"}
 
 
-def extract_transfer_slots(state: dict) -> dict | None:
-    """사용자 발화에서 수취인명·금액·계좌 힌트를 추출한다.
+def _is_cancel(reply: str) -> bool:
+    text = str(reply).strip()
+    return "취소" in text or text in _CANCEL_EXACT
 
-    결과를 multi-key output_data_key(recipient_name, amount, account)로 반환.
-    추출된 것이 없으면 None → on_fail_next_step_id(ask_transfer_info)로 라우팅.
+
+def _parse_amount(value) -> int | None:
+    """금액 입력을 정수(원)로 정규화한다. 해석 불가면 None.
+
+    지원: 50000, 50000.0, "5만원", "5만", "50,000원", "50000"
+    미지원(한계): "1만 5천원" 같은 혼합 단위 표기.
     """
-    user_input = state.get("user_input", "")
-    slots: dict = {}
-
-    m = re.search(r"(\S+)(?:에게|한테|에게로)", user_input)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    m = _AMOUNT_MAN.search(text)
     if m:
-        slots["recipient_name"] = m.group(1)
-
-    m = re.search(r"(\d+)\s*만\s*원", user_input)
+        return int(m.group(1).replace(",", "")) * 10000
+    m = _AMOUNT_WON.search(text)
     if m:
-        slots["amount"] = int(m.group(1)) * 10000
-    else:
-        m = re.search(r"(\d[\d,]*)\s*원", user_input)
-        if m:
-            slots["amount"] = int(m.group(1).replace(",", ""))
-
-    if not slots:
-        return None
-
-    return {
-        "recipient_name": slots.get("recipient_name"),
-        "amount": slots.get("amount"),
-        "account": slots.get("account_hint"),
-    }
-
-
-# ── 수취인 확인 ────────────────────────────────────────────────────────────────
-
-
-def verify_recipient(state: dict) -> dict | None:
-    """수취인 이름으로 등록 수취인을 검색해 단일 매칭 시 확정한다.
-
-    이미 selected_recipient가 있으면 그대로 통과.
-    단일 매칭 → 성공.
-    복수/미매칭 → _success: False (ask_recipient_resolution으로 라우팅).
-    """
-    if state.get("selected_recipient"):
-        rec = state["selected_recipient"]
-        return {
-            "recipient_candidates": [rec],
-            "selected_recipient": rec,
-            "recipient_verification_result": "matched",
-        }
-
-    user_id = state.get("user_id")
-    name = (state.get("recipient_name") or "").strip()
-    if not name:
-        return None
-
-    candidates = [r for r in MOCK_RECIPIENTS.get(user_id, []) if name in r["name"]]
-
-    if len(candidates) == 1:
-        return {
-            "recipient_candidates": candidates,
-            "selected_recipient": candidates[0],
-            "recipient_verification_result": "matched",
-        }
-    elif len(candidates) > 1:
-        return {
-            "_success": False,
-            "recipient_candidates": candidates,
-            "selected_recipient": None,
-            "recipient_verification_result": "multiple",
-        }
-    else:
-        return {
-            "_success": False,
-            "recipient_candidates": [],
-            "selected_recipient": None,
-            "recipient_verification_result": "no_match",
-        }
-
-
-# ── 출금 계좌 확인 ─────────────────────────────────────────────────────────────
-
-
-def verify_from_account(state: dict) -> dict | None:
-    """출금 계좌를 확정한다.
-
-    이미 selected_account가 있으면 유효성 검증 후 통과.
-    단일 계좌 또는 기본 계좌 → 성공.
-    후보 복수에 기본 계좌 없음 → _success: False (ask_account_selection으로 라우팅).
-    """
-    user_id = state.get("user_id")
-    accounts = MOCK_ACCOUNTS.get(user_id, [])
-    if not accounts:
-        return None
-
-    already = state.get("selected_account")
-    if already and isinstance(already, dict):
-        if any(a["account_id"] == already["account_id"] for a in accounts):
-            return {
-                "account_candidates": accounts,
-                "selected_account": already,
-                "account_verification_result": "matched",
-            }
-
-    hint = (state.get("account_hint") or state.get("account") or "").strip()
-    candidates = (
-        [a for a in accounts if hint in a.get("account_name", "")] if hint else accounts
-    )
-
-    if len(candidates) == 1:
-        return {
-            "account_candidates": candidates,
-            "selected_account": candidates[0],
-            "account_verification_result": "matched",
-        }
-
-    for a in candidates:
-        if a.get("is_default"):
-            return {
-                "account_candidates": candidates,
-                "selected_account": a,
-                "account_verification_result": "matched",
-            }
-
-    return {
-        "_success": False,
-        "account_candidates": candidates,
-        "selected_account": None,
-        "account_verification_result": "multiple",
-    }
-
-
-# ── 금액 검증 ──────────────────────────────────────────────────────────────────
-
-
-def verify_amount(state: dict) -> dict | None:
-    """송금 금액의 유효성을 검증한다."""
-    amount = state.get("amount")
-    if not isinstance(amount, (int, float)) or amount <= 0:
-        return {
-            "_success": False,
-            "amount": None,
-            "amount_verification_result": "invalid",
-        }
-    if amount > 50_000_000:
-        return {
-            "_success": False,
-            "amount": amount,
-            "amount_verification_result": "limit_exceeded",
-        }
-    return {"amount": int(amount), "amount_verification_result": "valid"}
-
-
-# ── 위험도 평가 ────────────────────────────────────────────────────────────────
-
-
-def assess_transfer_risk(state: dict) -> dict | None:
-    """송금 위험도를 평가한다.
-
-    1천만 원 이상 → 고위험(blocked).
-    그 외 → 통과 (백만 원 이상은 R4, 미만은 R2).
-    """
-    amount = state.get("amount", 0)
-
-    if amount >= 10_000_000:
-        return {
-            "_success": False,
-            "risk_result": {
-                "risk_level": "R5",
-                "decision": "blocked",
-                "reason": f"{amount:,}원 — 1천만 원 이상 고액 송금",
-            },
-        }
-
-    return {
-        "risk_result": {
-            "risk_level": "R4" if amount >= 1_000_000 else "R2",
-            "decision": "pass",
-        }
-    }
-
-
-# ── 승인 관리 ──────────────────────────────────────────────────────────────────
-
-
-def create_approval(state: dict) -> dict | None:
-    """송금 승인 요청 정보를 생성하고 approval_prompt를 설정한다."""
-    recipient = state.get("selected_recipient") or {}
-    account = state.get("selected_account") or {}
-    amount = state.get("amount", 0)
-    memo = state.get("memo") or ""
-
-    approval_id = state.get("approval_id") or f"apv_{int(time.time())}"
-
-    memo_line = f"\n  메모      : {memo}" if memo else ""
-    state["approval_prompt"] = (
-        f"[송금 확인]\n"
-        f"  받는 분   : {recipient.get('name', '?')} ({recipient.get('bank', '?')})\n"
-        f"  보내는 계좌: {account.get('account_name', '?')}\n"
-        f"  금액      : {amount:,}원{memo_line}\n"
-        f"송금하시겠습니까? (확인/취소)"
-    )
-    state["final_response"] = state["approval_prompt"]
-
-    return {
-        "approval_id": approval_id,
-        "approval_summary": {
-            "recipient_name": recipient.get("name"),
-            "recipient_bank": recipient.get("bank"),
-            "from_account": account.get("account_name"),
-            "amount": amount,
-            "memo": memo,
-        },
-    }
-
-
-def check_approval_result(state: dict) -> dict | None:
-    """approval_status를 확인해 승인 결과를 반환한다.
-
-    approved → {"approval_result": "approved"}.
-    그 외 → None (on_fail_next_step_id: show_transfer_cancelled 으로 라우팅).
-    """
-    if state.get("approval_status") == "approved":
-        return {"approval_result": "approved"}
+        return int(m.group(1).replace(",", ""))
+    bare = text.replace(",", "")
+    if bare.isdigit():
+        return int(bare)
     return None
 
 
-# ── 송금 실행 ──────────────────────────────────────────────────────────────────
+def _resolve_recipient(user_id: str, raw) -> tuple[dict | None, list[dict]]:
+    """수취인 입력(이름/계좌번호/dict)을 등록 수취인 단건으로 해석한다.
+
+    반환: (단건 매칭된 수취인 dict 또는 None, 매칭 후보 리스트)
+    """
+    recipients = MOCK_RECIPIENTS.get(user_id, [])
+    if isinstance(raw, dict):
+        if raw.get("account_number") and raw.get("bank"):
+            return raw, [raw]
+        raw = raw.get("name") or ""
+    text = str(raw or "").strip()
+    if not text:
+        return None, []
+    normalized = text.replace("-", "").replace(" ", "")
+    if normalized.isdigit():
+        matches = [
+            r for r in recipients if r["account_number"].replace("-", "") == normalized
+        ]
+    else:
+        matches = [r for r in recipients if text in r["name"] or r["name"] in text]
+    if len(matches) == 1:
+        return matches[0], matches
+    return None, matches
 
 
-def transfer_money(state: dict) -> dict | None:
-    """타인 송금을 실행한다. 잔액을 실제로 차감하고 거래 기록을 반환한다."""
-    from_account = state.get("selected_account")
-    recipient = state.get("selected_recipient")
-    amount = state.get("amount")
-    memo = state.get("memo", "")
-
-    if not from_account or not recipient or not amount:
-        return None
-    if from_account.get("balance", 0) < amount:
-        return None
-
-    from_account["balance"] -= amount
-
-    return {
-        "transaction_id": f"txn_{int(time.time())}",
-        "from_account_id": from_account["account_id"],
-        "to_recipient_id": recipient["recipient_id"],
-        "to_recipient_name": recipient["name"],
-        "amount": amount,
-        "memo": memo,
-        "status": "completed",
-    }
+def _live_account(user_id: str, account_id: str | None) -> dict | None:
+    """MOCK_ACCOUNTS에서 계좌를 실시간 재조회한다 (state 복사본의 잔액은
+    오래됐을 수 있으므로 잔액 확인/차감은 반드시 이 원본으로 한다)."""
+    for account in MOCK_ACCOUNTS.get(user_id, []):
+        if account.get("account_id") == account_id:
+            return account
+    return None
 
 
-def generate_transfer_response(state: dict) -> str | None:
-    """송금 결과를 사람이 읽을 응답 문자열로 만든다."""
-    result = state.get("transfer_result")
-    if not result or result.get("status") != "completed":
-        return None
-    memo = f" (메모: {result['memo']})" if result.get("memo") else ""
-    return (
-        f"{result['to_recipient_name']}님에게 {result['amount']:,}원을 송금했습니다."
-        f"{memo} 거래번호: {result['transaction_id']}"
+def _resolve_from_account(user_id: str, raw) -> tuple[dict | None, list[dict]]:
+    """출금 계좌 입력(dict/힌트 문자열/"1번"/None)을 계좌 단건으로 해석한다.
+
+    입력이 없으면 기본 계좌(is_default)를 쓴다.
+    반환: (해석된 계좌 dict 또는 None, 선택지 후보 리스트)
+    """
+    accounts = MOCK_ACCOUNTS.get(user_id, [])
+    if not accounts:
+        return None, []
+    if isinstance(raw, dict):
+        live = _live_account(user_id, raw.get("account_id"))
+        return live, accounts
+    text = str(raw or "").strip()
+    if text:
+        digits = "".join(ch for ch in text if ch.isdigit())
+        if digits:
+            index = int(digits)
+            if 1 <= index <= len(accounts):
+                return accounts[index - 1], accounts
+        compact = text.replace(" ", "")
+        matches = [
+            a
+            for a in accounts
+            if compact in a["account_name"].replace(" ", "")
+            or a["account_name"].replace(" ", "") in compact
+        ]
+        if len(matches) == 1:
+            return matches[0], accounts
+        return None, accounts
+    defaults = [a for a in accounts if a.get("is_default")]
+    if len(defaults) == 1:
+        return defaults[0], accounts
+    if len(accounts) == 1:
+        return accounts[0], accounts
+    return None, accounts
+
+
+def _parse_approval_reply(reply: str) -> str:
+    """승인 카드 답변 → route_key. 해석 불가는 보수적으로 cancelled."""
+    text = str(reply).strip()
+    if _is_cancel(text):
+        return "cancelled"
+    if "수취인" in text:
+        return "edit_recipient"
+    if "금액" in text:
+        return "edit_amount"
+    if "계좌" in text:
+        return "edit_from_account"
+    approve_keywords = ("승인", "확인", "네", "응", "보내", "진행", "예")
+    if any(keyword in text for keyword in approve_keywords):
+        return "approved"
+    return "cancelled"
+
+
+def _parse_auth_reply(reply: str) -> str:
+    """본인 인증 답변 → route_key. 취소/실패를 먼저 검사한다."""
+    text = str(reply).strip()
+    if _is_cancel(text) or "실패" in text:
+        return "not_authenticated"
+    auth_keywords = ("인증", "완료", "성공", "했어")
+    if any(keyword in text for keyword in auth_keywords):
+        return "authenticated"
+    return "not_authenticated"
+
+
+def _parse_warning_reply(reply: str) -> str:
+    """주의 안내 답변 → route_key. 명시적 취소만 중단, 그 외는 진행."""
+    return "cancelled" if _is_cancel(reply) else "confirmed"
+
+
+def _account_options(accounts: list[dict]) -> str:
+    return "\n".join(
+        f"  {i}. {a['account_name']} (잔액 {a['balance']:,}원)"
+        for i, a in enumerate(accounts, 1)
     )
 
 
-# ── 구 호환 (wf_balance_inquiry 등) ────────────────────────────────────────────
+def _recipient_catalog(user_id: str) -> str:
+    return "\n".join(
+        f"  {i}. {r['name']} ({r['bank']} {r['account_number']})"
+        for i, r in enumerate(MOCK_RECIPIENTS.get(user_id, []), 1)
+    )
 
 
-def search_recipient(state: dict) -> dict | None:
-    """수취인 이름으로 등록 수취인을 검색한다 (구 버전 호환)."""
+# ── 슬롯 추출 / 입력 확인 ──────────────────────────────────────────────────────
+
+
+def extract_transfer_slots(state: dict) -> dict:
+    """발화에서 수취인·금액·출금계좌 힌트를 추출한다. 항상 success.
+
+    빈 슬롯은 None으로 두고, 이후 check_* 스텝이 되묻기로 채운다.
+    """
+    user_input = state.get("user_input", "")
+
+    m = _RECIPIENT_PATTERN.search(user_input)
+    recipient = m.group(1) if m else None
+
+    amount = None
+    m = _AMOUNT_MAN.search(user_input)
+    if m:
+        amount = int(m.group(1).replace(",", "")) * 10000
+    else:
+        m = _AMOUNT_WON.search(user_input)
+        if m:
+            amount = int(m.group(1).replace(",", ""))
+
+    from_hint = None
+    m = _FROM_ACCOUNT_PATTERN.search(user_input)
+    if m:
+        from_hint = m.group(1)
+    else:
+        for keyword in _ACCOUNT_KEYWORDS:
+            if keyword in user_input:
+                from_hint = keyword
+                break
+
+    return {
+        "transfer.recipient": recipient,
+        "transfer.amount": amount,
+        "transfer.from_account": from_hint,
+        "route_key": "success",
+    }
+
+
+def check_recipient_input(state: dict) -> dict:
+    """수취인 입력 유무 확인. 없으면 ask_recipient로 되묻는다."""
+    if _data(state).get("transfer.recipient"):
+        return {"route_key": "exists"}
+    return {
+        "route_key": "missing",
+        "prompt_message": "누구에게 보낼까요? 이름 또는 계좌번호를 입력해주세요.",
+    }
+
+
+def resolve_recipient_input(state: dict) -> dict:
+    """수취인 입력값을 등록 수취인 단건으로 해석한다."""
     user_id = state.get("user_id")
-    slots = state.get("transfer_slots") or {}
-    name = slots.get("recipient_name") or state.get("recipient_name", "")
-    if not name:
-        return None
-    candidates = [r for r in MOCK_RECIPIENTS.get(user_id, []) if name in r["name"]]
-    return candidates[0] if candidates else None
+    raw = _data(state).get("transfer.recipient")
+    resolved, _matches = _resolve_recipient(user_id, raw)
+    if resolved:
+        return {"transfer.recipient": resolved, "route_key": "resolved"}
+    return {
+        "route_key": "failed",
+        "prompt_message": (
+            "수취인을 하나로 확정하지 못했어요. "
+            "이름 또는 계좌번호를 다시 입력해주세요.\n"
+            f"등록된 수취인:\n{_recipient_catalog(user_id)}"
+        ),
+    }
+
+
+def verify_recipient_account(state: dict) -> dict:
+    """수취인 계좌가 송금 가능한 계좌인지 확인한다.
+
+    ask_recipient의 답변이 문자열로 직접 들어오는 경로(resolved 직행)가
+    있어 문자열도 여기서 해석한다.
+    """
+    user_id = state.get("user_id")
+    raw = _data(state).get("transfer.recipient")
+    resolved, _matches = _resolve_recipient(user_id, raw)
+    if resolved and resolved.get("account_number") and resolved.get("bank"):
+        return {"transfer.recipient": resolved, "route_key": "verified"}
+    return {
+        "route_key": "not_verified",
+        "prompt_message": (
+            "수취인 계좌를 확인할 수 없어요. 다시 입력해주세요.\n"
+            f"등록된 수취인:\n{_recipient_catalog(user_id)}"
+        ),
+    }
+
+
+def check_amount_input(state: dict) -> dict:
+    """송금 금액 입력 유무 확인. 없으면 ask_amount_input으로 되묻는다."""
+    if _data(state).get("transfer.amount") is not None:
+        return {"route_key": "exists"}
+    return {"route_key": "missing"}
+
+
+# ── 검증 ──────────────────────────────────────────────────────────────────────
+
+_TRANSFER_LIMIT = 50_000_000  # 1회 송금 한도
+_GUARDRAIL_BLOCK = 10_000_000  # 정책 차단 기준
+_GUARDRAIL_WARN = 1_000_000  # 주의 안내 기준
+
+
+def verify_amount(state: dict) -> dict:
+    """송금 금액을 정수로 정규화하고 한도를 확인한다."""
+    raw = _data(state).get("transfer.amount")
+    amount = _parse_amount(raw)
+    if amount is None or amount <= 0:
+        return {
+            "route_key": "invalid",
+            "prompt_message": (
+                "금액을 확인하지 못했어요. 다시 입력해주세요 (예: 5만원)."
+            ),
+        }
+    if amount > _TRANSFER_LIMIT:
+        return {
+            "transfer.amount": amount,
+            "route_key": "limit_exceeded",
+            "final_response": (
+                f"1회 송금 한도({_TRANSFER_LIMIT:,}원)를 초과해 진행할 수 "
+                f"없습니다. 요청 금액: {amount:,}원"
+            ),
+        }
+    return {"transfer.amount": amount, "route_key": "valid"}
+
+
+def verify_from_account(state: dict) -> dict:
+    """출금 계좌를 확정한다 (dict 검증 / 힌트·선택 답변 해석 / 기본 계좌)."""
+    try:
+        user_id = state.get("user_id")
+        raw = _data(state).get("transfer.from_account")
+        resolved, candidates = _resolve_from_account(user_id, raw)
+        if resolved:
+            return {"transfer.from_account": resolved, "route_key": "verified"}
+        if not candidates:
+            return {
+                "route_key": "failed",
+                "final_response": "사용 가능한 출금 계좌가 없습니다.",
+            }
+        return {
+            "route_key": "needs_selection",
+            "prompt_message": (
+                f"어느 계좌에서 송금할까요?\n{_account_options(candidates)}"
+            ),
+        }
+    except Exception:
+        return {
+            "route_key": "failed",
+            "final_response": "출금 계좌 확인 중 문제가 발생했습니다.",
+        }
+
+
+def check_balance(state: dict) -> dict:
+    """출금 계좌의 사용 가능 잔액이 충분한지 실시간으로 확인한다."""
+    try:
+        user_id = state.get("user_id")
+        data = _data(state)
+        amount = data.get("transfer.amount")
+        account = data.get("transfer.from_account") or {}
+        live = _live_account(user_id, account.get("account_id"))
+        if not live or not isinstance(amount, int):
+            return {
+                "route_key": "failed",
+                "final_response": "잔액 확인 중 문제가 발생했습니다.",
+            }
+        if live["balance"] >= amount:
+            return {"transfer.from_account": live, "route_key": "sufficient"}
+        return {
+            "route_key": "insufficient",
+            "prompt_message": (
+                f"{live['account_name']} 잔액({live['balance']:,}원)이 송금 "
+                f"금액({amount:,}원)보다 부족해요. 다른 계좌를 선택해주세요.\n"
+                f"{_account_options(MOCK_ACCOUNTS.get(user_id, []))}"
+            ),
+        }
+    except Exception:
+        return {
+            "route_key": "failed",
+            "final_response": "잔액 확인 중 문제가 발생했습니다.",
+        }
+
+
+# ── 정책 검사 (guardrail) ─────────────────────────────────────────────────────
+
+
+def run_transfer_guardrail(state: dict) -> dict:
+    """송금 정책 검사: 고액 차단 / 주의 안내 / 통과."""
+    amount = _data(state).get("transfer.amount") or 0
+    if amount >= _GUARDRAIL_BLOCK:
+        return {
+            "transfer.risk": {
+                "risk_level": "R5",
+                "decision": "blocked",
+                "reason": f"{amount:,}원 — {_GUARDRAIL_BLOCK:,}원 이상 고액 송금",
+            },
+            "route_key": "blocked",
+            "final_response": (
+                f"정책상 1회 {_GUARDRAIL_BLOCK:,}원 이상 송금은 진행할 수 "
+                f"없습니다. (요청 금액: {amount:,}원)"
+            ),
+        }
+    if amount >= _GUARDRAIL_WARN:
+        return {
+            "transfer.risk": {"risk_level": "R4", "decision": "warning"},
+            "route_key": "warning_required",
+            "prompt_message": (
+                f"주의가 필요한 송금입니다. 금액: {amount:,}원\n"
+                "평소보다 큰 금액이에요. 진행하려면 '확인', "
+                "중단하려면 '취소'를 입력해주세요."
+            ),
+        }
+    return {
+        "transfer.risk": {"risk_level": "R2", "decision": "pass"},
+        "route_key": "allowed",
+    }
+
+
+def run_pre_execution_guardrail(state: dict) -> dict:
+    """실행 직전 검사: 승인 내용과 실행 내용 일치 + 잔액 재확인."""
+    try:
+        user_id = state.get("user_id")
+        data = _data(state)
+        approval = data.get("transfer.approval") or {}
+        recipient = data.get("transfer.recipient") or {}
+        account = data.get("transfer.from_account") or {}
+        amount = data.get("transfer.amount")
+
+        if (
+            not approval
+            or approval.get("account_number") != recipient.get("account_number")
+            or approval.get("from_account_id") != account.get("account_id")
+            or approval.get("amount") != amount
+        ):
+            return {
+                "route_key": "blocked",
+                "final_response": (
+                    "승인한 내용과 실행 내용이 일치하지 않아 송금을 차단했습니다."
+                ),
+            }
+        live = _live_account(user_id, account.get("account_id"))
+        if not live:
+            return {
+                "route_key": "failed",
+                "final_response": "실행 직전 검사 중 문제가 발생했습니다.",
+            }
+        if live["balance"] < amount:
+            return {
+                "route_key": "insufficient_balance",
+                "prompt_message": (
+                    "승인 이후 잔액이 부족해졌어요. 다른 계좌를 선택해주세요.\n"
+                    f"{_account_options(MOCK_ACCOUNTS.get(user_id, []))}"
+                ),
+            }
+        return {"route_key": "allowed"}
+    except Exception:
+        return {
+            "route_key": "failed",
+            "final_response": "실행 직전 검사 중 문제가 발생했습니다.",
+        }
+
+
+# ── 대화형 tool (interrupt 호출) ──────────────────────────────────────────────
+
+
+def transfer_warning(state: dict) -> dict:
+    """송금 주의 안내를 보여주고 사용자 확인을 받는다 (interrupt)."""
+    prompt = state.get("prompt_message") or (
+        "주의가 필요한 송금입니다. 진행하려면 '확인', 중단하려면 '취소'를 입력해주세요."
+    )
+    reply = interrupt({"prompt": prompt, "prompt_for": "transfer.warning_confirm"})
+
+    route = _parse_warning_reply(str(reply))
+    updates: dict = {"route_key": route, "prompt_message": None}
+    if route == "cancelled":
+        updates["final_response"] = "송금을 취소했습니다."
+    return updates
+
+
+def create_approval(state: dict) -> dict:
+    """송금 승인 카드를 보여주고 승인/취소/수정 답변을 받는다 (interrupt).
+
+    approved 시 승인 요약(transfer.approval)을 기록해 실행 직전 검사가
+    승인 내용과 실제 실행 내용의 일치를 대조할 수 있게 한다.
+    """
+    data = _data(state)
+    recipient = data.get("transfer.recipient") or {}
+    account = data.get("transfer.from_account") or {}
+    amount = data.get("transfer.amount") or 0
+
+    card = (
+        "[송금 확인]\n"
+        f"  받는 분    : {recipient.get('name', '?')} "
+        f"({recipient.get('bank', '?')} {recipient.get('account_number', '?')})\n"
+        f"  보내는 계좌: {account.get('account_name', '?')}\n"
+        f"  금액       : {amount:,}원\n"
+        "진행하려면 '승인', 중단하려면 '취소',\n"
+        "수정하려면 '수취인 수정' / '금액 수정' / '계좌 수정'을 입력해주세요."
+    )
+    reply = interrupt({"prompt": card, "prompt_for": "transfer.approval_decision"})
+
+    route = _parse_approval_reply(str(reply))
+    updates: dict = {"route_key": route, "prompt_message": None}
+    if route == "approved":
+        updates["transfer.approval"] = {
+            "recipient_id": recipient.get("recipient_id"),
+            "account_number": recipient.get("account_number"),
+            "from_account_id": account.get("account_id"),
+            "amount": amount,
+        }
+    elif route == "cancelled":
+        updates["final_response"] = (
+            "송금을 취소했습니다."
+            if _is_cancel(str(reply))
+            else "확인할 수 없는 답변이라 송금을 취소했습니다. 다시 시도해주세요."
+        )
+    elif route == "edit_amount":
+        updates["transfer.amount"] = None
+        updates["prompt_message"] = "새 송금 금액을 입력해주세요 (예: 3만원)."
+    elif route == "edit_recipient":
+        updates["transfer.recipient"] = None
+        updates["prompt_message"] = "새 수취인을 입력해주세요 (이름 또는 계좌번호)."
+    elif route == "edit_from_account":
+        updates["transfer.from_account"] = None
+        updates["prompt_message"] = "어느 계좌에서 송금할까요?"
+    return updates
+
+
+def request_user_authentication(state: dict) -> dict:
+    """송금 실행 전 본인 인증을 요청한다 (interrupt, mock 인증)."""
+    reply = interrupt(
+        {
+            "prompt": (
+                "본인 인증을 진행해주세요 (지문 / Face ID / 비밀번호). "
+                "완료 후 '인증완료'를 입력해주세요."
+            ),
+            "prompt_for": "transfer.auth_result",
+        }
+    )
+    route = _parse_auth_reply(str(reply))
+    updates: dict = {"route_key": route, "prompt_message": None}
+    if route == "not_authenticated":
+        updates["final_response"] = (
+            "본인 인증이 완료되지 않아 송금을 진행할 수 없습니다."
+        )
+    return updates
+
+
+# ── 송금 실행 / 응답 ──────────────────────────────────────────────────────────
+
+
+def transfer_money(state: dict) -> dict:
+    """Fake Money 송금을 실행한다. 잔액을 실제로 차감한다."""
+    user_id = state.get("user_id")
+    data = _data(state)
+    recipient = data.get("transfer.recipient") or {}
+    account = data.get("transfer.from_account") or {}
+    amount = data.get("transfer.amount")
+
+    live = _live_account(user_id, account.get("account_id"))
+    if not live or not recipient.get("recipient_id") or not isinstance(amount, int):
+        return {
+            "route_key": "failed",
+            "final_response": "송금 처리 중 문제가 발생했습니다.",
+        }
+    if live["balance"] < amount:
+        return {
+            "route_key": "failed",
+            "final_response": "잔액이 부족해 송금하지 못했습니다.",
+        }
+
+    live["balance"] -= amount  # mock 은행 원장의 유일한 승인된 변형
+
+    return {
+        "transfer.transfer_result": {
+            "transaction_id": f"txn_{uuid.uuid4().hex[:8]}",
+            "from_account_id": live["account_id"],
+            "to_recipient_id": recipient["recipient_id"],
+            "to_recipient_name": recipient.get("name"),
+            "amount": amount,
+            "status": "completed",
+        },
+        "route_key": "success",
+    }
+
+
+def generate_transfer_response(state: dict) -> dict:
+    """송금 결과를 사용자 응답 문장으로 만든다 (결정적)."""
+    result = _data(state).get("transfer.transfer_result") or {}
+    if result.get("status") != "completed":
+        return {
+            "route_key": "failed",
+            "final_response": "송금 결과를 확인하지 못했습니다.",
+        }
+    return {
+        "route_key": "success",
+        "final_response": (
+            f"{result['to_recipient_name']}님에게 {result['amount']:,}원을 "
+            f"송금했습니다. 거래번호: {result['transaction_id']}"
+        ),
+    }
 
 
 # ── 감사 로그 ──────────────────────────────────────────────────────────────────
