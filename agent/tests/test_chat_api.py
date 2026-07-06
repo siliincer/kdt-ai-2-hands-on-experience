@@ -72,17 +72,28 @@ def test_balance_inquiry_interrupt_and_resume(client, monkeypatch):
     assert "1,250,000" in second["reply"]
 
 
-def test_transfer_request_fails_safely(client):
-    """미구현 tool을 참조하는 송금 워크플로우도 크래시 없이 종료된다.
+def test_transfer_http_multiturn(client):
+    """송금 전 과정이 HTTP /chat의 waiting_input 흐름으로 완주된다.
 
-    회귀 방지: 미정의 route_key의 END 폴백이 path_map에 없으면
-    KeyError('__end__')가 났다 (subgraph_builder._add_edges).
+    승인 -> 인증 -> 실행. 각 턴은 직전 응답의 thread_id를 회송한다.
     """
-    response = client.post("/chat", json={"message": "김철수한테 5만원 보내줘"})
-    assert response.status_code == 200
-    body = response.json()
-    # 조기 종료라 completed 또는 failed — 서버 에러(500)만 아니면 된다
-    assert body["status"] in {"completed", "failed"}
+    first = client.post("/chat", json={"message": "김철수한테 5만원 보내줘"}).json()
+    assert first["status"] == "waiting_input"
+    assert first["prompt_for"] == "transfer.approval_decision"
+    assert "김철수" in first["reply"] and "50,000" in first["reply"]
+
+    second = client.post(
+        "/chat", json={"message": "승인", "thread_id": first["thread_id"]}
+    ).json()
+    assert second["status"] == "waiting_input"
+    assert second["prompt_for"] == "transfer.auth_result"
+    assert second["thread_id"] == first["thread_id"]
+
+    third = client.post(
+        "/chat", json={"message": "인증완료", "thread_id": second["thread_id"]}
+    ).json()
+    assert third["status"] == "completed"
+    assert "50,000원을 송금했습니다" in third["reply"]
 
 
 def test_stale_thread_id_starts_fresh_turn(client):

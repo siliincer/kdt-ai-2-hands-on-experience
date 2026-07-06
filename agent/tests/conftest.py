@@ -7,10 +7,13 @@ get_llm의 lru_cache를 비운다.
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 from fastapi.testclient import TestClient
 
 import agent.llm
+from agent.data.mock_bank import MOCK_ACCOUNTS
 
 
 @pytest.fixture(autouse=True)
@@ -20,6 +23,15 @@ def no_openai_key(monkeypatch):
     agent.llm.get_llm.cache_clear()
     yield
     agent.llm.get_llm.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def restore_mock_bank():
+    """transfer_money가 잔액을 실제로 차감하므로 테스트마다 원장을 복원한다."""
+    snapshot = copy.deepcopy(MOCK_ACCOUNTS)
+    yield
+    MOCK_ACCOUNTS.clear()
+    MOCK_ACCOUNTS.update(snapshot)
 
 
 @pytest.fixture()
