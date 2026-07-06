@@ -118,6 +118,59 @@ def test_resolve_from_account_variants():
 # ── 슬롯 추출 / 입력 확인 ──────────────────────────────────────────────────────
 
 
+class _FakeSlotLlm:
+    """extract_transfer_slots의 LLM 경로 검증용 가짜 LLM."""
+
+    def __init__(self, slots):
+        self._slots = slots
+
+    def with_structured_output(self, schema):
+        return self
+
+    def invoke(self, prompt):
+        return self._slots
+
+
+def test_extract_transfer_slots_llm_first(monkeypatch):
+    """LLM이 1순위 — 정규식으로는 못 뽑는 값도 LLM이 주면 채택된다."""
+    from agent.tools import bank_tools
+    from agent.tools.bank_tools import _TransferSlots
+
+    fake = _FakeSlotLlm(
+        _TransferSlots(recipient="박영수", amount="7만원", from_account_hint="생활비")
+    )
+    monkeypatch.setattr(bank_tools, "get_llm", lambda *a, **k: fake)
+
+    # "박영수" / "7만원"은 이 발화의 정규식 매칭으로는 나올 수 없는 값
+    result = extract_transfer_slots({"user_input": "지난번 그 사람한테 또 보내줘"})
+    assert result["transfer.recipient"] == "박영수"
+    assert result["transfer.amount"] == "7만원"
+    assert result["transfer.from_account"] == "생활비"
+
+    # LLM이 준 문자열 금액은 verify_amount의 코드가 정규화한다
+    got = verify_amount(_state(**{"transfer.amount": "7만원"}))
+    assert got["route_key"] == "valid"
+    assert got["transfer.amount"] == 70_000
+
+
+def test_extract_transfer_slots_partial_llm_backfilled_by_rule(monkeypatch):
+    """LLM이 일부 슬롯만 주면 나머지는 규칙(정규식)으로 보강된다."""
+    from agent.tools import bank_tools
+    from agent.tools.bank_tools import _TransferSlots
+
+    fake = _FakeSlotLlm(
+        _TransferSlots(recipient="김철수", amount=None, from_account_hint=None)
+    )
+    monkeypatch.setattr(bank_tools, "get_llm", lambda *a, **k: fake)
+
+    result = extract_transfer_slots(
+        {"user_input": "생활비통장에서 김철수한테 5만원 보내줘"}
+    )
+    assert result["transfer.recipient"] == "김철수"  # LLM 값
+    assert result["transfer.amount"] == 50_000  # 정규식 보강
+    assert result["transfer.from_account"] == "생활비"  # 정규식 보강
+
+
 def test_extract_transfer_slots_full_utterance():
     result = extract_transfer_slots(
         {"user_input": "생활비통장에서 김철수한테 5만원 보내줘"}

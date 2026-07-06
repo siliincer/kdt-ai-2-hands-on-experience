@@ -474,13 +474,34 @@ def _recipient_select_ui(user_id: str) -> dict:
 # ── 슬롯 추출 / 입력 확인 ──────────────────────────────────────────────────────
 
 
-def extract_transfer_slots(state: dict) -> dict:
-    """발화에서 수취인·금액·출금계좌 힌트를 추출한다. 항상 success.
+class _TransferSlots(BaseModel):
+    """송금 발화에서 뽑는 슬롯 (LLM structured output용)."""
 
-    빈 슬롯은 None으로 두고, 이후 check_* 스텝이 되묻기로 채운다.
-    """
-    user_input = state.get("user_input", "")
+    recipient: str | None = Field(
+        None,
+        description=(
+            "수취인 이름 또는 계좌번호. 조사(에게/한테)는 빼라 "
+            "(예: '김철수'). 발화에 없으면 null."
+        ),
+    )
+    amount: str | None = Field(
+        None,
+        description=(
+            "송금 금액을 발화에 나온 표현 그대로 (예: '5만원', '50,000원'). "
+            "숫자로 환산하지 말고 원문 그대로. 없으면 null."
+        ),
+    )
+    from_account_hint: str | None = Field(
+        None,
+        description=(
+            "출금할 계좌를 가리키는 단어 (예: '생활비', '입출금'). "
+            "특정 계좌를 지칭하지 않으면 null."
+        ),
+    )
 
+
+def _extract_transfer_slots_by_rule(user_input: str) -> dict:
+    """규칙 기반 폴백: 정규식/키워드로 수취인·금액·계좌 힌트를 뽑는다."""
     m = _RECIPIENT_PATTERN.search(user_input)
     recipient = m.group(1) if m else None
 
@@ -502,6 +523,43 @@ def extract_transfer_slots(state: dict) -> dict:
             if keyword in user_input:
                 from_hint = keyword
                 break
+
+    return {"recipient": recipient, "amount": amount, "from_account_hint": from_hint}
+
+
+def extract_transfer_slots(state: dict) -> dict:
+    """발화에서 수취인·금액·출금계좌 힌트를 추출한다. 항상 success.
+
+    LLM structured output이 1순위이고, 규칙 기반(정규식/키워드)은 폴백이다:
+      - LLM 호출 실패(키 없음 등) → 전부 규칙으로
+      - LLM이 못 뽑은(null) 슬롯 → 그 슬롯만 규칙으로 보강
+    금액은 LLM이 발화 표현 그대로("5만원") 반환하고 수치 정규화는
+    verify_amount의 코드(_parse_amount)가 담당한다 — LLM이 숫자를
+    지어내지 못하게 하는 원칙 (extract_balance_slots와 동일 철학).
+    빈 슬롯은 None으로 두고, 이후 check_* 스텝이 되묻기로 채운다.
+    """
+    user_input = state.get("user_input", "")
+
+    recipient = amount = from_hint = None
+    try:
+        llm = get_llm().with_structured_output(_TransferSlots)
+        result = llm.invoke(
+            f"다음 사용자 발화에서 송금에 필요한 슬롯을 추출해라.\n발화: {user_input}"
+        )
+        recipient = result.recipient or None
+        amount = result.amount or None
+        from_hint = result.from_account_hint or None
+    except Exception:
+        pass  # 아래 규칙 폴백이 전부 채운다
+
+    # LLM이 못 뽑은 슬롯만 규칙으로 보강한다
+    if recipient is None or amount is None or from_hint is None:
+        fallback = _extract_transfer_slots_by_rule(user_input)
+        recipient = recipient if recipient is not None else fallback["recipient"]
+        amount = amount if amount is not None else fallback["amount"]
+        from_hint = (
+            from_hint if from_hint is not None else fallback["from_account_hint"]
+        )
 
     return {
         "transfer.recipient": recipient,
