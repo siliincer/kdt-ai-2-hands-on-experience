@@ -5,22 +5,41 @@ tool이 인메모리 mock을 직접 읽던 구조를 **API 경계**로 바꾸고
 두 계약 모두 시트가 정본이다: **API Spec 탭**(tool→은행 REST), **UI Spec
 탭**(ui_type별 화면).
 
-## 1. 아키텍처
+## 1. 서비스 간 통신 경로 총괄
+
+시스템에는 **독립적인 통신 경로가 3개** 있다. bank_client는 이 중
+[3] 하나만 담당한다 — 채팅(frontend/backend 연결)과는 무관하다.
 
 ```
-frontend (useAgentChat)
-   │  POST /backendApi/api/v1/agent/chat
+frontend (5173)
+   │  [1] POST /backendApi/api/v1/agent/chat        (useAgentChat 훅)
    ▼
-backend 게이트웨이 (8000)                    ┌────────────────────────┐
-   │  POST {AGENT_SERVICE_URL}/chat          │ ChatResponse.ui        │
-   ▼                                         │ (confirm_modal 등)     │
-agent (8001)                                 └────────────────────────┘
-   │  tool ──> BankClient (Protocol)
-   │             ├─ LocalBankClient (기본)  ──> 내장 mock 원장
-   │             └─ HttpBankClient (compose) ──> mock-financial-service (8002)
-   ▼                                              GET /api/accounts/...
-LangGraph 워크플로우                              POST /api/transactions/...
+backend 게이트웨이 (8000)
+   │  [2] POST {AGENT_SERVICE_URL}/chat             (services/agent_client.py)
+   ▼
+agent (8001) ── LangGraph 워크플로우
+   │  [3] tool ──> BankClient                       (agent/bank_client.py)
+   │                 ├─ local(기본): 내장 mock 원장
+   │                 └─ http(compose): GET /api/accounts, POST /api/transactions/...
+   ▼
+mock-financial-service (8002) — Fake Money 원장
 ```
+
+| # | 경로 | 담당 코드 | 계약 | 역할 |
+|---|---|---|---|---|
+| [1] | frontend ↔ backend | `frontend/src/features/agent_chat/api/useAgentChat.ts` ↔ `backend/src/backend/api/agent_api.py` | CommonResponse 봉투, `data.ui` 포함 | 채팅 요청/응답 |
+| [2] | backend ↔ agent | `backend/src/backend/services/agent_client.py` → agent `POST /chat` | waiting_input / thread_id 회송 | 채팅 프록시 |
+| [3] | agent tool ↔ 은행 원장 | `agent/src/agent/bank_client.py` | 시트 API Spec (REST) | **돈 데이터 전용** — 계좌 조회·송금 실행 |
+
+> ⚠️ **이름 혼동 주의** — 비슷한 이름의 클라이언트가 2개 있다:
+> - `backend/services/agent_client.py` = **backend가 agent를** 부르는 클라이언트 (경로 [2], 채팅)
+> - `agent/bank_client.py` = **agent가 은행 원장을** 부르는 클라이언트 (경로 [3], 돈 데이터)
+>
+> frontend가 받는 `ui` 필드(승인 카드 등)도 bank_client가 아니라
+> **tool → interrupt payload → service.py → ChatResponse.ui** 경로([1]+[2])로
+> 전달된다. bank_client는 그 카드에 들어갈 *데이터*(계좌 목록 등)만 공급한다.
+
+### bank_client (경로 [3]) 동작 원칙
 
 - **tool은 원장을 직접 만지지 않는다** — 항상 `get_bank_client()` 경유
   (`agent/src/agent/bank_client.py`)
