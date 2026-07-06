@@ -23,16 +23,42 @@ _KEYWORD_RULES = [
 
 
 @lru_cache(maxsize=1)
-def _load_workflow_choices() -> tuple[tuple[str, str, str], ...]:
-    """(workflow_id, workflow_name, description) 목록. global 타입은 제외."""
+def _load_workflow_choices() -> tuple[tuple[str, str, str, str], ...]:
+    """(workflow_id, name, description, example_utterance) 목록.
+
+    global 타입은 제외. 매칭 프롬프트에는 이 요약 정보만 들어간다 —
+    steps/routes 등 YAML 본문은 LLM에 전달되지 않는다 (토큰 비용 없음).
+    """
     with open(WORKFLOWS_PATH, encoding="utf-8") as f:
         wfs = yaml.safe_load(f) or {}
     choices = []
     for wid, wf in wfs.items():
         if wf.get("workflow_type") == "global":
             continue
-        choices.append((wid, wf.get("workflow_name", ""), wf.get("description", "")))
+        choices.append(
+            (
+                wid,
+                wf.get("workflow_name", ""),
+                wf.get("description", ""),
+                wf.get("example_utterance", ""),
+            )
+        )
     return tuple(choices)
+
+
+def _build_catalog(choices: tuple[tuple[str, str, str, str], ...]) -> str:
+    """매칭 프롬프트용 워크플로우 카탈로그 (한 줄씩).
+
+    시트의 example_utterance를 few-shot 예시로 함께 넣어 분류 정확도를
+    높인다. 예시가 없으면 괄호를 생략한다.
+    """
+    lines = []
+    for wid, name, desc, example in choices:
+        line = f"- {wid}: {name} — {desc}"
+        if example:
+            line += f' (예: "{example}")'
+        lines.append(line)
+    return "\n".join(lines)
 
 
 class _IntentResult(BaseModel):
@@ -62,7 +88,7 @@ def match_workflow(user_input: str) -> str | None:
     valid_ids = {c[0] for c in choices}
 
     try:
-        catalog = "\n".join(f"- {wid}: {name} — {desc}" for wid, name, desc in choices)
+        catalog = _build_catalog(choices)
         llm = get_llm().with_structured_output(_IntentResult)
         result = llm.invoke(
             "너는 은행 상담 라우터다. 사용자 발화를 아래 워크플로우 중 "

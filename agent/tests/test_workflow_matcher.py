@@ -6,7 +6,31 @@ _KEYWORD_RULES 폴백이 동작한다.
 
 from __future__ import annotations
 
-from agent.workflow_matcher import match_workflow
+from agent.workflow_matcher import (
+    _build_catalog,
+    _load_workflow_choices,
+    match_workflow,
+)
+
+
+def test_choices_include_example_utterance():
+    """카탈로그 재료에 시트의 example_utterance가 포함된다."""
+    choices = {wid: example for wid, _, _, example in _load_workflow_choices()}
+    assert "보내줘" in choices["wf_external_transfer"]
+    assert "잔액" in choices["wf_balance_inquiry"]
+
+
+def test_build_catalog_format_and_size():
+    """카탈로그는 워크플로우당 한 줄 + 예시 발화 — steps는 절대 안 들어간다."""
+    catalog = _build_catalog(_load_workflow_choices())
+
+    assert '(예: "' in catalog  # 예시 발화 포함
+    assert "step_id" not in catalog and "routes" not in catalog
+    assert len(catalog.splitlines()) == 2  # 워크플로우 수만큼만
+    assert len(catalog) < 500  # 수백 자 수준 유지 (토큰 낭비 방지 가드)
+
+    # 예시가 없으면 괄호 생략
+    assert _build_catalog((("wf_x", "이름", "설명", ""),)) == "- wf_x: 이름 — 설명"
 
 
 def test_balance_keywords_match_balance_inquiry():
