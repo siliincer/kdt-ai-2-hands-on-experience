@@ -2,6 +2,9 @@
 
 agent 서비스(LangGraph 금융 에이전트) 문서입니다.
 
+> 처음이라면 **[agent/README.md](../README.md)** 부터 — 폴더 구조와
+> 동작 원리를 코드 지식 없이 읽을 수 있는 전체 개요입니다.
+
 ## 문서 목록
 
 - [agent-integration.md](agent-integration.md) — 아키텍처, 포팅 결정사항,
