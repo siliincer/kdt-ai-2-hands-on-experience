@@ -484,11 +484,12 @@ class _TransferSlots(BaseModel):
             "(예: '김철수'). 발화에 없으면 null."
         ),
     )
-    amount: str | None = Field(
+    amount: int | None = Field(
         None,
         description=(
-            "송금 금액을 발화에 나온 표현 그대로 (예: '5만원', '50,000원'). "
-            "숫자로 환산하지 말고 원문 그대로. 없으면 null."
+            "송금 금액을 원 단위 정수로 환산해라 "
+            "(예: '5만원'→50000, '오만원'→50000, '50,000원'→50000). "
+            "발화에 금액이 없으면 절대 만들어내지 말고 null."
         ),
     )
     from_account_hint: str | None = Field(
@@ -533,9 +534,9 @@ def extract_transfer_slots(state: dict) -> dict:
     LLM structured output이 1순위이고, 규칙 기반(정규식/키워드)은 폴백이다:
       - LLM 호출 실패(키 없음 등) → 전부 규칙으로
       - LLM이 못 뽑은(null) 슬롯 → 그 슬롯만 규칙으로 보강
-    금액은 LLM이 발화 표현 그대로("5만원") 반환하고 수치 정규화는
-    verify_amount의 코드(_parse_amount)가 담당한다 — LLM이 숫자를
-    지어내지 못하게 하는 원칙 (extract_balance_slots와 동일 철학).
+    금액은 LLM이 원 단위 정수로 환산한다 ('오만원' 같은 한글 수사도 처리).
+    환산 오류의 최종 방어선은 verify_amount의 범위 검증과 승인 카드
+    (사용자가 금액을 확인하고 승인해야 실행)다.
     빈 슬롯은 None으로 두고, 이후 check_* 스텝이 되묻기로 채운다.
     """
     user_input = state.get("user_input", "")
@@ -547,7 +548,8 @@ def extract_transfer_slots(state: dict) -> dict:
             f"다음 사용자 발화에서 송금에 필요한 슬롯을 추출해라.\n발화: {user_input}"
         )
         recipient = result.recipient or None
-        amount = result.amount or None
+        # 0 이하는 무의미한 값이므로 미추출로 취급
+        amount = result.amount if result.amount and result.amount > 0 else None
         from_hint = result.from_account_hint or None
     except Exception:
         pass  # 아래 규칙 폴백이 전부 채운다

@@ -132,25 +132,45 @@ class _FakeSlotLlm:
 
 
 def test_extract_transfer_slots_llm_first(monkeypatch):
-    """LLM이 1순위 — 정규식으로는 못 뽑는 값도 LLM이 주면 채택된다."""
+    """LLM이 1순위 — 정규식으로는 못 뽑는 값도 LLM이 주면 채택된다.
+
+    금액은 LLM이 원 단위 정수로 환산한다 ('오만원' 같은 한글 수사 대응).
+    """
+    from agent.tools import bank_tools
+    from agent.tools.bank_tools import _TransferSlots
+
+    # "오만원만 부쳐줘" 시나리오: LLM이 50000으로 환산해 반환
+    fake = _FakeSlotLlm(
+        _TransferSlots(recipient="박영수", amount=50_000, from_account_hint="생활비")
+    )
+    monkeypatch.setattr(bank_tools, "get_llm", lambda *a, **k: fake)
+
+    # "박영수" / 50000은 이 발화의 정규식 매칭으로는 나올 수 없는 값
+    result = extract_transfer_slots(
+        {"user_input": "지난번 그 사람한테 오만원만 부쳐줘"}
+    )
+    assert result["transfer.recipient"] == "박영수"
+    assert result["transfer.amount"] == 50_000
+    assert result["transfer.from_account"] == "생활비"
+
+    # 정수 금액은 verify_amount를 그대로 통과한다
+    got = verify_amount(_state(**{"transfer.amount": 50_000}))
+    assert got["route_key"] == "valid"
+    assert got["transfer.amount"] == 50_000
+
+
+def test_extract_transfer_slots_ignores_nonpositive_llm_amount(monkeypatch):
+    """LLM이 0 이하 금액을 주면 미추출로 취급하고 규칙 폴백을 시도한다."""
     from agent.tools import bank_tools
     from agent.tools.bank_tools import _TransferSlots
 
     fake = _FakeSlotLlm(
-        _TransferSlots(recipient="박영수", amount="7만원", from_account_hint="생활비")
+        _TransferSlots(recipient="김철수", amount=0, from_account_hint=None)
     )
     monkeypatch.setattr(bank_tools, "get_llm", lambda *a, **k: fake)
 
-    # "박영수" / "7만원"은 이 발화의 정규식 매칭으로는 나올 수 없는 값
-    result = extract_transfer_slots({"user_input": "지난번 그 사람한테 또 보내줘"})
-    assert result["transfer.recipient"] == "박영수"
-    assert result["transfer.amount"] == "7만원"
-    assert result["transfer.from_account"] == "생활비"
-
-    # LLM이 준 문자열 금액은 verify_amount의 코드가 정규화한다
-    got = verify_amount(_state(**{"transfer.amount": "7만원"}))
-    assert got["route_key"] == "valid"
-    assert got["transfer.amount"] == 70_000
+    result = extract_transfer_slots({"user_input": "김철수한테 5만원 보내줘"})
+    assert result["transfer.amount"] == 50_000  # 정규식 폴백이 채움
 
 
 def test_extract_transfer_slots_partial_llm_backfilled_by_rule(monkeypatch):
