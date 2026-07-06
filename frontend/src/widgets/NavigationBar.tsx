@@ -6,6 +6,10 @@ const links = [
   { path: '/spending', label: '소비분석' },
   { path: '/transactions', label: '거래내역' },
   { path: '/budget', label: '예산관리' },
+  { path: '/balance', label: '잔액조회' },
+  { path: '/autotransfer', label: '자동이체' },
+  { path: '/card', label: '카드관리' },
+  //{ path: '/logout  ', label: '로그아웃' },
 ];
 
 export default function NavigationBar() {

@@ -38,14 +38,14 @@ function ERow({
       >
         <span
           className="text-xs shrink-0 w-18"
-          style={{ color: '#6B7A99', fontFamily: F }}
+          style={{ color: '#94A3B8', fontFamily: F }}
         >
           {label}
         </span>
         <span
           className="flex-1 text-sm"
           style={{
-            color: NAVY,
+            color: '#F8FAFC',
             fontFamily: mono ? M : F,
             borderBottom: `1.5px dashed ${MINT}`,
             paddingBottom: 1,
@@ -195,8 +195,9 @@ function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
         <div className="pl-21 pr-2">
           <input
             autoFocus
-            className="w-full border-b-2 bg-transparent text-sm outline-none"
-            style={{ color: NAVY, fontFamily: M, borderColor: MINT }}
+            className="w-full border-b-2 bg-transparent text-sm text-slate-50 placeholder:text-slate-500 outline-none"
+            style={{ fontFamily: M, borderColor: MINT }}
+            placeholder="계좌번호 입력"
             value={account}
             onChange={(event) => setAccount(event.target.value)}
             onBlur={() => setEditingField(null)}
@@ -220,9 +221,10 @@ function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
         <div className="pl-21 pr-2">
           <input
             autoFocus
-            className="w-full border-b-2 bg-transparent text-sm outline-none"
-            style={{ color: NAVY, fontFamily: M, borderColor: MINT }}
+            className="w-full border-b-2 bg-transparent text-sm text-slate-50 placeholder:text-slate-500 outline-none"
+            style={{ fontFamily: M, borderColor: MINT }}
             inputMode="numeric"
+            placeholder="0"
             value={fmtAmt(amtRaw)}
             onChange={(event) => setAmtRaw(parseAmtInput(event.target.value))}
             onBlur={() => setEditingField(null)}
@@ -308,7 +310,7 @@ function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
       <div className="mt-4 flex gap-2">
         <button
           type="button"
-          className="flex-1 rounded-xl border border-slate-300 py-2.5 text-sm text-slate-600"
+          className="flex-1 rounded-xl border border-slate-300 py-2.5 text-sm text-slate-200 hover:bg-white/5"
           style={{ fontFamily: F }}
         >
           취소

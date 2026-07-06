@@ -206,7 +206,7 @@ function SpendingCard({ onNavigate }: { onNavigate: (path: string) => void }) {
         <span className="text-lg">📊</span>
         <p
           className="text-sm font-semibold"
-          style={{ color: NAVY, fontFamily: F }}
+          style={{ color: '#F8FAFC', fontFamily: F }}
         >
           카테고리별 지출
         </p>

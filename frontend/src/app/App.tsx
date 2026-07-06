@@ -1,225 +1,33 @@
-import { Link } from 'react-router';
-import { ActionButton, AppShell, SectionCard } from '../shared/ui';
-import {
-  accounts,
-  insights,
-  quickActions,
-  recentTransactions,
-} from './mockData';
+import { useState } from 'react';
+import { AppRouter } from './router';
+import LoginFeature from '@/features/auth/LoginFeature';
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('ko-KR', {
-    style: 'currency',
-    currency: 'KRW',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-type AppProps = {
-  initialView?: 'home' | 'transfer' | 'spending' | 'transactions' | 'budget';
-};
-
-function App({ initialView = 'home' }: AppProps) {
-  const totalBalance = accounts.reduce(
-    (sum, account) => sum + account.balance,
-    0,
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    () => sessionStorage.getItem('rf_logged_in') === '1',
   );
-
-  const viewContent = {
-    home: {
-      title: 'AI 금융 코파일럿 대시보드',
-      description:
-        '예시 화면을 기반으로 한 렌더링 가능 상태의 UI입니다. 백엔드 연결 전에도 주요 금융 정보와 행동 흐름을 확인할 수 있습니다.',
-    },
-    transfer: {
-      title: '송금 흐름',
-      description: '송금과 이체 요청을 바로 확인할 수 있는 전환형 화면입니다.',
-    },
-    spending: {
-      title: '소비 분석',
-      description:
-        '카테고리별 지출 흐름을 시각적으로 확인할 수 있는 화면입니다.',
-    },
-    transactions: {
-      title: '거래 내역',
-      description: '거래 요약과 최근 사용 내역을 빠르게 확인합니다.',
-    },
-    budget: {
-      title: '예산 관리',
-      description: '예산 목표와 지출 상태를 정리해둘 수 있는 화면입니다.',
-    },
-  }[initialView];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-        <header className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2">
-              <p className="text-sm font-medium uppercase tracking-[0.3em] text-emerald-300">
-                RealFinance
-              </p>
-              <h1 className="text-3xl font-semibold text-white sm:text-4xl">
-                {viewContent.title}
-              </h1>
-              <p className="max-w-2xl text-sm text-slate-300 sm:text-base">
-                {viewContent.description}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-              <p className="font-medium">총 자산</p>
-              <p className="mt-1 text-2xl font-semibold text-white">
-                {formatCurrency(totalBalance)}
-              </p>
-            </div>
+    <main className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+        {!isLoggedIn ? (
+          <div
+            className="w-full rounded-4xl border border-white/10 bg-slate-950/90 p-6 shadow-[0_32px_80px_rgba(15,23,42,0.35)] backdrop-blur-sm"
+            style={{ maxWidth: 480 }}
+          >
+            <LoginFeature
+              onLogin={() => {
+                sessionStorage.setItem('rf_logged_in', '1');
+                setIsLoggedIn(true);
+              }}
+            />
           </div>
-        </header>
-
-        <nav className="flex flex-wrap gap-2">
-          <Link
-            to="/"
-            className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-emerald-400/40 hover:text-emerald-200"
-          >
-            홈
-          </Link>
-          <Link
-            to="/transfer"
-            className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-emerald-400/40 hover:text-emerald-200"
-          >
-            송금
-          </Link>
-          <Link
-            to="/spending"
-            className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-emerald-400/40 hover:text-emerald-200"
-          >
-            소비분석
-          </Link>
-          <Link
-            to="/transactions"
-            className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-emerald-400/40 hover:text-emerald-200"
-          >
-            거래내역
-          </Link>
-          <Link
-            to="/budget"
-            className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-emerald-400/40 hover:text-emerald-200"
-          >
-            예산관리
-          </Link>
-        </nav>
-
-        <main className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-          <section className="space-y-6">
-            <AppShell
-              title="계좌 요약"
-              description="실제 계좌 정보를 확인하는 섹션입니다."
-            >
-              <div className="mb-4 flex justify-end">
-                <ActionButton variant="primary">새 계좌 추가</ActionButton>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {accounts.map((account) => (
-                  <article
-                    key={account.id}
-                    className="rounded-2xl border border-white/10 bg-slate-800/70 p-4"
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="text-sm font-medium text-slate-300">
-                        {account.bank}
-                      </p>
-                      <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] text-emerald-300">
-                        {account.badge}
-                      </span>
-                    </div>
-                    <p className="text-lg font-semibold text-white">
-                      {account.name}
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold text-white">
-                      {formatCurrency(account.balance)}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            </AppShell>
-
-            <AppShell title="빠른 실행" description="자주 쓰는 기능 바로가기">
-              <div className="grid gap-3 md:grid-cols-3">
-                {quickActions.map((action) => (
-                  <button
-                    key={action.label}
-                    className={`rounded-2xl bg-linear-to-br ${action.accent} p-4 text-left text-white shadow-md transition hover:scale-[1.01]`}
-                  >
-                    <p className="text-base font-semibold">{action.label}</p>
-                    <p className="mt-2 text-sm text-white/80">
-                      {action.description}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </AppShell>
-          </section>
-
-          <section className="space-y-6">
-            <AppShell
-              title="한눈에 보는 인사이트"
-              description="현재 금융 상황을 요약한 정보입니다."
-            >
-              <div className="space-y-3">
-                {insights.map((insight) => (
-                  <SectionCard key={insight.title} title={insight.title}>
-                    <p className="text-xl font-semibold text-white">
-                      {insight.value}
-                    </p>
-                    <p className="mt-1 text-sm text-emerald-300">
-                      {insight.tone}
-                    </p>
-                  </SectionCard>
-                ))}
-              </div>
-            </AppShell>
-
-            <AppShell
-              title="최근 거래"
-              description="최근 일주일 동향을 확인할 수 있습니다."
-            >
-              <div className="space-y-3">
-                {recentTransactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-800/70 px-3 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {transaction.title}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {transaction.date}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p
-                        className={`text-sm font-semibold ${
-                          transaction.amount > 0
-                            ? 'text-emerald-300'
-                            : 'text-slate-100'
-                        }`}
-                      >
-                        {transaction.amount > 0 ? '+' : ''}
-                        {formatCurrency(transaction.amount)}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {transaction.note}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </AppShell>
-          </section>
-        </main>
+        ) : (
+          <div className="w-full">
+            <AppRouter />
+          </div>
+        )}
       </div>
-    </div>
+    </main>
   );
 }
-
-export default App;

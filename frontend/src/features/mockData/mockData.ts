@@ -1,6 +1,6 @@
 import type { BarCatData, TxItem } from '@/shared/types/interface';
 
-import { NAVY, MINT } from '@/shared/constants/color';
+import { MINT, RED } from '@/shared/constants/color';
 
 const autoTxItems = [
   { name: '월세', cycle: '매월 1일', amount: 500000, active: true },
@@ -155,7 +155,7 @@ const barData: BarCatData[] = [
 const pieData = [
   { name: '식비', value: 38, color: MINT, amount: 474000 },
   { name: '교통비', value: 22, color: '#3B82F6', amount: 274000 },
-  { name: '고정비', value: 28, color: NAVY, amount: 349000 },
+  { name: '고정비', value: 28, color: RED, amount: 349000 },
   { name: '사치비', value: 12, color: '#F97316', amount: 150000 },
 ];
 
