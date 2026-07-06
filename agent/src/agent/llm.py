@@ -50,6 +50,12 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
         or os.getenv("LLM_MODEL")
         or _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
     )
+    # 제공자-모델 불일치 보호: 예전 .env에 남은 다른 제공자용 모델명이
+    # 조용히 404를 내지 않도록 해당 제공자 기본 모델로 되돌린다.
+    if provider == "vertex" and resolved_model.startswith("gpt"):
+        resolved_model = _DEFAULT_MODELS["vertex"]
+    if provider == "openai" and resolved_model.startswith("gemini"):
+        resolved_model = _DEFAULT_MODELS["openai"]
 
     if provider == "vertex":
         # vertex 미사용 환경에서 import 비용/의존 문제를 피하려고 지연 import
