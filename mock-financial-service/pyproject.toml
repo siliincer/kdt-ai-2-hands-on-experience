@@ -1,0 +1,30 @@
+[project]
+name = "financial-service"
+version = "0.1.0"
+description = "Double-entry ledger financial service"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "sqlalchemy>=2.0.0",
+    "uvicorn>=0.34.0",
+    "aiosqlite>=0.20.0",
+    "httpx>=0.28.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --durations=10"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
