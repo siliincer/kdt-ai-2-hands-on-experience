@@ -204,6 +204,24 @@ cython_debug/
 # .vscode/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
+### VisualStudioCode ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+### VisualStudioCode Patch ###
+# Ignore all local history of files
+.history
+.ionide
 
 # Ruff stuff:
 .ruff_cache/
@@ -218,3 +236,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ios
+.DS_Store
+
+# claude code
+claude.local.md
+
+# secret
+*.pem
+*.key
+*.crt
+
+# db
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Custom
+AI_CONTEXT/
+# AI_CONTEXT: 개인적으로 바이브 코딩 간 작업 상황 기록한 폴더임

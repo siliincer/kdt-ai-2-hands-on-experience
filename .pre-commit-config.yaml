@@ -14,5 +14,10 @@ repos:
     rev: v0.8.6
     hooks:
       - id: ruff
-        args: [--fix]
+        args: [--fix, --config, ./pyproject.toml]
       - id: ruff-format
+        args: [--config, ./pyproject.toml]
+
+# 간혹, 오류나면 캐시 초기화해보세요
+# pre-commit clean
+# pre-commit run --all-files

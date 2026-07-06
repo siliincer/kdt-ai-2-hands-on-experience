@@ -5,9 +5,11 @@ description = "FastAPI Backend Gateway for the financial copilot"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "alembic>=1.18.5",
     "asyncpg>=0.30.0",
     "fastapi[standard]>=0.115.0",
     "httpx>=0.28.0",
+    "pydantic>=2.7.0",
     "pydantic-settings>=2.7.0",
     "python-dotenv>=1.0.0",
     "redis>=5.2.0",
@@ -30,3 +32,6 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v --durations=10"
+filterwarnings = [
+    "ignore::starlette.exceptions.StarletteDeprecationWarning"
+]
