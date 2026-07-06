@@ -237,6 +237,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.ouroboros/
 
 # ios
 .DS_Store
