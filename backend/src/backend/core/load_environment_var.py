@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     REDIS_URL: AnyUrl = AnyUrl("redis://redis:6379/0")
     # redis://[호스트이름]:[포트번호]/[데이터베이스_번호]
 
+    # Agent Service Configuration
+    AGENT_SERVICE_URL: str = Field(
+        default="http://agent-service:8001",
+        description="에이전트 서비스 주소 (docker compose 네트워크 alias 기준)",
+    )
+
     # Auth Configuration
     JWT_SECRET_KEY: SecretStr = SecretStr("change-me-in-local")
     JWT_ALGORITHM: str = Field(default="HS256")
