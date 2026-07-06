@@ -330,7 +330,7 @@ def _harden_routes(wf_id: str, steps: list[dict], routes: list[dict]) -> list[di
     return out
 
 
-def build_workflows(raw: dict[str, list[dict]]) -> dict:
+def build_workflows(raw: dict[str, list[dict]], tools: dict) -> dict:
     """Workflow 4개 탭을 workflow_id로 조인해 workflows.yaml 데이터를 만든다."""
     workflows = _keyed(raw["workflows"], "workflow_id", "workflows")
 
@@ -341,6 +341,19 @@ def build_workflows(raw: dict[str, list[dict]]) -> dict:
             step["output_data_key"] = _map_output_key(
                 wf_id, step.get("output_data_key") or ""
             )
+            # input 스텝의 output_data_key가 비어 있으면 Tool_v2 동명 항목의
+            # write_state_keys로 백필한다 (예: ask_recipient -> transfer.recipient).
+            # 시트에서는 input UI가 Tool_v2 탭에 tool로 기술되어 있기 때문.
+            if step.get("step_type") == "input" and not step.get("output_data_key"):
+                write_keys = (
+                    tools.get(step.get("step_id"), {}).get("write_state_keys") or []
+                )
+                if write_keys:
+                    step["output_data_key"] = write_keys[0]
+                    warn(
+                        f"[{wf_id}] input 스텝 '{step.get('step_id')}' "
+                        f"output_data_key 빈 값 → Tool_v2 백필: '{write_keys[0]}'"
+                    )
         steps.sort(key=lambda s: s.get("step_order") or 0)
         workflows.setdefault(wf_id, {})["steps"] = steps
 
@@ -477,10 +490,13 @@ def generate(xlsx_path: str | None) -> dict:
     for name, rows in raw.items():
         print(f"  - {name}: {len(rows)} 행")
 
+    # tools를 먼저 빌드한다 — input 스텝 output_data_key 백필에 필요
+    tools = _keyed(raw["tools"], "tool_id", "tools")
+
     return {
-        "workflows.yaml": build_workflows(raw),
+        "workflows.yaml": build_workflows(raw, tools),
         "tasks.yaml": _keyed(raw["tasks"], "task_id", "tasks"),
-        "tools.yaml": _keyed(raw["tools"], "tool_id", "tools"),
+        "tools.yaml": tools,
         "risk_levels.yaml": _keyed(raw["risk_levels"], "risk_level", "risk_levels"),
         "guardrail_rules.yaml": build_guardrail_rules(raw["guardrail_rules"]),
     }

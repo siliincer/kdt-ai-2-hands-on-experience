@@ -40,6 +40,33 @@ def test_balance_routes_reference_existing_steps():
         assert route["to_step_id"] == "END" or route["to_step_id"] in step_ids
 
 
+def test_transfer_output_keys_are_namespaced_or_system():
+    workflows = _load_workflows()
+    for step in workflows["wf_external_transfer"]["steps"]:
+        key = step.get("output_data_key") or ""
+        assert not key or "." in key or key in SYSTEM_KEYS
+
+
+def test_input_steps_have_output_keys():
+    """input 스텝은 답변 저장 위치(output_data_key)가 반드시 있어야 한다.
+
+    (ask_recipient는 시트에 비어 있어 sync가 Tool_v2에서 백필한다.)
+    """
+    workflows = _load_workflows()
+    for wf_id in ("wf_balance_inquiry", "wf_external_transfer"):
+        for step in workflows[wf_id]["steps"]:
+            if step["step_type"] == "input":
+                assert step.get("output_data_key"), (
+                    f"[{wf_id}] input 스텝 '{step['step_id']}'에 output_data_key가 없음"
+                )
+    ask = next(
+        s
+        for s in workflows["wf_external_transfer"]["steps"]
+        if s["step_id"] == "ask_recipient"
+    )
+    assert ask["output_data_key"] == "transfer.recipient"
+
+
 def test_all_workflows_compile_despite_missing_tools():
     """transfer는 미구현 tool을 참조하지만 서브그래프 컴파일은 성공해야 한다.
 

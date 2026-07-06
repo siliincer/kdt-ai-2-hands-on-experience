@@ -188,7 +188,7 @@ wf_external_transfer:
     step_type: input
     task_id: recipient_input
     tool_id: ''
-    output_data_key: ''
+    output_data_key: transfer.recipient
     step_risk_level: R2
     ui_type: recipient_input
     step_message: (계좌번호 선택화면 ex. 토스에서 송금시)
