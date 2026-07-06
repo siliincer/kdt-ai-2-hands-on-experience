@@ -32,3 +32,12 @@ app.add_middleware(CORSMiddleware, **CORS_OPTIONS)
 @app.get("/")
 def read_root():
     return {"message": "안녕하세요!"}
+
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "backend",
+        "version": "0.1.0",
+    }
