@@ -184,7 +184,7 @@ mutate({ message: '1번', thread_id: prev.thread_id });
 
 배경: LangGraph는 스키마에 선언 안 된 top-level 키를 조용히 버리고, dotted
 키는 TypedDict 필드가 될 수 없다. data 버킷 방식이라 **새 워크플로우를
-추가해도 state.py 수정이 필요 없다.** 상세: `docs/agent-sheet-v2-review.md`.
+추가해도 state.py 수정이 필요 없다.** 상세: `agent/docs/agent-sheet-v2-review.md`.
 
 시스템/업무 키 분리는 엔진(`subgraph_builder._split_updates`)이 담당한다 —
 tool은 flat dict를 반환하면 되고, 시스템 키만 top-level로 가고 나머지는
@@ -237,7 +237,7 @@ uv run python agent/scripts/sync_config_from_sheets.py           # 재생성
 
 시트가 source of truth다. 경고는 전부 advisory이며 시트 정리 요청 목록을
 겸한다. config를 재생성했으면 서버/테스트를 재시작해야 반영된다
-(YAML 캐시가 프로세스 수명). 상세: `docs/agent-sheet-v2-review.md` 4절.
+(YAML 캐시가 프로세스 수명). 상세: `agent/docs/agent-sheet-v2-review.md` 4절.
 
 ## 6. 실행과 검증
 

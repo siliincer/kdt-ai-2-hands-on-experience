@@ -41,7 +41,7 @@ TOOL_REGISTRY = {
     "apply_account_selection": apply_account_selection,
     "get_balance": get_balance,
     # 시트 모순 흡수: Step 시트는 get_balance, Tool_v2는 fetch_balance를 쓴다.
-    # 둘 다 같은 함수로 등록한다 (docs/agent-sheet-v2-review.md 참조).
+    # 둘 다 같은 함수로 등록한다 (agent/docs/agent-sheet-v2-review.md 참조).
     "fetch_balance": get_balance,
     "generate_balance_response": generate_balance_response,
     # 타인 송금 — 슬롯 추출 / 입력 확인

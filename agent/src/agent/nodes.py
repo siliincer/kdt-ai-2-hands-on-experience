@@ -7,7 +7,7 @@
 
 참고: fin-ai 원본의 workflow_execution_node(순차 실행기 경로)는 서브그래프
 기반 실행으로 대체되어 포팅에서 제외했다. 자세한 배경은
-docs/agent-integration.md 참조.
+agent/docs/agent-integration.md 참조.
 """
 
 from __future__ import annotations
