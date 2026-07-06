@@ -134,6 +134,13 @@ GitHub에서 출력까지 그대로 볼 수 있습니다:
 2. `02_multiturn.ipynb` — "멈추고 묻기"(interrupt)가 어떻게 동작하는지
 3. `03_external_transfer.ipynb` — 송금 전 과정: 되묻기·승인·인증·실행 시나리오 8종
 
+**직접 실행하려면** — 별도 pip/conda 설치 없이 `uv sync` 한 번이면 됩니다
+(에이전트 코드와 ipykernel이 레포 루트 `.venv`에 들어감):
+
+- **VS Code / Cursor**: 노트북을 열고 우상단 커널 선택에서
+  **레포 루트의 `.venv`** (Python 3.11) 를 고르면 끝
+- **브라우저(JupyterLab)**: 레포 루트에서 `uv run --with jupyter jupyter lab`
+
 ## 7. 더 알아보기 (docs/)
 
 | 문서 | 내용 |

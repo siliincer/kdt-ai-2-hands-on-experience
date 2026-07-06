@@ -27,6 +27,7 @@ mock-financial-service = { workspace = true }
 [dependency-groups]
 dev = [
     "deptry>=0.25.1",
+    "ipykernel>=7.3.0",
     "pre-commit>=4.0.0",
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
