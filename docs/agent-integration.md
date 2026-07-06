@@ -208,13 +208,25 @@ data 버킷에 저장된다.
 
 ### wf_external_transfer 현황
 
-현재 **end-to-end로 동작하는 워크플로우는 `wf_balance_inquiry`(잔액조회)뿐이다.**
+**잔액조회와 타인송금 모두 end-to-end로 동작한다.** 송금 tool 15개가
+Tool_v2 계약대로 구현되어 있다 (`bank_tools.py` 타인 송금 섹션, 전부
+정규식/키워드 기반 결정적 — LLM 키 불필요).
 
-시트 v2에서 송금 tool 22개의 스펙(Tool_v2 탭)이 확정되어 YAML로 들어와 있고
-서브그래프 컴파일도 되지만, 대부분 미구현이라 런타임에 error 라우팅으로
-조기 종료된다 (크래시 없음). `bank_tools.py` 하단의 레거시 송금 tool들은
-구버전 flat 키 기준이라 새 state에서 동작하지 않는다 — Tool_v2 계약대로
-재작성이 필요하다.
+대화형 스텝 처리 방식 (승인/인증/경고):
+- 해당 tool이 **직접 `interrupt()`를 호출**해 멈추고, 사용자 답변을
+  키워드 파싱해 route_key(approved/cancelled/edit_* 등)를 정한다
+- 재개 시 노드가 처음부터 재실행되므로 interrupt 이전 코드는 프롬프트
+  조립 같은 멱등 작업만 둔다. 한 노드 실행에서 interrupt를 두 번 호출하지
+  않는다 (재개 매칭이 위치 기반)
+- 승인 게이트의 해석 불가 답변은 **보수적으로 취소** 처리한다
+
+안전장치 체인: 금액 정규화·한도(5천만) → 잔액 확인(실시간 재조회) →
+송금 정책 검사(1천만 차단/100만 경고) → 승인 카드(수정 루프 포함) →
+본인 인증(mock) → **실행 직전 재검사**(승인 요약 `transfer.approval`과
+실행 내용 대조 + 잔액 재확인) → 실행(원장 실차감) → 감사 로그.
+
+시나리오별 동작은 `agent/notebooks/03_external_transfer.ipynb`와
+`agent/tests/test_transfer_flow.py`(10종) 참조.
 
 ### config 동기화 (시트 → YAML)
 
@@ -241,9 +253,10 @@ curl -X POST localhost:8001/chat -H 'content-type: application/json' \
 uv run pytest agent
 uv run pytest backend
 
-# 단계별 실행 검증 노트북 (팀원 온보딩용, 실행 출력 포함)
-# agent/notebooks/01_agent_walkthrough.ipynb
-# -> state 구조 / YAML->그래프 / 단계별 수동 실행 / interrupt-재개 / HTTP API
+# 단계별 실행 검증 노트북 3권 (팀원 온보딩용, 실행 출력 포함)
+# agent/notebooks/01_balance_inquiry.ipynb   — 잔액조회 단계별 실행
+# agent/notebooks/02_multiturn.ipynb         — interrupt/재개 멀티턴
+# agent/notebooks/03_external_transfer.ipynb — 타인송금 시나리오 8종 + HTTP
 uv run --with jupyter jupyter lab   # 커널: 레포 루트 .venv
 
 # 전체 스택
@@ -256,7 +269,8 @@ gpt-4o-mini), `AGENT_SERVICE_URL`(backend가 agent를 찾는 주소).
 
 ## 7. 향후 과제
 
-- [ ] `wf_external_transfer` tool 22개를 Tool_v2 계약대로 구현 (5절 가이드)
+- [x] `wf_external_transfer` tool을 Tool_v2 계약대로 구현 — 완료 (5절)
+- [ ] 송금 답변 파싱(승인/금액 등)을 키워드에서 LLM 보강으로 확장
 - [ ] `data/mock_bank.py` → `mock-financial-service`(8002) HTTP 연동으로 교체
 - [ ] MemorySaver → persistent checkpointer (Redis/Postgres)
 - [ ] `LLM_PROVIDER` 환경변수 지원 (현재 OpenAI 고정, `.env.example`의

@@ -106,8 +106,19 @@ fin-ai 원본과의 차이:
 
 - **wf_balance_inquiry**: end-to-end 동작 (신규 show_balance_failed 경로 포함).
   API 키 없이도 키워드/규칙 폴백으로 완주
-- **wf_external_transfer**: YAML 스펙은 v2로 완전히 들어왔고 서브그래프
-  컴파일도 되지만, Tool_v2가 정의한 tool 22개 중 대부분이 미구현이라 런타임에
-  error 라우팅으로 조기 종료된다. 기존 레거시 송금 tool들(bank_tools.py 하단)은
-  구버전 flat 키를 읽으므로 새 state에서 동작하지 않는다 — Tool_v2 계약대로
-  재작성이 다음 단계다 (구현 가이드: docs/agent-integration.md 5절)
+- **wf_external_transfer**: **end-to-end 동작.** Tool_v2 계약대로 송금 tool
+  15개를 구현했고 (레거시 tool은 삭제), 승인·인증·경고는 tool이 직접
+  interrupt()를 호출하는 대화형으로 처리한다. 전 과정이 API 키 없이
+  결정적으로 완주된다. 시나리오: `agent/notebooks/03_external_transfer.ipynb`,
+  자동 테스트: `agent/tests/test_transfer_flow.py`
+
+### 구현 과정에서 흡수한 시트 정합성 이슈 (추가 정리 요청)
+
+- input 스텝 `ask_recipient`에 `output_data_key`가 비어 있어 답변 저장
+  위치가 없음 → sync가 Tool_v2 동명 항목의 write_state_keys로 백필
+  (시트에 `transfer.recipient` 기입 권고)
+- input 스텝들의 route_key가 제각각 (`resolved` vs `submitted`) → 엔진이
+  스텝별 route 정의를 따라가도록 일반화 (통일 권고)
+- `show_transfer_cancelled`의 step_message가 승인 카드 문구 복사본
+  ("송금 내용을 확인해주세요.") → 엔진이 앞 스텝의 final_response를
+  우선하도록 처리 (메시지 수정 권고)
