@@ -1,0 +1,251 @@
+extract_transfer_slots:
+  tool_name: 송금 정보 추출
+  tool_type: extraction
+  input_state_keys:
+  - user_input
+  write_state_keys:
+  - transfer.recipient
+  - transfer.amount
+  - transfer.from_account
+  risk_level: R2
+  description: 사용자 발화에서 수취인, 금액, 출금 계좌 힌트를 추출한다. 빈 값은 null로 둔다.
+check_recipient_input:
+  tool_name: 수취인 입력 유무 확인
+  tool_type: validation
+  input_state_keys:
+  - transfer.recipient
+  write_state_keys: []
+  risk_level: R2
+  description: 수취인 입력값이 있는지 확인한다. 값이 있으면 수취인 입력 해석으로 보내고, 없으면 수취인 입력 화면으로 보낸다.
+ask_recipient:
+  tool_name: 수취인 입력/선택 UI
+  tool_type: input
+  input_state_keys: []
+  write_state_keys:
+  - transfer.recipient
+  risk_level: R2
+  description: 사용자가 이름 검색, 계좌번호 입력, 최근 이체 계좌 선택 등을 통해 수취인 계좌 후보를 단건으로 확정한다.
+resolve_recipient_input:
+  tool_name: 수취인 입력 해석
+  tool_type: verification
+  input_state_keys:
+  - transfer.recipient
+  write_state_keys:
+  - transfer.recipient
+  risk_level: R2
+  description: 수취인 입력값이 계좌번호이거나, 이름이 거래내역에서 단일 계좌로 매칭되는 경우 검증 가능한 계좌 후보를 만든다. 하나로
+    좁힐 수 없으면 failed를 반환한다.
+verify_recipient_account:
+  tool_name: 수취인 계좌 확인
+  tool_type: verification
+  input_state_keys:
+  - transfer.recipient
+  write_state_keys:
+  - transfer.recipient
+  risk_level: R2
+  description: 수취인 계좌 후보가 실제 송금 가능한 계좌인지 확인한다. 계좌번호 오류, 송금 불가 계좌, 확인 오류는 not_verified로
+    처리한다.
+show_invalid_recipient_account:
+  tool_name: 수취인 계좌 확인 실패 안내
+  tool_type: response
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R0
+  description: 수취인 계좌를 확인할 수 없다는 안내를 표시한다.
+check_amount_input:
+  tool_name: 송금 금액 유무 확인
+  tool_type: validation
+  input_state_keys:
+  - transfer.amount
+  write_state_keys: []
+  risk_level: R2
+  description: 송금 금액 입력값이 있는지 확인한다.
+ask_amount_input:
+  tool_name: 송금 금액 입력 UI
+  tool_type: input
+  input_state_keys: []
+  write_state_keys:
+  - transfer.amount
+  risk_level: R2
+  description: 사용자에게 송금 금액을 입력받는다.
+verify_amount:
+  tool_name: 송금 금액 확인
+  tool_type: verification
+  input_state_keys:
+  - transfer.amount
+  write_state_keys:
+  - transfer.amount
+  risk_level: R2
+  description: 송금 금액을 숫자로 정규화하고 최소금액, 최대금액, 한도 조건을 확인한다.
+verify_from_account:
+  tool_name: 출금 계좌 확인
+  tool_type: verification
+  input_state_keys:
+  - transfer.from_account
+  write_state_keys:
+  - transfer.from_account
+  risk_level: R2
+  description: 출금 계좌 힌트, 기본 계좌, 사용 가능 계좌 목록, 사용자 선택값을 기준으로 실제 출금 계좌를 확정한다.
+ask_account_selection:
+  tool_name: 출금 계좌 선택 UI
+  tool_type: input
+  input_state_keys: []
+  write_state_keys:
+  - transfer.from_account
+  risk_level: R2
+  description: 출금 계좌 후보가 여러 개이거나 기본 계좌를 확정할 수 없을 때 사용자에게 계좌 선택을 요청한다.
+check_balance:
+  tool_name: 출금 가능 잔액 확인
+  tool_type: verification
+  input_state_keys:
+  - transfer.amount
+  - transfer.from_account
+  write_state_keys: []
+  risk_level: R2
+  description: 선택된 출금 계좌의 사용 가능 잔액이 송금 금액보다 충분한지 확인한다.
+show_insufficient_balance:
+  tool_name: 잔액 부족 안내
+  tool_type: response
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R0
+  description: 잔액이 부족하다는 안내를 표시하고 다른 출금 계좌 선택으로 이어지게 한다.
+run_transfer_guardrail:
+  tool_name: 송금 정책 검사
+  tool_type: guardrail
+  input_state_keys:
+  - transfer.recipient
+  - transfer.amount
+  - transfer.from_account
+  write_state_keys: []
+  risk_level: R5
+  description: 송금 금액, 수취인 계좌, 출금 계좌, 정책 조건을 바탕으로 승인 요청 전 실행 가능 여부를 판단한다.
+show_transfer_warning:
+  tool_name: 송금 주의 안내
+  tool_type: response
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R4
+  description: 고액 송금, 신규 수취인, 추가 인증 필요 등 주의가 필요한 송금에 대해 사용자 확인을 받는다.
+show_transfer_blocked:
+  tool_name: 송금 차단 안내
+  tool_type: response
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R5
+  description: 정책상 진행할 수 없는 송금임을 사용자에게 안내한다.
+show_transfer_review:
+  tool_name: 송금 정보 확인
+  tool_type: approval
+  input_state_keys:
+  - transfer.recipient
+  - transfer.amount
+  - transfer.from_account
+  write_state_keys: []
+  risk_level: R4
+  description: 수취인, 송금 금액, 출금 계좌를 한 화면에서 보여주고 사용자의 승인, 취소, 수정 액션을 받는다.
+show_transfer_cancelled:
+  tool_name: 송금 취소 안내
+  tool_type: response
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R0
+  description: 사용자가 송금을 취소했거나 확인 시간이 만료된 경우 취소 안내를 표시한다.
+request_user_authentication:
+  tool_name: 사용자 본인 인증
+  tool_type: auth
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R4
+  description: 송금 실행 전 지문, Face ID, 비밀번호 등으로 사용자 본인 인증을 요청한다.
+show_authentication_failed:
+  tool_name: 본인 인증 실패 안내
+  tool_type: response
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R0
+  description: 본인 인증 실패, 취소, 만료로 송금을 진행할 수 없음을 안내한다.
+run_pre_execution_guardrail:
+  tool_name: 실행 직전 정책 검사
+  tool_type: guardrail
+  input_state_keys:
+  - transfer.recipient
+  - transfer.amount
+  - transfer.from_account
+  write_state_keys: []
+  risk_level: R5
+  description: 승인된 송금 정보와 실제 실행 정보가 일치하는지, 인증이 유효한지, 실행 직전 정책 조건을 통과하는지 확인한다.
+transfer_money:
+  tool_name: 송금 실행
+  tool_type: execution
+  input_state_keys:
+  - transfer.recipient
+  - transfer.amount
+  - transfer.from_account
+  write_state_keys: []
+  risk_level: R4
+  description: Fake Money 기반 타인 송금을 실행한다.
+show_transfer_failed:
+  tool_name: 송금 실패 안내
+  tool_type: response
+  input_state_keys: []
+  write_state_keys: []
+  risk_level: R0
+  description: 송금 처리 중 오류가 발생했을 때 실패 안내를 표시한다.
+generate_transfer_response:
+  tool_name: 송금 결과 응답 생성
+  tool_type: response
+  input_state_keys:
+  - transfer.recipient
+  - transfer.amount
+  - transfer.from_account
+  write_state_keys: []
+  risk_level: R0
+  description: 송금 성공 결과를 사용자에게 보여줄 응답으로 생성한다.
+write_audit_log:
+  tool_name: Audit Log 기록
+  tool_type: logging
+  input_state_keys:
+  - transfer.recipient
+  - transfer.amount
+  - transfer.from_account
+  write_state_keys: []
+  risk_level: R2
+  description: 성공, 실패, 취소, 차단 등 주요 실행 결과를 기록한다. 로그 실패는 사용자 흐름을 막지 않는다.
+extract_balance_slots:
+  tool_name: 잔액 조회 슬롯 추출
+  tool_type: extraction
+  input_state_keys:
+  - user_input
+  write_state_keys:
+  - balance.account_hint
+  risk_level: R1
+  description: 사용자 발화에서 잔액 조회에 필요한 계좌 힌트를 추출한다. 은행명, 계좌 별칭, 계좌 유형 등이 없으면 null로 둔다.
+verify_account:
+  tool_name: 조회 계좌 확인
+  tool_type: verification
+  input_state_keys:
+  - balance.account_hint
+  write_state_keys:
+  - balance.selected_accounts
+  risk_level: R1
+  description: 사용자의 보유 계좌 목록과 계좌 힌트를 기준으로 잔액 조회 대상 계좌를 확정한다. 하나로 확정할 수 없으면 계좌 선택이
+    필요하다는 결과를 반환한다.
+fetch_balance:
+  tool_name: 잔액 조회
+  tool_type: inquiry
+  input_state_keys:
+  - balance.selected_accounts
+  write_state_keys:
+  - balance.balance_results
+  risk_level: R1
+  description: 선택된 계좌들의 현재 잔액을 조회한다. 단일 계좌와 복수 계좌 조회를 모두 지원한다.
+generate_balance_response:
+  tool_name: 잔액 응답 생성
+  tool_type: response
+  input_state_keys:
+  - balance.selected_accounts
+  - balance.balance_results
+  write_state_keys: []
+  risk_level: R0
+  description: 잔액 조회 결과를 사용자가 이해할 수 있는 자연어 응답으로 생성한다.
