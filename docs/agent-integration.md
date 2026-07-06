@@ -241,6 +241,11 @@ curl -X POST localhost:8001/chat -H 'content-type: application/json' \
 uv run pytest agent
 uv run pytest backend
 
+# 단계별 실행 검증 노트북 (팀원 온보딩용, 실행 출력 포함)
+# agent/notebooks/01_agent_walkthrough.ipynb
+# -> state 구조 / YAML->그래프 / 단계별 수동 실행 / interrupt-재개 / HTTP API
+uv run --with jupyter jupyter lab   # 커널: 레포 루트 .venv
+
 # 전체 스택
 cp .env.example .env   # OPENAI_API_KEY 입력 시 LLM 의도분류/응답생성 활성화
 docker compose up -d --build

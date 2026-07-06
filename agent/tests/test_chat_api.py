@@ -72,6 +72,19 @@ def test_balance_inquiry_interrupt_and_resume(client, monkeypatch):
     assert "1,250,000" in second["reply"]
 
 
+def test_transfer_request_fails_safely(client):
+    """미구현 tool을 참조하는 송금 워크플로우도 크래시 없이 종료된다.
+
+    회귀 방지: 미정의 route_key의 END 폴백이 path_map에 없으면
+    KeyError('__end__')가 났다 (subgraph_builder._add_edges).
+    """
+    response = client.post("/chat", json={"message": "김철수한테 5만원 보내줘"})
+    assert response.status_code == 200
+    body = response.json()
+    # 조기 종료라 completed 또는 failed — 서버 에러(500)만 아니면 된다
+    assert body["status"] in {"completed", "failed"}
+
+
 def test_stale_thread_id_starts_fresh_turn(client):
     """pending interrupt가 없는 thread_id는 새 턴으로 처리된다."""
     response = client.post(

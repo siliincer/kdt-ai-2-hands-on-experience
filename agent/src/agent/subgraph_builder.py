@@ -231,6 +231,9 @@ def _add_edges(graph: StateGraph, step_id: str, route_map: dict[str, str]) -> No
     # path_map: route_key → 목적지 노드명
     # 라우터는 route_key를 그대로 반환 → LangGraph가 path_map에서 목적지를 찾는다
     mapping = {rkey: (END if to == "END" else to) for rkey, to in route_map.items()}
+    # 라우터의 폴백 반환값(END)도 path_map에 있어야 한다.
+    # 없으면 미정의 route_key(예: 미구현 tool의 "error")에서 KeyError가 난다.
+    mapping.setdefault(END, END)
 
     def make_router(m: dict) -> Callable:
         def router(state: dict) -> str:
