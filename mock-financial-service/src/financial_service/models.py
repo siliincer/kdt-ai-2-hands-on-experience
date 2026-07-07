@@ -93,6 +93,30 @@ class LedgerEntry(Base):
     )
 
 
+class BalanceSnapshot(Base):
+    """정보계 잔액 캐시 — 계정당 1행, 갱신 시 덮어쓰기.
+
+    cached_balance = SUM(CREDIT) - SUM(DEBIT) up to last_entry_rowid.
+    캐시일 뿐 — canonical balance는 항상 ledger_entries에서 재계산.
+    """
+
+    __tablename__ = "balance_snapshots"
+
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.account_id"), primary_key=True
+    )
+    cached_balance: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # SQLite rowid high-water-mark: entries with rowid <= this value are covered
+    last_entry_rowid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sum_credit: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sum_debit: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+
+    account: Mapped["Account"] = relationship("Account")
+
+
 class AuditLog(Base):
     """감사로그 — append-only, DB 트리거로 UPDATE/DELETE 거부."""
 

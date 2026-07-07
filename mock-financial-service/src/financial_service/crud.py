@@ -2,11 +2,12 @@
 
 import hashlib
 import json
+from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .models import Account, AuditLog, LedgerEntry, Transaction
+from .models import Account, AuditLog, BalanceSnapshot, LedgerEntry, Transaction
 from .schemas import AccountCreate, TransferRequest
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -310,6 +311,138 @@ def transfer(
     )
 
     return txn
+
+
+# ── Snapshot / 정보계 balance cache ───────────────────────────────────────────
+
+
+def refresh_snapshot(db: Session, account_id: str) -> BalanceSnapshot:
+    """Compute and overwrite single-row snapshot for account.
+
+    Semantics: one row per account, mutable, overwritten in-place.
+    Never append-only — calling twice leaves exactly 1 row.
+    """
+    sum_credit = int(
+        db.execute(
+            select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+            .where(LedgerEntry.account_id == account_id)
+            .where(LedgerEntry.entry_type == "CREDIT")
+        ).scalar()
+        or 0
+    )
+    sum_debit = int(
+        db.execute(
+            select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+            .where(LedgerEntry.account_id == account_id)
+            .where(LedgerEntry.entry_type == "DEBIT")
+        ).scalar()
+        or 0
+    )
+    # SQLite rowid as integer high-water-mark
+    last_rowid = db.execute(
+        text("SELECT MAX(rowid) FROM ledger_entries WHERE account_id = :aid"),
+        {"aid": account_id},
+    ).scalar()
+
+    cached_balance = sum_credit - sum_debit
+    now = datetime.now(timezone.utc)
+
+    existing = db.execute(
+        select(BalanceSnapshot).where(BalanceSnapshot.account_id == account_id)
+    ).scalar_one_or_none()
+
+    if existing is not None:
+        # Overwrite in-place — never append
+        existing.cached_balance = cached_balance
+        existing.last_entry_rowid = last_rowid
+        existing.sum_credit = sum_credit
+        existing.sum_debit = sum_debit
+        existing.refreshed_at = now
+        snap = existing
+    else:
+        snap = BalanceSnapshot(
+            account_id=account_id,
+            cached_balance=cached_balance,
+            last_entry_rowid=last_rowid,
+            sum_credit=sum_credit,
+            sum_debit=sum_debit,
+            refreshed_at=now,
+        )
+        db.add(snap)
+
+    db.commit()
+    db.refresh(snap)
+    return snap
+
+
+def get_snapshot(db: Session, account_id: str) -> BalanceSnapshot | None:
+    """Fetch existing snapshot row (None if not yet refreshed)."""
+    return db.execute(
+        select(BalanceSnapshot).where(BalanceSnapshot.account_id == account_id)
+    ).scalar_one_or_none()
+
+
+def reconcile_snapshot(db: Session, account_id: str) -> dict:
+    """Compare watermark-scoped stored sums vs live recompute.
+
+    Pure function — no locking, no writes, does not block ledger writes.
+    Scope: only ledger entries with rowid <= last_entry_rowid are compared.
+    """
+    snap = get_snapshot(db, account_id)
+    if snap is None:
+        live_balance = _get_balance(db, account_id)
+        return {
+            "account_id": account_id,
+            "cached_balance": 0,
+            "expected_balance": live_balance,
+            "sum_credit": 0,
+            "sum_debit": 0,
+            "last_entry_rowid": None,
+            "drift_detected": live_balance != 0,
+            "delta": -live_balance,
+            "reconciled_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    if snap.last_entry_rowid is not None:
+        recomputed_credit = int(
+            db.execute(
+                text(
+                    "SELECT COALESCE(SUM(amount), 0) FROM ledger_entries "
+                    "WHERE account_id = :aid AND entry_type = 'CREDIT' AND rowid <= :wm"
+                ),
+                {"aid": account_id, "wm": snap.last_entry_rowid},
+            ).scalar()
+            or 0
+        )
+        recomputed_debit = int(
+            db.execute(
+                text(
+                    "SELECT COALESCE(SUM(amount), 0) FROM ledger_entries "
+                    "WHERE account_id = :aid AND entry_type = 'DEBIT' AND rowid <= :wm"
+                ),
+                {"aid": account_id, "wm": snap.last_entry_rowid},
+            ).scalar()
+            or 0
+        )
+    else:
+        recomputed_credit = 0
+        recomputed_debit = 0
+
+    expected_balance = recomputed_credit - recomputed_debit
+    delta = snap.cached_balance - expected_balance
+    drift_detected = delta != 0
+
+    return {
+        "account_id": account_id,
+        "cached_balance": snap.cached_balance,
+        "expected_balance": expected_balance,
+        "sum_credit": snap.sum_credit,
+        "sum_debit": snap.sum_debit,
+        "last_entry_rowid": snap.last_entry_rowid,
+        "drift_detected": drift_detected,
+        "delta": delta,
+        "reconciled_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # ── Custom exceptions ─────────────────────────────────────────────────────────
