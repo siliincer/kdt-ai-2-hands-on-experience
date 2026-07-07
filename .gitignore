@@ -258,3 +258,6 @@ claude.local.md
 # Custom
 AI_CONTEXT/
 # AI_CONTEXT: 개인적으로 바이브 코딩 간 작업 상황 기록한 폴더임
+
+# Claude Code local session state
+.claude/
