@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.healthcheck import health_router
+from .api.check_db_conn import health_router
 from .api.user_api import user_router
-from .core.config import CORS_OPTIONS
+from .core.config import CORS_OPTIONS, configure_app
 from .core.exceptions import exception_handlers
 
 
@@ -24,7 +24,9 @@ app = FastAPI(
 )
 
 app.include_router(user_router, prefix="/api/v1")
-app.include_router(health_router, prefix="")
+app.include_router(health_router, prefix="/api/v1")
+
+configure_app(app)  # 일괄적인 설정값 주입
 
 # CORS 설정은 앱 전체의 가장 바깥에 둬서
 # 검증 / 서버 에러 응답에도 헤더가 붙게 한다.

@@ -6,7 +6,7 @@ from ..core.load_environment_var import settings
 from ..schemas.response import CommonResponse
 from ..utils.build_response import success_response
 
-health_router = APIRouter(prefix="/health", tags=["Health"])
+health_router = APIRouter(prefix="/dbhealth", tags=["Health"])
 
 
 @health_router.get("", response_model=CommonResponse[dict])
