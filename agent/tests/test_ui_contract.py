@@ -101,6 +101,68 @@ def test_consumed_ui_does_not_leak_to_next_interrupt(graph):
     assert ui["type"] == "confirm_modal"  # 이전 number_input이 남아 있으면 실패
 
 
+def test_all_interrupt_uis_conform_to_schema(graph):
+    """대표 시나리오의 모든 interrupt ui가 ChatUi 계약(discriminated union)에
+    맞는지 스키마로 강제한다. 계약 밖 필드 구조·타입 변경은 여기서 잡힌다."""
+    from pydantic import TypeAdapter
+
+    from agent.schemas import ChatUi
+
+    adapter = TypeAdapter(ChatUi)
+    seen_types = set()
+
+    def collect(result):
+        if "__interrupt__" in result:
+            ui = _payload(result).get("ui")
+            if ui is not None:
+                validated = adapter.validate_python(ui)
+                seen_types.add(validated.type)
+
+    # 잔액조회: account_card_list
+    config = _config()
+    collect(graph.invoke(_new_state("잔액 얼마야?", "user_001"), config))
+
+    # 송금 되묻기 연쇄: search_select → number_input → confirm_modal(승인)
+    config = _config()
+    collect(graph.invoke(_new_state("송금해줘", "user_001"), config))
+    collect(graph.invoke(Command(resume="김철수"), config))
+    collect(graph.invoke(Command(resume="3만원"), config))
+    # 승인 → auth_request
+    collect(graph.invoke(Command(resume="승인"), config))
+
+    # 고액 경고: confirm_modal(variant=warning)
+    config = _config()
+    result = graph.invoke(_new_state("김철수한테 120만원 보내줘", "user_001"), config)
+    ui = _payload(result)["ui"]
+    assert adapter.validate_python(ui).variant == "warning"
+    collect(result)
+
+    assert seen_types == {
+        "account_card_list",
+        "search_select",
+        "number_input",
+        "confirm_modal",
+        "auth_request",
+    }
+
+
+def test_openapi_exposes_ui_contract(client):
+    """/openapi.json에 ui 5종 스키마가 노출된다 — 프론트/백엔드가
+    서버만 띄우면(/docs) 계약을 코드 기반으로 확인할 수 있어야 한다."""
+    spec = client.get("/openapi.json").json()
+    schemas = spec["components"]["schemas"]
+    for name in (
+        "AccountCardListUi",
+        "SearchSelectUi",
+        "NumberInputUi",
+        "ConfirmModalUi",
+        "AuthRequestUi",
+    ):
+        assert name in schemas, f"{name} 스키마가 OpenAPI에 없음"
+    ui_refs = str(schemas["ChatResponse"]["properties"]["ui"])
+    assert "ConfirmModalUi" in ui_refs
+
+
 def test_chat_api_exposes_ui(client):
     """HTTP /chat 응답에 ui가 그대로 노출되고, 완료 응답에는 없다."""
     first = client.post("/chat", json={"message": "김철수한테 5만원 보내줘"}).json()
