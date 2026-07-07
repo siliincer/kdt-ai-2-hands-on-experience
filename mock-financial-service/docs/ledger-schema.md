@@ -109,7 +109,15 @@ CREATE TABLE balance_snapshots (
 
 ### 고수위표(High-Water Mark) 의미
 
-`last_entry_rowid` 는 스냅샷 계산에 포함된 마지막 원장 항목의 `entry_id`. 정합성 검증(reconciliation) 시 이 ID까지의 원장 항목만 재집계하여 비교.
+`last_entry_rowid` 는 스냅샷 계산에 포함된 마지막 원장 항목의 SQLite `rowid`(정수, 자동증가) — `entry_id`(UUID)와는 다른 값이니 혼동 주의. 정합성 검증(reconciliation) 시 이 rowid까지의 원장 항목만 재집계하여 비교.
+
+**왜 "지금까지 전체"가 아니라 "이 rowid까지만" 비교하는가:**
+
+캐시(`cached_balance`)는 마지막 새로고침 시점 값. 그 이후 새 거래가 들어오면 원장은 늘어나지만 캐시는 그대로 — 이건 정상적인 stale 상태지, 버그 아님. 만약 reconcile이 "지금 원장 전체"와 캐시를 비교하면, 새 거래가 하나만 생겨도 항상 불일치로 뜸(오탐/false positive) — 매번 refresh 안 했다고 재검증에 걸리는 꼴.
+
+고수위표로 비교 범위를 "캐시 계산 당시 시점"으로 고정하면, reconcile은 "그 시점까지의 계산이 맞았는가"만 검증 — 즉 stale(정상, 새 거래 때문)과 corrupt(비정상, 캐시 계산 로직 자체의 버그)를 구분해낸다. 이게 이 필드의 존재 이유.
+
+**SQLite 기반 구현**: `rowid`는 SQLite 내장 자동증가 정수(`database.py`에서 `sqlite:///./financial.db` 사용, `crud.py`의 `refresh_snapshot()`이 `SELECT MAX(rowid) FROM ledger_entries WHERE account_id = ...` 로 조회). Postgres 전환 시 `rowid` 개념이 없으므로 별도 auto-increment 시퀀스 컬럼으로 교체 필요 — README의 Postgres 전환 체크리스트에 이 항목 추가 필요.
 
 ---
 
