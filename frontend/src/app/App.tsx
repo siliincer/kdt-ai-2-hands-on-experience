@@ -1,17 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppRouter } from './router';
 import LoginFeature from '@/features/auth/LoginFeature';
 import SignupFeature from '@/features/auth/SignupFeature';
 import { useTheme } from '@/shared/hooks/useTheme';
+import { useUserStore } from '@/entities/user';
 
-type AuthView = 'login' | 'signup';
+import type { AuthView } from '@/shared/types/types';
 
 export default function App() {
   const { theme } = useTheme();
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    () => sessionStorage.getItem('rf_logged_in') === '1',
-  );
+  const isLoggedIn = useUserStore((state) => state.isLoggedIn);
+  const login = useUserStore((state) => state.login);
   const [authView, setAuthView] = useState<AuthView>('login');
+
+  useEffect(() => {
+    if (sessionStorage.getItem('rf_logged_in') === '1') {
+      login({ id: 'restored', name: '사용자' });
+    }
+  }, [login]);
 
   return (
     <main
@@ -28,7 +34,6 @@ export default function App() {
               <LoginFeature
                 onLogin={() => {
                   sessionStorage.setItem('rf_logged_in', '1');
-                  setIsLoggedIn(true);
                 }}
                 onGoToSignup={() => setAuthView('signup')}
               />

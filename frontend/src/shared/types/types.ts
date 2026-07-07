@@ -1,3 +1,4 @@
 type ThemeMode = 'light' | 'dark';
+type AuthView = 'login' | 'signup';
 
-export type { ThemeMode };
+export type { ThemeMode, AuthView };

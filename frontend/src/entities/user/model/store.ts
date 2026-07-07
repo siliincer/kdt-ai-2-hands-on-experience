@@ -12,5 +12,9 @@ export const useUserStore = create<UserState>((set) => ({
   user: null,
   isLoggedIn: false,
   login: (userData) => set({ user: userData, isLoggedIn: true }),
-  logout: () => set({ user: null, isLoggedIn: false }),
+  logout: () => {
+    sessionStorage.removeItem('rf_access_token');
+    sessionStorage.removeItem('rf_logged_in');
+    set({ user: null, isLoggedIn: false });
+  },
 }));

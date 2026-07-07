@@ -34,3 +34,18 @@ export async function loginApi(
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * 로그아웃 API
+ * POST /backendApi/api/v1/users/logout
+ */
+export async function logoutApi(): Promise<Record<string, never>> {
+  const token = sessionStorage.getItem('rf_access_token') ?? '';
+  return customFetch<Record<string, never>>('/backendApi/api/v1/users/logout', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
