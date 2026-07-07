@@ -1,6 +1,6 @@
 """타인 송금 tool 단위 테스트 (그래프 없이 함수 직접 호출).
 
-대화형 tool(create_approval 등)은 interrupt를 호출하므로 여기서는 다루지 않고
+대화형 tool(request_transfer_approval 등)은 interrupt를 호출하므로 여기서는 다루지 않고
 답변 파서만 검증한다. 대화형 흐름은 test_transfer_flow.py에서 그래프로 검증한다.
 """
 
@@ -18,12 +18,12 @@ from agent.tools.bank_tools import (
     check_amount_input,
     check_balance,
     check_recipient_input,
+    execute_transfer,
     extract_transfer_slots,
     generate_transfer_response,
     resolve_recipient_input,
     run_pre_execution_guardrail,
     run_transfer_guardrail,
-    transfer_money,
     verify_amount,
     verify_from_account,
     verify_recipient_account,
@@ -290,7 +290,8 @@ def test_run_transfer_guardrail_thresholds():
     assert got["route_key"] == "warning_required"
     got = run_transfer_guardrail(_state(**{"transfer.amount": 10_000_000}))
     assert got["route_key"] == "blocked"
-    assert "정책상" in got["final_response"]
+    # 차단 문구는 guardrail_rules.yaml(=시트)의 user_message가 정본
+    assert "10,000,000원 이상 송금은 진행할 수 없습니다" in got["final_response"]
 
 
 def test_pre_execution_guardrail():
@@ -328,7 +329,7 @@ def test_pre_execution_guardrail():
 # ── 실행 / 응답 ───────────────────────────────────────────────────────────────
 
 
-def test_transfer_money_deducts_balance():
+def test_execute_transfer_deducts_balance():
     account = MOCK_ACCOUNTS["user_001"][0]
     before = account["balance"]
     recipient = {
@@ -337,7 +338,7 @@ def test_transfer_money_deducts_balance():
         "bank": "국민은행",
         "account_number": "123-456-789012",
     }
-    got = transfer_money(
+    got = execute_transfer(
         _state(
             **{
                 "transfer.recipient": recipient,
@@ -353,8 +354,8 @@ def test_transfer_money_deducts_balance():
     assert result["to_recipient_name"] == "김철수"
 
 
-def test_transfer_money_guards():
-    got = transfer_money(_state())
+def test_execute_transfer_guards():
+    got = execute_transfer(_state())
     assert got["route_key"] == "failed"
 
 

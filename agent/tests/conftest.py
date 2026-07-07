@@ -42,7 +42,7 @@ def local_bank_client(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def restore_mock_bank():
-    """transfer_money가 잔액을 실제로 차감하므로 테스트마다 원장을 복원한다."""
+    """execute_transfer가 잔액을 실제로 차감하므로 테스트마다 원장을 복원한다."""
     snapshot = copy.deepcopy(MOCK_ACCOUNTS)
     yield
     MOCK_ACCOUNTS.clear()

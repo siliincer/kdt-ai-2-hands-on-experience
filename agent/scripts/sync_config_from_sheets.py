@@ -23,8 +23,7 @@ fin-ai 원본 스크립트와의 주요 차이:
     uv run python agent/scripts/sync_config_from_sheets.py --xlsx sheet.xlsx
 
 의존성: 표준 라이브러리 + pyyaml (오프라인 --xlsx 모드만 openpyxl 필요).
-경고는 전부 advisory다 — 시트 정리 요청 목록으로 활용한다
-(agent/docs/agent-sheet-v2-review.md 참조).
+경고는 전부 advisory다 — 시트 정리 요청 목록으로 활용한다.
 """
 
 from __future__ import annotations

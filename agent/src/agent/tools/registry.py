@@ -10,21 +10,21 @@ step_message/final_response 표시를 담당한다.
 
 from agent.tools.bank_tools import (
     apply_account_selection,
+    authenticate_user,
     check_amount_input,
     check_balance,
     check_recipient_input,
-    create_approval,
+    confirm_transfer_warning,
+    execute_transfer,
     extract_balance_slots,
     extract_transfer_slots,
+    fetch_balance,
     generate_balance_response,
     generate_transfer_response,
-    get_balance,
-    request_user_authentication,
+    request_transfer_approval,
     resolve_recipient_input,
     run_pre_execution_guardrail,
     run_transfer_guardrail,
-    transfer_money,
-    transfer_warning,
     verify_account,
     verify_amount,
     verify_from_account,
@@ -39,10 +39,7 @@ TOOL_REGISTRY = {
     "extract_balance_slots": extract_balance_slots,
     "verify_account": verify_account,
     "apply_account_selection": apply_account_selection,
-    "get_balance": get_balance,
-    # 시트 모순 흡수: Step 시트는 get_balance, Tool_v2는 fetch_balance를 쓴다.
-    # 둘 다 같은 함수로 등록한다 (agent/docs/agent-sheet-v2-review.md 참조).
-    "fetch_balance": get_balance,
+    "fetch_balance": fetch_balance,
     "generate_balance_response": generate_balance_response,
     # 타인 송금 — 슬롯 추출 / 입력 확인
     "extract_transfer_slots": extract_transfer_slots,
@@ -58,11 +55,11 @@ TOOL_REGISTRY = {
     "run_transfer_guardrail": run_transfer_guardrail,
     "run_pre_execution_guardrail": run_pre_execution_guardrail,
     # 타인 송금 — 대화형 (interrupt)
-    "transfer_warning": transfer_warning,
-    "create_approval": create_approval,
-    "request_user_authentication": request_user_authentication,
+    "confirm_transfer_warning": confirm_transfer_warning,
+    "request_transfer_approval": request_transfer_approval,
+    "authenticate_user": authenticate_user,
     # 타인 송금 — 실행 / 응답
-    "transfer_money": transfer_money,
+    "execute_transfer": execute_transfer,
     "generate_transfer_response": generate_transfer_response,
 }
 

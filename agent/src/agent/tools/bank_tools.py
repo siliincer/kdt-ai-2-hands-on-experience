@@ -22,6 +22,16 @@ from pydantic import BaseModel, Field
 
 from agent.bank_client import BankClientError, get_bank_client
 from agent.llm import get_llm
+from agent.policy.guardrail_engine import GuardrailEngine
+from agent.schemas import (
+    AccountCardListUi,
+    AccountCardOption,
+    AuthRequestUi,
+    ConfirmModalUi,
+    NumberInputUi,
+    RecipientOption,
+    SearchSelectUi,
+)
 
 
 def _data(state: dict) -> dict:
@@ -42,11 +52,10 @@ def _recipients(user_id: str) -> list[dict]:
 # ── 공통 조회 ──────────────────────────────────────────────────────────────────
 
 
-def get_balance(state: dict) -> dict:
+def fetch_balance(state: dict) -> dict:
     """확정된 계좌들의 잔액 정보를 balance.balance_results(리스트)로 반환한다.
 
     잔액조회 전용 tool이다. 송금의 잔액확인은 별도 tool(check_balance)이 담당한다.
-    Tool_v2에서는 fetch_balance라는 id로 정의되어 있다 (registry에 alias 등록).
     """
     accounts = _data(state).get("balance.selected_accounts") or []
     if not accounts:
@@ -437,38 +446,50 @@ def _recipient_catalog(user_id: str) -> str:
 
 
 def _account_card_ui(accounts: list[dict], multi: bool = False) -> dict:
-    """account_card_list — 계좌 카드 목록에서 선택하는 UI."""
-    ui: dict = {
-        "type": "account_card_list",
-        "options": [
-            {
-                "account_id": a.get("account_id"),
-                "account_name": a.get("account_name"),
-                "balance": a.get("balance"),
-            }
+    """account_card_list — 계좌 카드 목록에서 선택하는 UI.
+
+    계약: agent.schemas.AccountCardListUi (frontend types.ts와 1:1)
+    """
+    ui = AccountCardListUi(
+        type="account_card_list",
+        options=[
+            AccountCardOption(
+                account_id=a["account_id"],
+                account_name=a["account_name"],
+                balance=a["balance"],
+            )
             for a in accounts
         ],
-    }
-    if multi:
-        ui["multi"] = True
-    return ui
+        multi=True if multi else None,
+    )
+    return ui.model_dump(exclude_none=True)
 
 
 def _recipient_select_ui(user_id: str) -> dict:
-    """search_select — 수취인 검색/선택 UI. 조회 실패 시 options 생략."""
+    """search_select — 수취인 검색/선택 UI. 조회 실패 시 options 생략.
+
+    계약: agent.schemas.SearchSelectUi
+    """
     try:
         options = [
-            {
-                "recipient_id": r.get("recipient_id"),
-                "name": r.get("name"),
-                "bank": r.get("bank"),
-                "account_number": r.get("account_number"),
-            }
+            RecipientOption(
+                recipient_id=r["recipient_id"],
+                name=r["name"],
+                bank=r["bank"],
+                account_number=r["account_number"],
+            )
             for r in _recipients(user_id)
         ]
     except BankClientError:
         options = []
-    return {"type": "search_select", "options": options}
+    return SearchSelectUi(type="search_select", options=options).model_dump(
+        exclude_none=True
+    )
+
+
+def _number_input_ui() -> dict:
+    """number_input — 금액 입력 UI. 계약: agent.schemas.NumberInputUi"""
+    return NumberInputUi(type="number_input").model_dump(exclude_none=True)
 
 
 # ── 슬롯 추출 / 입력 확인 ──────────────────────────────────────────────────────
@@ -633,14 +654,12 @@ def check_amount_input(state: dict) -> dict:
     """송금 금액 입력 유무 확인. 없으면 ask_amount_input으로 되묻는다."""
     if _data(state).get("transfer.amount") is not None:
         return {"route_key": "exists"}
-    return {"route_key": "missing", "prompt_ui": {"type": "number_input"}}
+    return {"route_key": "missing", "prompt_ui": _number_input_ui()}
 
 
 # ── 검증 ──────────────────────────────────────────────────────────────────────
 
-_TRANSFER_LIMIT = 50_000_000  # 1회 송금 한도
-_GUARDRAIL_BLOCK = 10_000_000  # 정책 차단 기준
-_GUARDRAIL_WARN = 1_000_000  # 주의 안내 기준
+_TRANSFER_LIMIT = 50_000_000  # 1회 송금 한도 (입력 형식 검증 — 가드레일 아님)
 
 
 def verify_amount(state: dict) -> dict:
@@ -653,7 +672,7 @@ def verify_amount(state: dict) -> dict:
             "prompt_message": (
                 "금액을 확인하지 못했어요. 다시 입력해주세요 (예: 5만원)."
             ),
-            "prompt_ui": {"type": "number_input"},
+            "prompt_ui": _number_input_ui(),
         }
     if amount > _TRANSFER_LIMIT:
         return {
@@ -730,39 +749,72 @@ def check_balance(state: dict) -> dict:
 
 
 def run_transfer_guardrail(state: dict) -> dict:
-    """송금 정책 검사: 고액 차단 / 주의 안내 / 통과."""
-    amount = _data(state).get("transfer.amount") or 0
-    if amount >= _GUARDRAIL_BLOCK:
+    """송금 정책 검사 — guardrail_rules.yaml의 tool 규칙(execute_transfer) 평가.
+
+    승인 전 단계이므로 approval_status는 context에 넣지 않는다
+    (approval_required_for_execution 규칙은 실행 직전 검사에서 평가된다).
+    임계값·메시지는 코드가 아니라 YAML(=시트)이 source of truth다.
+    """
+    data = _data(state)
+    amount = data.get("transfer.amount") or 0
+    account = data.get("transfer.from_account") or {}
+    recipient = data.get("transfer.recipient") or {}
+
+    context: dict = {"user_input": state.get("user_input") or "", "amount": amount}
+    if isinstance(account.get("balance"), int):
+        context["balance"] = account["balance"]
+    # 신호가 있는 수취인만 판정한다 — 필드가 없는 소스(원격 API 등)에서
+    # 모든 송금이 신규 수취인 경고로 오탐되는 것을 막는다.
+    if "last_transfer_at" in recipient:
+        context["recipient_is_new"] = not recipient.get("last_transfer_at")
+
+    triggered = GuardrailEngine.check("tool", context, target_id="execute_transfer")
+    decision = GuardrailEngine.pick_decision(triggered)
+
+    if decision is None:
+        return {
+            "transfer.risk": {"risk_level": "R2", "decision": "pass"},
+            "route_key": "allowed",
+        }
+
+    risk_level = decision.get("risk_level_override") or "R4"
+    if decision.get("action") == "block":
         return {
             "transfer.risk": {
-                "risk_level": "R5",
+                "risk_level": risk_level,
                 "decision": "blocked",
-                "reason": f"{amount:,}원 — {_GUARDRAIL_BLOCK:,}원 이상 고액 송금",
+                "rule_id": decision.get("rule_id"),
+                "reason": decision.get("rule_name"),
             },
             "route_key": "blocked",
             "final_response": (
-                f"정책상 1회 {_GUARDRAIL_BLOCK:,}원 이상 송금은 진행할 수 "
-                f"없습니다. (요청 금액: {amount:,}원)"
+                f"{decision.get('user_message')} (요청 금액: {amount:,}원)"
             ),
         }
-    if amount >= _GUARDRAIL_WARN:
-        return {
-            "transfer.risk": {"risk_level": "R4", "decision": "warning"},
-            "route_key": "warning_required",
-            "prompt_message": (
-                f"주의가 필요한 송금입니다. 금액: {amount:,}원\n"
-                "평소보다 큰 금액이에요. 진행하려면 '확인', "
-                "중단하려면 '취소'를 입력해주세요."
-            ),
-        }
+
+    # require_additional_auth / warn → 경고 확인 라우트
+    # (확인 후 승인·인증 스텝이 이어지므로 추가 인증 요구가 충족된다)
+    notices = "\n".join(
+        f"- {r['user_message']}" for r in triggered if r.get("user_message")
+    )
     return {
-        "transfer.risk": {"risk_level": "R2", "decision": "pass"},
-        "route_key": "allowed",
+        "transfer.risk": {
+            "risk_level": risk_level,
+            "decision": "warning",
+            "rules": [r.get("rule_id") for r in triggered],
+        },
+        "route_key": "warning_required",
+        "prompt_message": (
+            f"주의가 필요한 송금입니다. 금액: {amount:,}원\n{notices}\n"
+            "진행하려면 '확인', 중단하려면 '취소'를 입력해주세요."
+        ),
     }
 
 
 def run_pre_execution_guardrail(state: dict) -> dict:
-    """실행 직전 검사: 승인 내용과 실행 내용 일치 + 잔액 재확인."""
+    """실행 직전 검사 — 승인-실행 대조 결과와 라이브 잔액을 context로 만들어
+    guardrail_rules.yaml의 tool 규칙(approval_required_for_execution,
+    insufficient_balance)을 평가한다. 판정 기준은 YAML, UX 라우팅은 여기서."""
     try:
         user_id = state.get("user_id")
         data = _data(state)
@@ -771,25 +823,36 @@ def run_pre_execution_guardrail(state: dict) -> dict:
         account = data.get("transfer.from_account") or {}
         amount = data.get("transfer.amount")
 
-        if (
-            not approval
-            or approval.get("account_number") != recipient.get("account_number")
-            or approval.get("from_account_id") != account.get("account_id")
-            or approval.get("amount") != amount
-        ):
+        approval_matches = bool(
+            approval
+            and approval.get("account_number") == recipient.get("account_number")
+            and approval.get("from_account_id") == account.get("account_id")
+            and approval.get("amount") == amount
+        )
+        context: dict = {
+            "approval_status": "approved" if approval_matches else "not_approved",
+            "amount": amount,
+        }
+        live = _live_account(user_id, account.get("account_id"))
+        if live:
+            context["balance"] = live["balance"]
+
+        triggered = GuardrailEngine.check("tool", context, target_id="execute_transfer")
+        by_id = {r["rule_id"]: r for r in triggered}
+
+        if "approval_required_for_execution" in by_id:
             return {
                 "route_key": "blocked",
                 "final_response": (
                     "승인한 내용과 실행 내용이 일치하지 않아 송금을 차단했습니다."
                 ),
             }
-        live = _live_account(user_id, account.get("account_id"))
         if not live:
             return {
                 "route_key": "failed",
                 "final_response": "실행 직전 검사 중 문제가 발생했습니다.",
             }
-        if live["balance"] < amount:
+        if "insufficient_balance" in by_id:
             candidates = _accounts(user_id)
             return {
                 "route_key": "insufficient_balance",
@@ -798,6 +861,14 @@ def run_pre_execution_guardrail(state: dict) -> dict:
                     f"{_account_options(candidates)}"
                 ),
                 "prompt_ui": _account_card_ui(candidates),
+            }
+        # 그 외 block 액션 규칙(고액 차단 등)은 앞 단계를 우회했을 때의 방어선
+        blocked = [r for r in triggered if r.get("action") == "block"]
+        if blocked:
+            decision = GuardrailEngine.pick_decision(blocked)
+            return {
+                "route_key": "blocked",
+                "final_response": decision.get("user_message"),
             }
         return {"route_key": "allowed"}
     except Exception:
@@ -810,7 +881,7 @@ def run_pre_execution_guardrail(state: dict) -> dict:
 # ── 대화형 tool (interrupt 호출) ──────────────────────────────────────────────
 
 
-def transfer_warning(state: dict) -> dict:
+def confirm_transfer_warning(state: dict) -> dict:
     """송금 주의 안내를 보여주고 사용자 확인을 받는다 (interrupt)."""
     prompt = state.get("prompt_message") or (
         "주의가 필요한 송금입니다. 진행하려면 '확인', 중단하려면 '취소'를 입력해주세요."
@@ -820,12 +891,12 @@ def transfer_warning(state: dict) -> dict:
         {
             "prompt": prompt,
             "prompt_for": "transfer.warning_confirm",
-            "ui": {
-                "type": "confirm_modal",
-                "variant": "warning",
-                "display": {"amount": amount},
-                "actions": ["확인", "취소"],
-            },
+            "ui": ConfirmModalUi(
+                type="confirm_modal",
+                variant="warning",
+                display={"amount": amount},
+                actions=["확인", "취소"],
+            ).model_dump(exclude_none=True),
         }
     )
 
@@ -836,7 +907,7 @@ def transfer_warning(state: dict) -> dict:
     return updates
 
 
-def create_approval(state: dict) -> dict:
+def request_transfer_approval(state: dict) -> dict:
     """송금 승인 카드를 보여주고 승인/취소/수정 답변을 받는다 (interrupt).
 
     approved 시 승인 요약(transfer.approval)을 기록해 실행 직전 검사가
@@ -860,23 +931,23 @@ def create_approval(state: dict) -> dict:
         {
             "prompt": card,
             "prompt_for": "transfer.approval_decision",
-            "ui": {
-                "type": "confirm_modal",
-                "display": {
+            "ui": ConfirmModalUi(
+                type="confirm_modal",
+                display={
                     "recipient_name": recipient.get("name"),
                     "bank": recipient.get("bank"),
                     "account_number": recipient.get("account_number"),
                     "from_account_name": account.get("account_name"),
                     "amount": amount,
                 },
-                "actions": [
+                actions=[
                     "송금하기",
                     "취소",
                     "수취인 수정",
                     "금액 수정",
                     "계좌 수정",
                 ],
-            },
+            ).model_dump(exclude_none=True),
         }
     )
 
@@ -898,7 +969,7 @@ def create_approval(state: dict) -> dict:
     elif route == "edit_amount":
         updates["transfer.amount"] = None
         updates["prompt_message"] = "새 송금 금액을 입력해주세요 (예: 3만원)."
-        updates["prompt_ui"] = {"type": "number_input"}
+        updates["prompt_ui"] = _number_input_ui()
     elif route == "edit_recipient":
         updates["transfer.recipient"] = None
         updates["prompt_message"] = "새 수취인을 입력해주세요 (이름 또는 계좌번호)."
@@ -913,7 +984,7 @@ def create_approval(state: dict) -> dict:
     return updates
 
 
-def request_user_authentication(state: dict) -> dict:
+def authenticate_user(state: dict) -> dict:
     """송금 실행 전 본인 인증을 요청한다 (interrupt, mock 인증)."""
     reply = interrupt(
         {
@@ -923,11 +994,11 @@ def request_user_authentication(state: dict) -> dict:
             ),
             "prompt_for": "transfer.auth_result",
             # auth_request는 시트 UI Spec에 없는 타입 — 시트 추가 요청 대상
-            "ui": {
-                "type": "auth_request",
-                "methods": ["지문", "Face ID", "비밀번호"],
-                "actions": ["인증완료", "취소"],
-            },
+            "ui": AuthRequestUi(
+                type="auth_request",
+                methods=["지문", "Face ID", "비밀번호"],
+                actions=["인증완료", "취소"],
+            ).model_dump(exclude_none=True),
         }
     )
     route = _parse_auth_reply(str(reply))
@@ -942,7 +1013,7 @@ def request_user_authentication(state: dict) -> dict:
 # ── 송금 실행 / 응답 ──────────────────────────────────────────────────────────
 
 
-def transfer_money(state: dict) -> dict:
+def execute_transfer(state: dict) -> dict:
     """Fake Money 송금을 실행한다. 원장 차감은 BankClient가 담당한다."""
     user_id = state.get("user_id")
     data = _data(state)

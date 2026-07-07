@@ -248,7 +248,7 @@ wf_external_transfer:
     on_success_next_step_id: 송금 금액 입력값이 있는지 확인한다. 값이 없으면 ask_amount_input으로 이동한다.
     on_fail_next_step_id: ''
   - step_order: 9
-    step_id: ask_amount_input
+    step_id: ask_amount
     step_name: 송금 금액 입력
     step_type: input
     task_id: amount_input
@@ -287,7 +287,7 @@ wf_external_transfer:
     on_success_next_step_id: 출금 계좌 힌트, 기본 계좌, 사용 가능한 계좌 목록을 기준으로 실제 출금 계좌를 확정한다.
     on_fail_next_step_id: ''
   - step_order: 13
-    step_id: ask_account_selection
+    step_id: ask_from_account
     step_name: 출금 계좌 선택
     step_type: input
     task_id: from_account_selection
@@ -343,7 +343,7 @@ wf_external_transfer:
     step_name: 송금 주의 안내
     step_type: response
     task_id: transfer_warning_response
-    tool_id: transfer_warning
+    tool_id: confirm_transfer_warning
     output_data_key: ''
     step_risk_level: R4
     ui_type: warning_message
@@ -360,7 +360,7 @@ wf_external_transfer:
     step_name: 송금 차단 안내
     step_type: response
     task_id: transfer_blocked_response
-    tool_id: final_response
+    tool_id: ''
     output_data_key: ''
     step_risk_level: R5
     ui_type: blocked_message
@@ -369,11 +369,11 @@ wf_external_transfer:
     on_success_next_step_id: 정책 조건에 의해 송금이 차단된 경우 사용자에게 안내하고 종료한다.
     on_fail_next_step_id: 위험도 평가 또는 정책 조건에 의해 송금이 차단된 경우 사용자에게 안내한다.
   - step_order: 19
-    step_id: show_transfer_review
+    step_id: review_transfer
     step_name: 송금 정보 확인
     step_type: approval
     task_id: user_approval
-    tool_id: create_approval
+    tool_id: request_transfer_approval
     output_data_key: ''
     step_risk_level: R4
     ui_type: confirmation_card
@@ -386,20 +386,20 @@ wf_external_transfer:
     step_name: 송금 취소 안내
     step_type: response
     task_id: transfer_cancelled_response
-    tool_id: final_response
+    tool_id: ''
     output_data_key: ''
     step_risk_level: R0
     ui_type: message
-    step_message: 송금 내용을 확인해주세요.
+    step_message: 송금을 취소했습니다.
     on_fail_condition: ''
     on_success_next_step_id: 사용자가 승인하지 않았거나 승인 시간이 만료된 경우 안내한다.
     on_fail_next_step_id: ''
   - step_order: 22
-    step_id: request_user_authentication
+    step_id: authenticate_user
     step_name: 사용자 본인 인증 요청
     step_type: auth
     task_id: user_authentication
-    tool_id: request_user_authentication
+    tool_id: authenticate_user
     output_data_key: ''
     step_risk_level: R4
     ui_type: ''
@@ -412,7 +412,7 @@ wf_external_transfer:
     step_name: 본인 인증 실패 안내
     step_type: response
     task_id: authentication_failed_response
-    tool_id: final_response
+    tool_id: ''
     output_data_key: ''
     step_risk_level: R0
     ui_type: error_message
@@ -438,7 +438,7 @@ wf_external_transfer:
     step_name: 송금 실행
     step_type: tool
     task_id: external_transfer
-    tool_id: transfer_money
+    tool_id: execute_transfer
     output_data_key: ''
     step_risk_level: R4
     ui_type: ''
@@ -451,7 +451,7 @@ wf_external_transfer:
     step_name: 송금 실패 안내
     step_type: response
     task_id: transfer_failed_response
-    tool_id: final_response
+    tool_id: ''
     output_data_key: ''
     step_risk_level: R0
     ui_type: error_message
@@ -460,7 +460,7 @@ wf_external_transfer:
     on_success_next_step_id: 송금 실행 결과를 사용자에게 보여줄 최종 응답으로 변환한다.
     on_fail_next_step_id: ''
   - step_order: 28
-    step_id: generate_transfer_response
+    step_id: show_transfer_result
     step_name: 송금 결과 응답 생성
     step_type: response
     task_id: transfer_response_generation
@@ -545,13 +545,13 @@ wf_external_transfer:
     route_key: missing
     route_name: 금액 입력 없음
     condition_description: 송금 금액 입력값이 비어 있는 경우
-    to_step_id: ask_amount_input
-  - from_step_id: ask_amount_input
+    to_step_id: ask_amount
+  - from_step_id: ask_amount
     route_key: submitted
     route_name: 금액 입력 완료
     condition_description: 사용자가 송금 금액을 입력한 경우
     to_step_id: verify_amount
-  - from_step_id: ask_amount_input
+  - from_step_id: ask_amount
     route_key: cancelled
     route_name: 금액 입력 취소
     condition_description: 사용자가 금액 입력을 취소한 경우
@@ -565,7 +565,7 @@ wf_external_transfer:
     route_key: invalid
     route_name: 금액 확인 실패
     condition_description: 금액 누락, 형식 오류, 0 이하, 허용 범위 오류 등으로 금액을 확정할 수 없는 경우
-    to_step_id: ask_amount_input
+    to_step_id: ask_amount
   - from_step_id: verify_amount
     route_key: limit_exceeded
     route_name: 한도 초과
@@ -581,18 +581,18 @@ wf_external_transfer:
     route_name: 출금 계좌 선택 필요
     condition_description: 기본 계좌 없음, 후보 다수, 사용 가능 계좌 없음, 선택값 오류 등으로 사용자의 계좌 선택이 필요한
       경우
-    to_step_id: ask_account_selection
+    to_step_id: ask_from_account
   - from_step_id: verify_from_account
     route_key: failed
     route_name: 출금 계좌 확인 실패
     condition_description: 출금 계좌 확인 중 시스템 오류가 발생한 경우
     to_step_id: show_transfer_failed
-  - from_step_id: ask_account_selection
+  - from_step_id: ask_from_account
     route_key: submitted
     route_name: 출금 계좌 선택 완료
     condition_description: 사용자가 출금 계좌를 선택한 경우
     to_step_id: verify_from_account
-  - from_step_id: ask_account_selection
+  - from_step_id: ask_from_account
     route_key: cancelled
     route_name: 출금 계좌 선택 취소
     condition_description: 사용자가 출금 계좌 선택을 취소한 경우
@@ -616,12 +616,12 @@ wf_external_transfer:
     route_key: completed
     route_name: 잔액 부족 안내 완료
     condition_description: 잔액 부족 안내 메시지를 표시한 경우
-    to_step_id: ask_account_selection
+    to_step_id: ask_from_account
   - from_step_id: run_transfer_guardrail
     route_key: allowed
     route_name: 정책 통과
     condition_description: 송금 요청이 정책상 바로 최종 확인 가능한 경우
-    to_step_id: show_transfer_review
+    to_step_id: review_transfer
   - from_step_id: run_transfer_guardrail
     route_key: warning_required
     route_name: 주의 안내 필요
@@ -641,7 +641,7 @@ wf_external_transfer:
     route_key: confirmed
     route_name: 주의 안내 확인
     condition_description: 사용자가 송금 주의 안내를 확인한 경우
-    to_step_id: show_transfer_review
+    to_step_id: review_transfer
   - from_step_id: show_transfer_warning
     route_key: cancelled
     route_name: 주의 안내 취소
@@ -652,32 +652,32 @@ wf_external_transfer:
     route_name: 차단 안내 완료
     condition_description: 송금 차단 안내 응답이 생성된 경우
     to_step_id: write_audit_log
-  - from_step_id: show_transfer_review
+  - from_step_id: review_transfer
     route_key: approved
     route_name: 송금 승인
     condition_description: 사용자가 송금 정보 확인 화면에서 송금하기를 선택한 경우
-    to_step_id: request_user_authentication
-  - from_step_id: show_transfer_review
+    to_step_id: authenticate_user
+  - from_step_id: review_transfer
     route_key: cancelled
     route_name: 송금 취소
     condition_description: 사용자가 송금 정보 확인 화면에서 취소하거나 승인 시간이 만료된 경우
     to_step_id: show_transfer_cancelled
-  - from_step_id: show_transfer_review
+  - from_step_id: review_transfer
     route_key: edit_recipient
     route_name: 수취인 수정
     condition_description: 사용자가 송금 정보 확인 화면에서 수취인 수정을 선택한 경우
     to_step_id: ask_recipient
-  - from_step_id: show_transfer_review
+  - from_step_id: review_transfer
     route_key: edit_amount
     route_name: 금액 수정
     condition_description: 사용자가 송금 정보 확인 화면에서 금액 수정을 선택한 경우
-    to_step_id: ask_amount_input
-  - from_step_id: show_transfer_review
+    to_step_id: ask_amount
+  - from_step_id: review_transfer
     route_key: edit_from_account
     route_name: 출금 계좌 수정
     condition_description: 사용자가 송금 정보 확인 화면에서 출금 계좌 수정을 선택한 경우
-    to_step_id: ask_account_selection
-  - from_step_id: show_transfer_review
+    to_step_id: ask_from_account
+  - from_step_id: review_transfer
     route_key: failed
     route_name: 승인 처리 실패
     condition_description: 송금 정보 확인 화면 처리 중 시스템 오류가 발생한 경우
@@ -687,12 +687,12 @@ wf_external_transfer:
     route_name: 취소 안내 완료
     condition_description: 송금 취소 안내 응답이 생성된 경우
     to_step_id: write_audit_log
-  - from_step_id: request_user_authentication
+  - from_step_id: authenticate_user
     route_key: authenticated
     route_name: 인증 성공
     condition_description: 지문, Face ID, 비밀번호 등 본인 인증이 성공한 경우
     to_step_id: run_pre_execution_guardrail
-  - from_step_id: request_user_authentication
+  - from_step_id: authenticate_user
     route_key: not_authenticated
     route_name: 인증 실패
     condition_description: 본인 인증 실패, 취소, 만료 등으로 인증이 완료되지 않은 경우
@@ -726,7 +726,7 @@ wf_external_transfer:
     route_key: success
     route_name: 송금 성공
     condition_description: Fake Money 송금 실행이 정상 완료된 경우
-    to_step_id: generate_transfer_response
+    to_step_id: show_transfer_result
   - from_step_id: execute_transfer
     route_key: failed
     route_name: 송금 실행 실패
@@ -737,12 +737,12 @@ wf_external_transfer:
     route_name: 실패 안내 완료
     condition_description: 송금 실패 안내 응답이 생성된 경우
     to_step_id: write_audit_log
-  - from_step_id: generate_transfer_response
+  - from_step_id: show_transfer_result
     route_key: success
     route_name: 응답 생성 성공
     condition_description: 송금 결과 응답이 정상 생성된 경우
     to_step_id: write_audit_log
-  - from_step_id: generate_transfer_response
+  - from_step_id: show_transfer_result
     route_key: failed
     route_name: 응답 생성 실패
     condition_description: 송금 결과 응답 생성에 실패한 경우
@@ -816,7 +816,7 @@ wf_balance_inquiry:
     step_name: 잔액 조회
     step_type: tool
     task_id: ''
-    tool_id: get_balance
+    tool_id: fetch_balance
     output_data_key: balance.balance_results
     step_risk_level: R1
     ui_type: ''
@@ -825,7 +825,7 @@ wf_balance_inquiry:
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
   - step_order: 6
-    step_id: generate_balance_response
+    step_id: show_balance_result
     step_name: 잔액 조회 결과 응답 생성
     step_type: response
     task_id: ''
@@ -883,7 +883,7 @@ wf_balance_inquiry:
     route_key: success
     route_name: 조회 성공
     condition_description: 잔액 조회가 성공한 경우
-    to_step_id: generate_balance_response
+    to_step_id: show_balance_result
   - from_step_id: verify_account
     route_key: not_found
     route_name: 계좌 없음
@@ -919,12 +919,12 @@ wf_balance_inquiry:
     route_name: 조회 실패
     condition_description: 잔액 조회 중 오류가 발생한 경우
     to_step_id: show_balance_failed
-  - from_step_id: generate_balance_response
+  - from_step_id: show_balance_result
     route_key: success
     route_name: 응답 생성 완료
     condition_description: 잔액 조회 결과 응답이 정상 생성된 경우
     to_step_id: write_audit_log
-  - from_step_id: generate_balance_response
+  - from_step_id: show_balance_result
     route_key: failed
     route_name: 응답 생성 실패
     condition_description: 잔액 조회 결과 응답 생성에 실패한 경우

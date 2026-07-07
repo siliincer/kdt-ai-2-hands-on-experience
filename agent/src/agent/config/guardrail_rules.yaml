@@ -41,7 +41,7 @@ insufficient_balance:
   applies_to_scope: tool
   applies_to_ids:
   - withdraw_money
-  - transfer_money
+  - execute_transfer
   - transfer_between_own_accounts
   - create_auto_savings_rule
   condition:
@@ -54,7 +54,7 @@ high_amount_transfer:
   rule_name: 고액 송금 추가 인증
   applies_to_scope: tool
   applies_to_ids:
-  - transfer_money
+  - execute_transfer
   condition:
     expression: amount >= 1000000
   action: require_additional_auth
@@ -65,7 +65,7 @@ new_recipient_warning:
   rule_name: 신규 수취인 경고
   applies_to_scope: tool
   applies_to_ids:
-  - transfer_money
+  - execute_transfer
   condition:
     expression: recipient_is_new == true
   action: warn
@@ -79,7 +79,7 @@ approval_required_for_execution:
   - deposit_money
   - withdraw_money
   - transfer_between_own_accounts
-  - transfer_money
+  - execute_transfer
   - create_auto_savings_rule
   condition:
     expression: approval_status != 'approved'
@@ -94,7 +94,7 @@ post_result_validation:
   - deposit_money
   - withdraw_money
   - transfer_between_own_accounts
-  - transfer_money
+  - execute_transfer
   - create_auto_savings_rule
   condition:
     expression: tool_result.status != 'success'
@@ -123,3 +123,14 @@ pii_masking:
   risk_level_override: R0
   user_message: (없이 자동 마스킹 처리)
   enabled: false
+high_amount_transfer_block:
+  rule_name: 고액 송금 차단
+  applies_to_scope: tool
+  applies_to_ids:
+  - execute_transfer
+  condition:
+    expression: amount >= 10000000
+  action: block
+  risk_level_override: R5
+  user_message: 1회 10,000,000원 이상 송금은 진행할 수 없습니다.
+  enabled: true
