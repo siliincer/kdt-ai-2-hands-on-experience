@@ -6,12 +6,17 @@ import { NAVY, MINT } from '@/shared/constants/color';
 import { F } from '@/shared/constants/font';
 
 import { useUserStore } from '@/entities/user';
+import { loginApi } from '@/entities/user/api/userApi';
 
 interface LoginScreenProps {
   onLogin: () => void;
+  onGoToSignup?: () => void;
 }
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
+export default function LoginScreen({
+  onLogin,
+  onGoToSignup,
+}: LoginScreenProps) {
   // Zustand 스토어에서 login 액션 가져오기
   const login = useUserStore((state) => state.login);
 
@@ -19,24 +24,36 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) return;
+    setErrorMsg('');
     setIsLoading(true);
 
-    // API 통신을 모킹한 타이머
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const result = await loginApi({ email, password });
 
-      // 1. Zustand 전역 스토어에 유저 정보 저장
+      // Zustand 전역 스토어에 유저 정보 저장
       login({
-        id: 'user_01',
-        name: email.split('@')[0], // 이메일 앞부분을 임시 이름으로 사용
+        id: result.user.id,
+        name: result.user.name ?? email.split('@')[0],
       });
 
-      // 2. 부모 컴포넌트의 화면 전환 콜백 실행
+      // access_token 저장
+      sessionStorage.setItem('rf_access_token', result.access_token);
+
+      // 부모 컴포넌트의 화면 전환 콜백 실행
       onLogin();
-    }, 800);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg('로그인 중 오류가 발생했습니다.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -76,6 +93,20 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         >
           로그인
         </h2>
+
+        {/* Error message */}
+        {errorMsg && (
+          <div
+            className="mb-4 px-4 py-2.5 rounded-xl text-sm"
+            style={{
+              background: '#FEF2F2',
+              color: '#DC2626',
+              fontFamily: F,
+            }}
+          >
+            {errorMsg}
+          </div>
+        )}
 
         {/* Email */}
         <div className="mb-4">
@@ -164,6 +195,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         >
           계정이 없으신가요?{' '}
           <button
+            onClick={onGoToSignup}
             className="font-semibold hover:opacity-70 transition-opacity"
             style={{ color: MINT }}
           >
@@ -171,14 +203,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </button>
         </p>
       </div>
-
-      {/* Forgot password */}
-      <button
-        className="mt-6 text-xs hover:opacity-70 transition-opacity"
-        style={{ color: 'rgba(255,255,255,0.4)', fontFamily: F }}
-      >
-        비밀번호를 잊으셨나요?
-      </button>
     </div>
   );
 }

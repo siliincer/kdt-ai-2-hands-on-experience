@@ -75,7 +75,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     setTimeout(() => {
       setLoading(false);
       onLogin();
-    }, 800);
+    }, 500);
   };
 
   return (
@@ -210,14 +210,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </button>
         </p>
       </div>
-
-      {/* Forgot password */}
-      <button
-        className="mt-6 text-xs hover:opacity-70 transition-opacity"
-        style={{ color: "rgba(255,255,255,0.4)", fontFamily: F }}
-      >
-        비밀번호를 잊으셨나요?
-      </button>
     </div>
   );
 }
