@@ -91,7 +91,7 @@ def test_limit_exceeded_blocks_without_interrupt(graph):
 
 
 def test_insufficient_balance_reselects_account(graph):
-    """잔액 부족 → 계좌 재선택 → 진행."""
+    """잔액 부족 → 계좌 재선택 → 신규 수취인 경고 → 진행."""
     config = _config()
 
     r = graph.invoke(
@@ -101,6 +101,10 @@ def test_insufficient_balance_reselects_account(graph):
     assert "부족" in _prompt(r)
 
     r = graph.invoke(Command(resume="1번"), config)
+    # 이영희는 송금 이력 없는 신규 수취인 → new_recipient_warning 경고
+    assert "처음 보내는 수취인" in _prompt(r)
+
+    r = graph.invoke(Command(resume="확인"), config)
     card = _prompt(r)
     assert "이영희" in card and "500,000" in card and "입출금통장" in card
 

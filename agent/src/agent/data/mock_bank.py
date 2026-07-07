@@ -26,6 +26,8 @@ MOCK_ACCOUNTS = {
 }
 
 # user_id -> 송금 수취인 목록
+# last_transfer_at: 마지막 송금 일시. None이면 송금 이력이 없는 신규 수취인으로,
+# new_recipient_warning 가드레일 규칙의 recipient_is_new 신호가 된다.
 MOCK_RECIPIENTS = {
     "user_001": [
         {
@@ -33,12 +35,14 @@ MOCK_RECIPIENTS = {
             "name": "김철수",
             "bank": "국민은행",
             "account_number": "123-456-789012",
+            "last_transfer_at": "2026-06-15T10:30:00",
         },
         {
             "recipient_id": "rec_002",
             "name": "이영희",
             "bank": "신한은행",
             "account_number": "110-123-456789",
+            "last_transfer_at": None,
         },
     ]
 }

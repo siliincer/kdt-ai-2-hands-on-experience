@@ -67,6 +67,27 @@ def test_input_steps_have_output_keys():
     assert ask["output_data_key"] == "transfer.recipient"
 
 
+def test_guardrail_rules_schema():
+    """모든 가드레일 규칙이 엔진이 이해하는 형태인지 검증한다."""
+    from agent.workflow_loader import get_guardrail_rules
+
+    valid_actions = {
+        "block",
+        "require_additional_auth",
+        "require_approval",
+        "warn",
+        "ask_clarification",
+        "info_masking",
+    }
+    for rule_id, rule in get_guardrail_rules().items():
+        assert rule.get("applies_to_scope") in {"global", "workflow", "tool"}, rule_id
+        assert rule.get("action") in valid_actions, rule_id
+        condition = rule.get("condition") or {}
+        assert condition.get("contains_any") or condition.get("expression"), (
+            f"규칙 '{rule_id}'에 엔진이 평가할 수 있는 condition이 없음"
+        )
+
+
 def test_all_workflows_compile_despite_missing_tools():
     """transfer는 미구현 tool을 참조하지만 서브그래프 컴파일은 성공해야 한다.
 

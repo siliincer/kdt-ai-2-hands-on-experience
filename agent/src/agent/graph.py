@@ -52,7 +52,7 @@ def build_graph(checkpointer=None):
     graph.add_node("global_guardrail", global_guardrail_node)
     graph.add_node("workflow_matching", workflow_matching_node)
 
-    # 사용자 워크플로우 서브그래프만 노드로 추가
+    # 실행 후보 워크플로우 서브그래프들을 메인 그래프에 등록
     for wf_id, sub_graph in workflow_graphs.items():
         graph.add_node(wf_id, sub_graph)
 

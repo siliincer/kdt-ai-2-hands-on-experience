@@ -7,22 +7,26 @@
 
 참고: fin-ai 원본의 workflow_execution_node(순차 실행기 경로)는 서브그래프
 기반 실행으로 대체되어 포팅에서 제외했다. 자세한 배경은
-agent/docs/agent-integration.md 참조.
+agent/docs/README.md 참조.
 """
 
 from __future__ import annotations
 
+from agent.policy.context_extractor import build_global_context
 from agent.policy.guardrail_engine import GuardrailEngine
 from agent.workflow_matcher import match_workflow
 
 
 def global_guardrail_node(state: dict) -> dict:
     """전역 가드레일 규칙(guardrail_rules.yaml, scope=global)으로 입력을 검사한다."""
-    result = GuardrailEngine.check_global(state.get("user_input", ""))
-    if result.get("triggered"):
+    context = build_global_context(state)
+    triggered = GuardrailEngine.check_global(context)
+    decision = GuardrailEngine.pick_decision(triggered)
+    result = {"triggered": bool(triggered), "scope": "global", "rules": triggered}
+    if decision and decision.get("action") == "block":
         return {
             "status": "blocked",
-            "final_response": result.get("user_message"),
+            "final_response": decision.get("user_message"),
             "guardrail_result": result,
         }
     return {"status": "guardrail_passed", "guardrail_result": result}
