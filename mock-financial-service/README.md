@@ -7,7 +7,7 @@
 > 동작하도록 만든 **최소 참고 구현**입니다. 시트 API Spec 탭 계약을
 > 따르며, 담당자가 자유롭게 확장/재작성해도 됩니다 — agent 쪽 계약 테스트는
 > `agent/tests/test_bank_client.py`, 통합 문서는
-> `agent/docs/tool-api-integration.md`를 참조하세요.
+> `agent/docs/README.md` 4절(은행 API 경계)을 참조하세요.
 
 ## 구현된 API (시트 API Spec 탭 기준)
 

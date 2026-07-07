@@ -101,7 +101,7 @@ state에 쌓입니다. 엔진용 고정 필드(응답 문장, 분기 키 등)와
 
 | 담당 | 접점 | 봐야 할 것 |
 |---|---|---|
-| **프론트** | 채팅 응답의 `ui` 필드로 화면을 그린다 — 계좌 카드 목록, 승인 카드(버튼 라벨 포함) 등. 버튼 라벨("송금하기")을 **그대로 다음 메시지로 보내면** 에이전트가 인식 | `frontend/src/features/agent_chat/api/types.ts` (타입), [docs/tool-api-integration.md](docs/tool-api-integration.md) 3절 (ui 종류별 예시) |
+| **프론트** | 채팅 응답의 `ui` 필드로 화면을 그린다 — 계좌 카드 목록, 승인 카드(버튼 라벨 포함) 등. 버튼 라벨("송금하기")을 **그대로 다음 메시지로 보내면** 에이전트가 인식 | `frontend/src/features/agent_chat/api/types.ts` (타입), [docs/README.md](docs/README.md) 3절 (ui 종류별 예시) |
 | **백엔드** | `/api/v1/agent/chat`이 이 서비스의 `/chat`으로 프록시. 요청/응답을 그대로 전달만 하면 됨 | `backend/src/backend/api/agent_api.py`, `backend/src/backend/services/agent_client.py` |
 | **원장(mock-financial-service)** | 에이전트가 http 모드에서 호출하는 계좌/송금 REST API | `mock-financial-service/README.md` (구현된 API와 에러 규칙) |
 
@@ -145,10 +145,8 @@ GitHub에서 출력까지 그대로 볼 수 있습니다:
 
 | 문서 | 내용 |
 |---|---|
-| [agent-integration.md](docs/agent-integration.md) | 아키텍처 전반, API 계약, state 설계, tool 작성 가이드 |
-| [tool-api-integration.md](docs/tool-api-integration.md) | 서비스 간 통신 경로 총괄, 은행 API 경계, 프론트 ui 계약 |
-| [agent-sheet-v2-review.md](docs/agent-sheet-v2-review.md) | 스프레드시트 v2 검토 결과와 설계 결정 기록 |
-| [sheet-cleanup-guide.md](docs/sheet-cleanup-guide.md) | 시트 수정 지시서 (탭/행/컬럼 단위) |
+| [docs/README.md](docs/README.md) | **통합 문서** — 아키텍처·통신 경로, 계약별 정본과 변경 루틴, 채팅 API/UI 계약(ui 5종·회신 규약), 은행 API 경계, state 설계·tool 작성 가이드, 연결 현황과 파트별 인계 |
+| [docs/naming-convention.md](docs/naming-convention.md) | step_id/tool_id 명명규칙과 시트 재작성 지시서 |
 
 알아두면 좋은 제약: 대화 상태는 서버 메모리에만 있어서 **재시작하면 진행
 중이던 대화가 사라지고**, 서버는 1개 프로세스로 띄워야 합니다 (개선 예정).
