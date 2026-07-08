@@ -18,7 +18,7 @@ from ..db.redis import stream_pool
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 from .agent_stream_producer import publish_agent_event
 
-_STEP_DELAY_SECONDS = 0.6
+_STEP_DELAY_SECONDS = 0.5
 
 # 송금 의도로 볼 키워드
 _TRANSFER_KEYWORDS = ("송금", "보내", "이체", "transfer")

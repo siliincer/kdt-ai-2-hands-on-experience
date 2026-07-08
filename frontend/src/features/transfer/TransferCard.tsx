@@ -23,7 +23,30 @@ interface TransferPrefill {
   scheduled?: string;
 }
 
-export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
+export interface TransferConfirmValues {
+  name: string;
+  bank: string;
+  account: string;
+  amount: string;
+  time: string;
+}
+
+interface TransferCardProps {
+  prefill?: TransferPrefill;
+  /** 주어지면 confirm 모드: 내부 완료 화면 대신 이 콜백을 호출한다(HITL). */
+  onConfirm?: (values: TransferConfirmValues) => void;
+  onCancel?: () => void;
+  submitLabel?: string;
+  disabled?: boolean;
+}
+
+export function TransferCard({
+  prefill,
+  onConfirm,
+  onCancel,
+  submitLabel = '송금하기 →',
+  disabled = false,
+}: TransferCardProps) {
   const [name, setName] = useState(prefill?.name ?? '');
   const [bank, setBank] = useState(prefill?.bank ?? '신한은행');
   const [account, setAccount] = useState(prefill?.account ?? '');
@@ -284,18 +307,33 @@ export function TransferCard({ prefill }: { prefill?: TransferPrefill }) {
       <div className="mt-4 flex gap-2">
         <button
           type="button"
-          className="flex-1 rounded-xl border border-border bg-transparent py-2.5 text-sm text-foreground hover:bg-muted/30 transition-colors"
+          disabled={disabled}
+          onClick={onCancel}
+          className="flex-1 rounded-xl border border-border bg-transparent py-2.5 text-sm text-foreground hover:bg-muted/30 transition-colors disabled:opacity-50"
           style={{ fontFamily: F }}
         >
           취소
         </button>
         <button
           type="button"
-          onClick={() => setDone(true)}
-          className="flex-1 rounded-xl bg-chart-1 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+          disabled={disabled}
+          onClick={() => {
+            if (onConfirm) {
+              onConfirm({
+                name,
+                bank,
+                account,
+                amount: amtRaw,
+                time: timeOpt === 'now' ? '지금 바로' : schedDT,
+              });
+            } else {
+              setDone(true);
+            }
+          }}
+          className="flex-1 rounded-xl bg-chart-1 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
           style={{ fontFamily: F }}
         >
-          송금하기 →
+          {submitLabel}
         </button>
       </div>
     </div>

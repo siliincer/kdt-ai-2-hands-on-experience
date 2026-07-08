@@ -52,10 +52,13 @@ export function foldEvent(
       return { ...message, parts };
     }
     case 'need_approval': {
+      // 승인 프롬프트는 진행 tool_call 과 toolName 이 겹치지 않도록 confirm_ 접두사.
+      // 예: metadata.tool='transfer' → 'confirm_transfer' (전용 confirm 카드 렌더)
+      const tool = (metadata?.tool as string) ?? 'action';
       parts.push({
         type: 'tool-call',
         toolCallId: newId(),
-        toolName: (metadata?.tool as string) ?? 'confirm',
+        toolName: `confirm_${tool}`,
         argsText: event.content,
         args: (metadata?.args as Record<string, unknown>) ?? undefined,
         approvalId: event.approval_id ?? undefined,
@@ -92,11 +95,15 @@ export function convertMessage(message: ChatUiMessage): ThreadMessageLike {
     if (part.type === 'reasoning') {
       return { type: 'reasoning' as const, text: part.text };
     }
+    // approvalId 를 args 에 실어 confirm 툴 UI(render props.args)로 전달
+    const toolArgs = part.approvalId
+      ? { ...(part.args ?? {}), approvalId: part.approvalId }
+      : (part.args ?? {});
     return {
       type: 'tool-call' as const,
       toolCallId: part.toolCallId,
       toolName: part.toolName,
-      args: part.args ?? {},
+      args: toolArgs,
       argsText: part.argsText,
     };
   });

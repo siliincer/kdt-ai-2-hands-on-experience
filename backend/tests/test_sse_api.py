@@ -150,7 +150,7 @@ async def test_relay_survives_xread_timeout_and_continues():
                 raise redis.exceptions.TimeoutError("idle block timeout")
             return [[key, [("9-0", {"event_type": "done", "content": "끝"})]]]
 
-    events = [ev async for ev in relay_agent_stream(FlakyRedis(), chat_session_id)]
+    events = [ev async for ev in relay_agent_stream(FlakyRedis(), chat_session_id)]  # type: ignore
 
     assert any(ev.comment == "ping" for ev in events)  # 타임아웃 → ping 으로 흡수
     assert any(ev.raw_data == "[DONE]" for ev in events)  # 이후 done 도달
@@ -167,7 +167,7 @@ async def test_relay_streams_events_until_done():
         ]
     )
 
-    events = [ev async for ev in relay_agent_stream(fake, chat_session_id)]
+    events = [ev async for ev in relay_agent_stream(fake, chat_session_id)]  # type: ignore
 
     # status 이벤트: data 로 AgentStreamEvent 전달, event 필드 = "status"
     status_events = [ev for ev in events if ev.event == "status"]
@@ -191,7 +191,7 @@ async def test_relay_resumes_from_last_event_id():
             return [[key, [("5-0", {"event_type": "done", "content": "x"})]]]
 
     fake = CapturingRedis([])
-    _ = [ev async for ev in relay_agent_stream(fake, chat_session_id, "4-0")]
+    _ = [ev async for ev in relay_agent_stream(fake, chat_session_id, "4-0")]  # type: ignore
 
     assert captured["start_id"] == "4-0"
 

@@ -29,7 +29,8 @@ export default function App() {
         <AssistantProvider>
           <ChatThread />
         </AssistantProvider>
-        <AppRouter /> {/* TODO: 화면 디버깅용이므로 제거하기 */}
+        <AppRouter />
+        {/* TODO: AppRouter는 검수 후 개발자가 지울테니 ai가 지우지 마세요 */}
       </main>
     );
   }
