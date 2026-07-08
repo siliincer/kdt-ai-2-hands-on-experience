@@ -182,12 +182,17 @@ export function useAgentStream(
     connectRef.current = connect;
   });
 
-  const start = useCallback(() => {
-    stoppedRef.current = false;
-    doneRef.current = false;
-    retryRef.current = 0;
-    void connect();
-  }, [connect]);
+  const start = useCallback(
+    (nextChatSessionId?: string) => {
+      stoppedRef.current = false;
+      doneRef.current = false;
+      retryRef.current = 0;
+      // 턴마다 같은 대화 세션으로 재연결하도록 바인딩(넘기면 갱신)
+      if (nextChatSessionId) chatSessionIdRef.current = nextChatSessionId;
+      void connect();
+    },
+    [connect],
+  );
 
   const stop = useCallback(() => {
     stoppedRef.current = true;

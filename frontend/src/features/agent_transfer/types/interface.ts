@@ -15,7 +15,8 @@ export interface UseAgentStreamResult {
   /** 티켓이 바인딩한 대화 세션 ID(재연결·다음 턴에 재사용). */
   chatSessionId: string | null;
   error: string | null;
-  start: () => void;
+  /** 스트림 (재)연결. chatSessionId 를 주면 그 세션에 바인딩해 연결한다. */
+  start: (chatSessionId?: string) => void;
   stop: () => void;
   /** 이벤트 로그를 비우고 idle 로 되돌린다(스트림은 끊지 않음). */
   reset: () => void;

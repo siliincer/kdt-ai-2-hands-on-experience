@@ -132,6 +132,31 @@ class FakeStreamRedis:
 
 
 @pytest.mark.asyncio
+async def test_relay_survives_xread_timeout_and_continues():
+    """idle 블로킹 XREAD 가 redis TimeoutError 를 던져도 크래시하지 않고
+    keep-alive(ping) 후 계속 읽어 done 까지 도달해야 한다(승인 대기 스트림 회귀)."""
+    import redis.exceptions
+
+    chat_session_id = uuid4()
+    key = agent_stream_key(chat_session_id)
+
+    class FlakyRedis:
+        def __init__(self):
+            self._calls = 0
+
+        async def xread(self, streams, block=None, count=None):
+            self._calls += 1
+            if self._calls == 1:
+                raise redis.exceptions.TimeoutError("idle block timeout")
+            return [[key, [("9-0", {"event_type": "done", "content": "끝"})]]]
+
+    events = [ev async for ev in relay_agent_stream(FlakyRedis(), chat_session_id)]
+
+    assert any(ev.comment == "ping" for ev in events)  # 타임아웃 → ping 으로 흡수
+    assert any(ev.raw_data == "[DONE]" for ev in events)  # 이후 done 도달
+
+
+@pytest.mark.asyncio
 async def test_relay_streams_events_until_done():
     chat_session_id = uuid4()
     key = agent_stream_key(chat_session_id)
