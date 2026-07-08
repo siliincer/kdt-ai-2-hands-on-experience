@@ -32,7 +32,10 @@ class Account(Base):
 
     user: Mapped["User"] = relationship(
         back_populates="accounts",
-        lazy="selectin",  # eager loading
+        lazy="selectin",
+        # lazy="selectin": IN 방식 사용: 부모를 조회하는 쿼리를 먼저 실행한 후,
+        # 부모들의 PK 값을 모아서 IN 절을 사용한 두 번째 쿼리로
+        # 자식들을 따로 가져옵니다.
     )
     sent_transactions: Mapped[list["Transaction"]] = relationship(
         back_populates="sender_account",
