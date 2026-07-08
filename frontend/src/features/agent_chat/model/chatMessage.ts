@@ -51,6 +51,19 @@ export function foldEvent(
       });
       return { ...message, parts };
     }
+    case 'component': {
+      // 읽기전용 카드 렌더 시그널(ADR-002): 데이터는 없고 component 키/params 만.
+      // FE 툴 UI 가 UI Data API 로 데이터를 별도 fetch 한다.
+      const component = (metadata?.component as string) ?? 'unknown';
+      parts.push({
+        type: 'tool-call',
+        toolCallId: newId(),
+        toolName: `render_${component}`,
+        argsText: event.content,
+        args: (metadata?.params as Record<string, unknown>) ?? {},
+      });
+      return { ...message, parts };
+    }
     case 'need_approval': {
       // 승인 프롬프트는 진행 tool_call 과 toolName 이 겹치지 않도록 confirm_ 접두사.
       // 예: metadata.tool='transfer' → 'confirm_transfer' (전용 confirm 카드 렌더)

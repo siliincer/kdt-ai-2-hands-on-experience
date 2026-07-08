@@ -69,23 +69,42 @@ Content-Type: application/json
 
 ---
 
-## 4. `component` — 읽기전용 카드
+## 4. `component` — 읽기전용 카드 (렌더 시그널만)
+
+> **핵심(ADR-002)**: `component` 이벤트는 **데이터를 싣지 않는다.** "무엇을 그릴지"만 알린다.
+> 실제 데이터는 FE 가 아래 **UI Data API** 로 직접 조회한다(tanstack query 캐싱). Agent 는 데이터 소유 불필요.
 
 ```jsonc
 {
   "chat_session_id": "…",
   "event_type": "component",
-  "content": "총 자산 12,850,000원",       // 폴백/접근성 텍스트
+  "content": "총 자산을 불러왔어요", // 폴백/접근성 텍스트
   "metadata": {
-    "component": "balance",                // FE 컴포넌트 레지스트리 키
-    "data": { … }                          // 아래 컴포넌트별 스키마
+    "component": "balance", // FE 컴포넌트 레지스트리 키
+    "params": {}            // (선택) 조회 파라미터. 예: account_detail → { "account_id": 1 }
   }
 }
 ```
 
-FE 레지스트리 키 → 컴포넌트: `balance | account_detail | spending | transactions | budget | cards`.
+FE 레지스트리 키 → 컴포넌트/조회 엔드포인트:
 
-### 4.1 `balance` — 내 자산 현황
+| `component` | 렌더 | UI Data API (FE→BE, Bearer) | params |
+|-------------|------|------------------------------|--------|
+| `balance` | 자산 현황 | `GET /api/v1/ui/balance` | — |
+| `account_detail` | 계좌 상세 | `GET /api/v1/ui/account/{account_id}` | `account_id` |
+| `spending` | 소비 분석 | `GET /api/v1/ui/spending` | — |
+| `transactions` | 거래 내역 | `GET /api/v1/ui/transactions` | `month?` |
+| `budget` | 예산 현황 | `GET /api/v1/ui/budget` | — |
+| `cards` | 카드 관리 | `GET /api/v1/ui/cards` | — |
+
+---
+
+## 4b. UI Data API 응답 스키마 (BE → FE)
+
+> Agent 가 아니라 **BE(정보계/BFF)** 가 제공한다. Agent 개발자는 참고만. BE 는 postgres/redis/
+> mock-financial-service 에서 조회해 아래 view model 로 반환한다(현재 D단계는 목 픽스처).
+
+### 4b.1 `GET /ui/balance` — 내 자산 현황
 
 ```json
 {

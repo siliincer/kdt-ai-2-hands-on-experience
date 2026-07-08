@@ -3,6 +3,9 @@
 export const CHAT_URL = '/backendApi/api/v1/chat';
 export const APPROVE_URL = '/backendApi/api/v1/agent/approve';
 
+// UI Data API (BFF) — component 시그널 이후 카드 데이터 조회(ADR-002)
+export const UI_BALANCE_URL = '/backendApi/api/v1/ui/balance';
+
 // 빠른 프롬프트 pill(기존 네비게이션 링크 대체) — 클릭 시 자연어 메시지 전송
 export const QUICK_PROMPTS: { label: string; prompt: string }[] = [
   { label: '송금하기', prompt: '송금하고 싶어' },

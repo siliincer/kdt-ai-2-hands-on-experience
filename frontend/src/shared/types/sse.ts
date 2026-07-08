@@ -1,7 +1,13 @@
 // 백엔드 backend/schemas/sse.py 와 1:1 대응하는 SSE/Agent 스트림 타입
 
 export type AgentStreamEventType =
-  'status' | 'token' | 'tool_call' | 'need_approval' | 'done' | 'error';
+  | 'status'
+  | 'token'
+  | 'tool_call'
+  | 'component'
+  | 'need_approval'
+  | 'done'
+  | 'error';
 
 export interface AgentStreamEvent {
   event_type: AgentStreamEventType;

@@ -8,6 +8,7 @@ class AgentStreamEventType(str, Enum):
     STATUS = "status"
     TOKEN = "token"
     TOOL_CALL = "tool_call"
+    COMPONENT = "component"  # 읽기전용 UI 카드 렌더 시그널(데이터는 FE가 별도 fetch)
     NEED_APPROVAL = "need_approval"
     DONE = "done"
     ERROR = "error"

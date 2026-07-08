@@ -8,20 +8,22 @@ import {
 import { LogOut, Moon, Send, SunMedium } from 'lucide-react';
 
 import { QUICK_PROMPTS } from '@/features/agent_chat/constants/constants';
-import { ConfirmTransferToolUI } from '@/features/agent_chat/ui/ConfirmTransferToolUI';
+import { TOOL_UI_REGISTRY } from '@/features/agent_chat/ui/componentRegistry';
 import {
   MessageText,
   ReasoningBlock,
   ToolProgressChip,
 } from '@/features/agent_chat/ui/messageParts';
+import { ThinkingIndicator } from '@/features/agent_chat/ui/ThinkingIndicator';
 import { logoutApi, useUserStore } from '@/entities/user';
 import { useTheme } from '@/shared/hooks/useTheme';
 
 const ASSISTANT_PART_COMPONENTS = {
+  Empty: ThinkingIndicator,
   Text: MessageText,
   Reasoning: ReasoningBlock,
   tools: {
-    by_name: { confirm_transfer: ConfirmTransferToolUI },
+    by_name: TOOL_UI_REGISTRY,
     Fallback: ToolProgressChip,
   },
 };

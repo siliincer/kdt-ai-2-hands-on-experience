@@ -1,14 +1,22 @@
 import { F, M } from '@/shared/constants/font';
-import { accounts } from '@/features/mockData/mockData';
 
-export function BalanceCard({
-  onSelectAccount,
-  onNavigate,
-}: {
-  onSelectAccount: (id: number) => void;
-  onNavigate: (path: string) => void;
-}) {
-  const total = accounts.reduce((sum, item) => sum + item.balance, 0);
+import type { BalanceData } from '@/shared/types/ui';
+
+interface BalanceCardProps {
+  data: BalanceData;
+  /** 카드 내 액션 → 자연어 프롬프트 전송(라우팅 대신 chat 흐름). */
+  onPrompt?: (text: string) => void;
+}
+
+const QUICK_ACTIONS = [
+  { label: '거래내역 보기', prompt: '거래 내역 보여줘' },
+  { label: '카드 청구서', prompt: '카드 청구서 보여줘' },
+  { label: '계좌 이체', prompt: '송금하고 싶어' },
+];
+
+export function BalanceCard({ data, onPrompt }: BalanceCardProps) {
+  const total =
+    data.total || data.accounts.reduce((sum, item) => sum + item.balance, 0);
 
   return (
     <div>
@@ -35,12 +43,10 @@ export function BalanceCard({
       </p>
 
       <div className="mb-4 space-y-3 rounded-3xl border border-border p-3">
-        {accounts.map((account) => (
-          <button
+        {data.accounts.map((account) => (
+          <div
             key={account.id}
-            type="button"
-            onClick={() => onSelectAccount(account.id)}
-            className="w-full rounded-3xl border border-border p-3 text-left transition hover:bg-muted/30"
+            className="w-full rounded-3xl border border-border p-3 text-left"
             style={{ color: 'var(--foreground)', fontFamily: F }}
           >
             <div className="flex items-center justify-between gap-3">
@@ -66,10 +72,7 @@ export function BalanceCard({
                 </p>
                 <button
                   type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onNavigate('/transfer');
-                  }}
+                  onClick={() => onPrompt?.('송금하고 싶어')}
                   className="mt-2 rounded-full border border-border bg-secondary px-3 py-1 text-[10px] font-medium text-secondary-foreground transition hover:bg-muted"
                   style={{ fontFamily: F }}
                 >
@@ -77,21 +80,16 @@ export function BalanceCard({
                 </button>
               </div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 
-      {/* 하단 에메랄드 테두리 및 텍스트 하드코딩 구문을 시스템 변수 기반의 시맨틱 스위치로 통합 */}
       <div className="flex flex-wrap gap-2">
-        {[
-          { label: '거래내역 보기', path: '/transactions' },
-          { label: '카드 청구서', path: '/bill' },
-          { label: '계좌 이체', path: '/transfer' },
-        ].map((item) => (
+        {QUICK_ACTIONS.map((item) => (
           <button
             key={item.label}
             type="button"
-            onClick={() => onNavigate(item.path)}
+            onClick={() => onPrompt?.(item.prompt)}
             className="rounded-full border border-border bg-transparent px-3 py-2 text-[10px] font-medium text-muted-foreground transition hover:bg-muted/30 hover:text-foreground"
             style={{ fontFamily: F }}
           >

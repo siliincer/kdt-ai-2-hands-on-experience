@@ -23,6 +23,11 @@ _STEP_DELAY_SECONDS = 0.5
 # 송금 의도로 볼 키워드
 _TRANSFER_KEYWORDS = ("송금", "보내", "이체", "transfer")
 
+# 읽기전용 카드 의도 → component 키
+_COMPONENT_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
+    (("잔액", "자산", "balance"), "balance"),
+]
+
 # 파싱 실패 시 사용할 샘플(스크린샷 기준)
 _SAMPLE_ARGS = {
     "name": "김철수",
@@ -35,6 +40,14 @@ _SAMPLE_ARGS = {
 
 def _is_transfer_intent(message: str) -> bool:
     return any(keyword in message for keyword in _TRANSFER_KEYWORDS)
+
+
+def _match_component(message: str) -> str | None:
+    """읽기전용 카드 의도면 component 키를 반환."""
+    for keywords, component in _COMPONENT_KEYWORDS:
+        if any(keyword in message for keyword in keywords):
+            return component
+    return None
 
 
 def _extract_transfer_args(message: str) -> dict[str, str]:
@@ -112,6 +125,32 @@ async def run_initial_turn(chat_session_id: UUID, message: str) -> None:
                 metadata={"tool": "transfer", "args": args},
             )
             # 승인 대기 — done 을 보내지 않고 종료(스트림은 열린 채 유지)
+            return
+
+        component = _match_component(message)
+        if component is not None:
+            # 읽기전용 카드: 데이터는 싣지 않고 렌더 시그널만(ADR-002).
+            # FE 가 UI Data API 로 데이터를 별도 fetch 한다.
+            await _emit(
+                redis_stream,
+                chat_session_id,
+                AgentStreamEventType.STATUS,
+                "정보를 조회하고 있어요...",
+                delay=False,
+            )
+            await _emit(
+                redis_stream,
+                chat_session_id,
+                AgentStreamEventType.COMPONENT,
+                "자산 현황을 불러왔어요.",
+                metadata={"component": component},
+            )
+            await _emit(
+                redis_stream,
+                chat_session_id,
+                AgentStreamEventType.DONE,
+                "다른 도움이 필요하시면 말씀해 주세요.",
+            )
             return
 
         # 일반 대화(목)

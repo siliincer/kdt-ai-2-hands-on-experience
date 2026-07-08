@@ -1,8 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { accounts as mockAccounts } from '@/features/mockData/mockData';
+
+import type { BalanceData } from '@/shared/types/ui';
+
 import { BalanceCard } from './BalanceCard';
 import { AccountDetailCard } from './AccountDetailCard';
+
+// 라우트(디버그) 잔존용 어댑터: 목데이터를 BalanceData 형태로. E단계에서 라우트째 제거.
+const MOCK_BALANCE: BalanceData = {
+  total: mockAccounts.reduce((sum, a) => sum + a.balance, 0),
+  accounts: mockAccounts,
+};
 
 export default function BalanceFeature() {
   const navigate = useNavigate();
@@ -35,8 +45,8 @@ export default function BalanceFeature() {
         />
       ) : (
         <BalanceCard
-          onSelectAccount={setSelectedAccountId}
-          onNavigate={navigate}
+          data={MOCK_BALANCE}
+          onPrompt={() => navigate('/transfer')}
         />
       )}
     </div>
