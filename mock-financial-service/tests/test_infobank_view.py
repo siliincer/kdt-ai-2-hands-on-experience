@@ -10,15 +10,13 @@ to avoid merge conflicts with sibling tasks editing conftest.py.
 
 import pytest
 from fastapi.testclient import TestClient
+from financial_service.app import create_app
+from financial_service.database import Base, get_db
+from financial_service.migrations import apply_analytics_views, apply_audit_triggers
 from sqlalchemy import create_engine, text
 from sqlalchemy import event as sqla_event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from financial_service.app import create_app
-from financial_service.database import Base, get_db
-from financial_service.migrations import apply_analytics_views, apply_audit_triggers
-
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +150,7 @@ def test_view_balance_matches_rest_api(view_client):
     vmap = {row.account_id: row.balance for row in rows}
 
     assert vmap[carol_id] == carol_api  # 3500
-    assert vmap[dave_id] == dave_api    # 3500
+    assert vmap[dave_id] == dave_api  # 3500
 
 
 def test_view_zero_balance_account(view_client):

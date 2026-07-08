@@ -125,13 +125,17 @@ def _apply_sqlite_views(engine: Engine) -> None:
             a.owner,
             a.currency,
             a.created_at,
-            COALESCE(SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0)
-                - COALESCE(SUM(CASE WHEN le.entry_type = 'DEBIT'  THEN le.amount ELSE 0 END), 0)
-                AS balance,
-            COALESCE(SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0)
-                AS sum_credit,
-            COALESCE(SUM(CASE WHEN le.entry_type = 'DEBIT'  THEN le.amount ELSE 0 END), 0)
-                AS sum_debit,
+            COALESCE(
+                SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0
+            ) - COALESCE(
+                SUM(CASE WHEN le.entry_type = 'DEBIT' THEN le.amount ELSE 0 END), 0
+            ) AS balance,
+            COALESCE(
+                SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0
+            ) AS sum_credit,
+            COALESCE(
+                SUM(CASE WHEN le.entry_type = 'DEBIT' THEN le.amount ELSE 0 END), 0
+            ) AS sum_debit,
             COUNT(le.entry_id) AS entry_count
         FROM accounts a
         LEFT JOIN ledger_entries le ON le.account_id = a.account_id
@@ -169,13 +173,17 @@ def _apply_postgres_views(engine: Engine) -> None:
             a.owner,
             a.currency,
             a.created_at,
-            COALESCE(SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0)
-                - COALESCE(SUM(CASE WHEN le.entry_type = 'DEBIT'  THEN le.amount ELSE 0 END), 0)
-                AS balance,
-            COALESCE(SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0)
-                AS sum_credit,
-            COALESCE(SUM(CASE WHEN le.entry_type = 'DEBIT'  THEN le.amount ELSE 0 END), 0)
-                AS sum_debit,
+            COALESCE(
+                SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0
+            ) - COALESCE(
+                SUM(CASE WHEN le.entry_type = 'DEBIT' THEN le.amount ELSE 0 END), 0
+            ) AS balance,
+            COALESCE(
+                SUM(CASE WHEN le.entry_type = 'CREDIT' THEN le.amount ELSE 0 END), 0
+            ) AS sum_credit,
+            COALESCE(
+                SUM(CASE WHEN le.entry_type = 'DEBIT' THEN le.amount ELSE 0 END), 0
+            ) AS sum_debit,
             COUNT(le.entry_id) AS entry_count
         FROM accounts a
         LEFT JOIN ledger_entries le ON le.account_id = a.account_id

@@ -65,7 +65,9 @@ class CardLedgerEntry(Base):
     card_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("cards.card_id"), nullable=False, index=True
     )
-    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)  # charge amount, non-negative
+    amount: Mapped[int] = mapped_column(
+        BigInteger, nullable=False
+    )  # charge amount, non-negative
     idempotency_key: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
@@ -106,8 +108,12 @@ class Transaction(Base):
     )
     # Settlement discriminator fields (null for normal transfers)
     settlement_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    settlement_card_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    settlement_watermark_rowid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    settlement_card_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    settlement_watermark_rowid: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

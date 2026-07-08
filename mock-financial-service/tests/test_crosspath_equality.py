@@ -13,14 +13,13 @@ GET /api/v1/analytics/accounts/{id}/ledger (analytics REST) agree on:
 
 import pytest
 from fastapi.testclient import TestClient
+from financial_service.app import create_app
+from financial_service.database import Base, get_db
+from financial_service.migrations import apply_analytics_views, apply_audit_triggers
 from sqlalchemy import create_engine, text
 from sqlalchemy import event as sqla_event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from financial_service.app import create_app
-from financial_service.database import Base, get_db
-from financial_service.migrations import apply_analytics_views, apply_audit_triggers
 
 ANALYTICS_KEY = "analytics-demo-key"
 
@@ -98,7 +97,8 @@ def _view_balance(engine, account_id: str) -> int:
     with engine.connect() as conn:
         row = conn.execute(
             text(
-                "SELECT balance FROM v_infobank_account_balances WHERE account_id = :aid"
+                "SELECT balance FROM v_infobank_account_balances "
+                "WHERE account_id = :aid"
             ),
             {"aid": account_id},
         ).fetchone()
@@ -126,7 +126,10 @@ def _view_ledger(engine, account_id: str) -> list[dict]:
             ),
             {"aid": account_id},
         ).fetchall()
-    return [{"entry_id": r.entry_id, "entry_type": r.entry_type, "amount": r.amount} for r in rows]
+    return [
+        {"entry_id": r.entry_id, "entry_type": r.entry_type, "amount": r.amount}
+        for r in rows
+    ]
 
 
 def _rest_ledger(client, account_id: str) -> list[dict]:
@@ -137,7 +140,14 @@ def _rest_ledger(client, account_id: str) -> list[dict]:
     )
     assert r.status_code == 200, r.text
     return sorted(
-        [{"entry_id": e["entry_id"], "entry_type": e["entry_type"], "amount": e["amount"]} for e in r.json()],
+        [
+            {
+                "entry_id": e["entry_id"],
+                "entry_type": e["entry_type"],
+                "amount": e["amount"],
+            }
+            for e in r.json()
+        ],
         key=lambda x: x["entry_id"],
     )
 
@@ -242,7 +252,7 @@ def test_crosspath_ledger_empty_account(xp_client):
 
 
 def test_crosspath_multiple_transfers_consistency(xp_client):
-    """View and REST agree after multiple transfers — entry IDs, types, amounts identical."""
+    """View and REST agree after multiple transfers — IDs, types, amounts identical."""
     client, engine = xp_client
     alice_id = _make_account(client, "XPAlice", 500_000)
     bob_id = _make_account(client, "XPBob", 100_000)

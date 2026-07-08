@@ -6,11 +6,10 @@ Verifies:
   2. Single-row semantics — calling refresh N times leaves exactly 1 row per account
   3. Watermark (last_entry_rowid) advances after new ledger entries
   4. cached_balance equals canonical balance (SUM CREDIT - SUM DEBIT) at refresh time
-  5. Analytics GET /analytics/accounts/{id}/snapshot returns same data (API key required)
+  5. Analytics GET /analytics/accounts/{id}/snapshot returns same data (API key req.)
   6. Reconciliation detects injected drift
 """
 
-import pytest
 from sqlalchemy import text
 
 ANALYTICS_KEY = "analytics-demo-key"
@@ -50,9 +49,7 @@ def _transfer(client, sender_id: str, receiver_id: str, amount: int, key: str):
 def _count_snapshot_rows(db_engine, account_id: str) -> int:
     with db_engine.connect() as conn:
         row = conn.execute(
-            text(
-                "SELECT COUNT(*) FROM balance_snapshots WHERE account_id = :aid"
-            ),
+            text("SELECT COUNT(*) FROM balance_snapshots WHERE account_id = :aid"),
             {"aid": account_id},
         ).fetchone()
     return row[0]
@@ -69,7 +66,14 @@ def test_snapshot_returns_200_and_fields(client):
     r = client.post(f"/api/v1/accounts/{acct['account_id']}/snapshot")
     assert r.status_code == 200
     body = r.json()
-    for field in ("account_id", "cached_balance", "last_entry_rowid", "sum_credit", "sum_debit", "refreshed_at"):
+    for field in (
+        "account_id",
+        "cached_balance",
+        "last_entry_rowid",
+        "sum_credit",
+        "sum_debit",
+        "refreshed_at",
+    ):
         assert field in body, f"Missing field: {field}"
     assert body["account_id"] == acct["account_id"]
 
@@ -122,7 +126,9 @@ def test_snapshot_watermark_advances_after_transfer(client, db_engine):
     assert wm1 is not None
 
     # Transfer adds a DEBIT to sender
-    _transfer(client, sender["account_id"], receiver["account_id"], 30_000, "wm-test-001")
+    _transfer(
+        client, sender["account_id"], receiver["account_id"], 30_000, "wm-test-001"
+    )
 
     # Second snapshot — must have higher watermark
     snap2 = _refresh(client, sender["account_id"])
@@ -152,7 +158,9 @@ def test_snapshot_cached_balance_matches_canonical(client):
     acct = _make_account(client, "BalMatch", 80_000)
     snap = _refresh(client, acct["account_id"])
 
-    canonical = client.get(f"/api/v1/accounts/{acct['account_id']}/balance").json()["balance"]
+    canonical = client.get(f"/api/v1/accounts/{acct['account_id']}/balance").json()[
+        "balance"
+    ]
     assert snap["cached_balance"] == canonical
 
 
@@ -161,7 +169,9 @@ def test_snapshot_cached_balance_after_transfer(client):
     sender = _make_account(client, "CacheSender", 200_000)
     receiver = _make_account(client, "CacheReceiver", 0)
 
-    _transfer(client, sender["account_id"], receiver["account_id"], 50_000, "cache-test-001")
+    _transfer(
+        client, sender["account_id"], receiver["account_id"], 50_000, "cache-test-001"
+    )
 
     snap = _refresh(client, sender["account_id"])
     assert snap["cached_balance"] == 150_000
@@ -175,7 +185,9 @@ def test_snapshot_sum_credit_and_debit_correct(client):
     sender = _make_account(client, "SumSender", 100_000)
     receiver = _make_account(client, "SumReceiver", 0)
 
-    _transfer(client, sender["account_id"], receiver["account_id"], 40_000, "sum-test-001")
+    _transfer(
+        client, sender["account_id"], receiver["account_id"], 40_000, "sum-test-001"
+    )
 
     snap = _refresh(client, sender["account_id"])
     # sender: 1 CREDIT (initial 100k) + 1 DEBIT (40k)
@@ -275,7 +287,7 @@ def test_reconcile_detects_injected_drift(client, db_engine):
 
 
 def test_reconcile_drift_cleared_after_refresh(client, db_engine):
-    """After re-running refresh following injected drift → drift_detected=False again."""
+    """After re-running refresh following injected drift, drift_detected is False."""
     acct = _make_account(client, "ReconRecover", 75_000)
     _refresh(client, acct["account_id"])
 
@@ -283,7 +295,8 @@ def test_reconcile_drift_cleared_after_refresh(client, db_engine):
     with db_engine.connect() as conn:
         conn.execute(
             text(
-                "UPDATE balance_snapshots SET cached_balance = 1 WHERE account_id = :aid"
+                "UPDATE balance_snapshots SET cached_balance = 1 "
+                "WHERE account_id = :aid"
             ),
             {"aid": acct["account_id"]},
         )

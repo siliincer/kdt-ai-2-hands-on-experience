@@ -1,16 +1,16 @@
 """Card write endpoints — POST /api/v1/cards, charges, settlement.
 
 No auth (consistent with existing demo-scope decision for account endpoints).
-Charge endpoint requires Idempotency-Key header (same pattern as POST /api/v1/transfers).
+Charge endpoint requires Idempotency-Key header
+(same pattern as POST /api/v1/transfers).
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from .crud import (
-    ConflictError,
     NotFoundError,
     ValidationError,
     charge_card,

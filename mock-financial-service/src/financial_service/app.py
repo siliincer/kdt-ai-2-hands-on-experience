@@ -7,7 +7,11 @@ from fastapi.responses import JSONResponse
 from .analytics_router import analytics_router
 from .card_router import card_router
 from .database import Base, engine
-from .migrations import apply_analytics_views, apply_audit_triggers, apply_snapshot_schema
+from .migrations import (
+    apply_analytics_views,
+    apply_audit_triggers,
+    apply_snapshot_schema,
+)
 from .routers import router
 
 

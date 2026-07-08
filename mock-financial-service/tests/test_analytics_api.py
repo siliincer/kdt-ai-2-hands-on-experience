@@ -88,7 +88,13 @@ def test_analytics_balance_after_transfer(client):
     """Analytics balance reflects deducted amount after a transfer."""
     sender = _make_account(client, "BalSender", 100_000)
     receiver = _make_account(client, "BalReceiver", 0)
-    _transfer(client, sender["account_id"], receiver["account_id"], 30_000, "analytics-bal-001")
+    _transfer(
+        client,
+        sender["account_id"],
+        receiver["account_id"],
+        30_000,
+        "analytics-bal-001",
+    )
 
     r_sender = client.get(
         f"/api/v1/analytics/accounts/{sender['account_id']}/balance",
@@ -135,7 +141,7 @@ def test_analytics_ledger_wrong_key_rejected(client):
 
 
 def test_analytics_ledger_initial_credit_entry(client):
-    """Account with initial_balance has one CREDIT ledger entry via analytics endpoint."""
+    """Account with initial_balance has one CREDIT entry via analytics endpoint."""
     acct = _make_account(client, "LedCredit", 20_000)
 
     r = client.get(
@@ -153,7 +159,13 @@ def test_analytics_ledger_after_transfer(client):
     """Sender has CREDIT + DEBIT entries; receiver has CREDIT entry after transfer."""
     sender = _make_account(client, "LedSender", 80_000)
     receiver = _make_account(client, "LedReceiver", 0)
-    _transfer(client, sender["account_id"], receiver["account_id"], 25_000, "analytics-led-001")
+    _transfer(
+        client,
+        sender["account_id"],
+        receiver["account_id"],
+        25_000,
+        "analytics-led-001",
+    )
 
     r_sender = client.get(
         f"/api/v1/analytics/accounts/{sender['account_id']}/ledger",
@@ -223,7 +235,7 @@ def test_analytics_ledger_404_unknown_account(client):
 
 
 def test_analytics_balance_matches_canonical_endpoint(client):
-    """Analytics balance == GET /api/v1/accounts/{id}/balance (canonical, unauthenticated)."""
+    """Analytics balance == canonical /accounts/{id}/balance (unauthenticated)."""
     alice = _make_account(client, "CrossAlice", 200_000)
     bob = _make_account(client, "CrossBob", 50_000)
     _transfer(client, alice["account_id"], bob["account_id"], 75_000, "cross-path-001")
@@ -245,7 +257,7 @@ def test_analytics_balance_matches_canonical_endpoint(client):
 
 
 def test_analytics_ledger_matches_canonical_endpoint(client):
-    """Analytics ledger entry count and types match GET /api/v1/accounts/{id}/transactions."""
+    """Analytics ledger matches /api/v1/accounts/{id}/transactions (count + types)."""
     acct = _make_account(client, "CrossLedger", 60_000)
     other = _make_account(client, "CrossLedgerOther", 0)
     _transfer(client, acct["account_id"], other["account_id"], 15_000, "cross-path-002")

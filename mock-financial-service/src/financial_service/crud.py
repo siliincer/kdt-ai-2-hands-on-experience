@@ -7,7 +7,15 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .models import Account, AuditLog, BalanceSnapshot, Card, CardLedgerEntry, LedgerEntry, Transaction
+from .models import (
+    Account,
+    AuditLog,
+    BalanceSnapshot,
+    Card,
+    CardLedgerEntry,
+    LedgerEntry,
+    Transaction,
+)
 from .schemas import AccountCreate, CardChargeRequest, CardCreate, TransferRequest
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -484,7 +492,9 @@ def create_card(db: Session, payload: CardCreate) -> Card:
     """Create a card under an existing account."""
     acct = get_account(db, payload.account_id)
     if acct is None:
-        raise NotFoundError("ACCOUNT_NOT_FOUND", f"Account {payload.account_id} not found")
+        raise NotFoundError(
+            "ACCOUNT_NOT_FOUND", f"Account {payload.account_id} not found"
+        )
 
     card = Card(
         account_id=payload.account_id,
@@ -498,10 +508,16 @@ def create_card(db: Session, payload: CardCreate) -> Card:
         db,
         actor=payload.account_id,
         action="CARD_CREATE",
-        reason=f"Card created for account {payload.account_id} with limit {payload.limit}",
+        reason=(
+            f"Card created for account {payload.account_id} with limit {payload.limit}"
+        ),
         status="success",
         payload_snapshot=json.dumps(
-            {"account_id": payload.account_id, "limit": payload.limit, "currency": payload.currency}
+            {
+                "account_id": payload.account_id,
+                "limit": payload.limit,
+                "currency": payload.currency,
+            }
         ),
     )
     db.commit()
@@ -514,7 +530,7 @@ def get_card(db: Session, card_id: str) -> Card | None:
 
 
 def _get_card_watermark(db: Session, card_id: str) -> int:
-    """Return the highest card-ledger rowid covered by the latest settlement (0 if none)."""
+    """Highest card-ledger rowid covered by the latest settlement (0 if none)."""
     result = db.execute(
         select(func.max(Transaction.settlement_watermark_rowid)).where(
             Transaction.settlement_type == CARD_SETTLEMENT,
@@ -549,7 +565,9 @@ def charge_card(
 
     # Idempotency: if same key exists, replay
     existing = db.execute(
-        select(CardLedgerEntry).where(CardLedgerEntry.idempotency_key == idempotency_key)
+        select(CardLedgerEntry).where(
+            CardLedgerEntry.idempotency_key == idempotency_key
+        )
     ).scalar_one_or_none()
     if existing is not None:
         return existing
@@ -560,7 +578,8 @@ def charge_card(
     if unsettled + payload.amount > card.limit:
         raise ValidationError(
             "CARD_LIMIT_EXCEEDED",
-            f"Unsettled usage {unsettled} + charge {payload.amount} exceeds limit {card.limit}",
+            f"Unsettled usage {unsettled} + charge {payload.amount} "
+            f"exceeds limit {card.limit}",
         )
 
     entry = CardLedgerEntry(
@@ -578,7 +597,11 @@ def charge_card(
         reason=f"Card {card_id} charged {payload.amount} {card.currency}",
         status="success",
         payload_snapshot=json.dumps(
-            {"card_id": card_id, "amount": payload.amount, "idempotency_key": idempotency_key}
+            {
+                "card_id": card_id,
+                "amount": payload.amount,
+                "idempotency_key": idempotency_key,
+            }
         ),
     )
     db.commit()
@@ -606,13 +629,17 @@ def settle_card(db: Session, card_id: str) -> Transaction:
         {"cid": card_id},
     ).scalar()
     if new_watermark_result is None or new_watermark_result <= watermark:
-        raise ValidationError("NOTHING_TO_SETTLE", "No unsettled card charges to settle")
+        raise ValidationError(
+            "NOTHING_TO_SETTLE", "No unsettled card charges to settle"
+        )
 
     new_watermark = int(new_watermark_result)
     settled_amount = _get_unsettled_usage(db, card_id, watermark)
 
     if settled_amount == 0:
-        raise ValidationError("NOTHING_TO_SETTLE", "No unsettled card charges to settle")
+        raise ValidationError(
+            "NOTHING_TO_SETTLE", "No unsettled card charges to settle"
+        )
 
     # Check account has sufficient balance
     account_balance = _get_balance(db, card.account_id)
@@ -623,7 +650,9 @@ def settle_card(db: Session, card_id: str) -> Transaction:
         )
 
     idempotency_key = f"__settle__{card_id}__{new_watermark}"
-    phash = _payload_hash({"card_id": card_id, "watermark": new_watermark, "amount": settled_amount})
+    phash = _payload_hash(
+        {"card_id": card_id, "watermark": new_watermark, "amount": settled_amount}
+    )
 
     txn = Transaction(
         idempotency_key=idempotency_key,
@@ -639,7 +668,8 @@ def settle_card(db: Session, card_id: str) -> Transaction:
     db.add(txn)
     db.flush()
 
-    # Single DEBIT entry on the card owner's account (settlement reduces account balance)
+    # Single DEBIT entry on the card owner's account
+    # (settlement reduces account balance)
     current_balance = _get_balance(db, card.account_id)
     debit = LedgerEntry(
         transaction_id=txn.transaction_id,

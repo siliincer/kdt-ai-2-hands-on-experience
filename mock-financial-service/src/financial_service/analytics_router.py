@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from .crud import (
-    NotFoundError,
     get_account,
     get_audit_logs,
     get_balance,
@@ -48,7 +47,10 @@ def _require_analytics_key(
     if x_analytics_key != ANALYTICS_API_KEY:
         raise HTTPException(
             status_code=401,
-            detail={"error_code": "UNAUTHORIZED", "message": "Valid X-Analytics-Key required"},
+            detail={
+                "error_code": "UNAUTHORIZED",
+                "message": "Valid X-Analytics-Key required",
+            },
         )
 
 
@@ -71,14 +73,20 @@ def _err(status: int, code: str, msg: str):
 def get_snapshot_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     """Return the latest balance snapshot for an account.
 
-    Returns 404 if no snapshot has been generated yet (call POST /accounts/{id}/snapshot first).
+    Returns 404 if no snapshot has been generated yet
+    (call POST /accounts/{id}/snapshot first).
     """
     acct = get_account(db, account_id)
     if acct is None:
         _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     snap = get_snapshot(db, account_id)
     if snap is None:
-        _err(404, "SNAPSHOT_NOT_FOUND", f"No snapshot for {account_id}. Call POST /accounts/{account_id}/snapshot first.")
+        _err(
+            404,
+            "SNAPSHOT_NOT_FOUND",
+            f"No snapshot for {account_id}. "
+            f"Call POST /accounts/{account_id}/snapshot first.",
+        )
     return snap
 
 
@@ -94,8 +102,8 @@ def get_snapshot_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
 def reconcile_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     """Compare watermark-scoped stored sums vs live recompute.
 
-    drift_detected=true means cached_balance diverges from recomputed sum at watermark.
-    Pure read — does not acquire locks or block ledger writes.
+    drift_detected=true means cached_balance diverges from recomputed
+    sum at watermark. Pure read — does not acquire locks or block ledger writes.
     """
     acct = get_account(db, account_id)
     if acct is None:
@@ -122,7 +130,9 @@ def get_analytics_balance(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     if acct is None:
         _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
-    return BalanceResponse(account_id=account_id, balance=balance, currency=acct.currency)
+    return BalanceResponse(
+        account_id=account_id, balance=balance, currency=acct.currency
+    )
 
 
 # ── GET /analytics/accounts/{account_id}/ledger ──────────────────────────────
@@ -143,7 +153,8 @@ def get_analytics_ledger(
 ):
     """Return ledger entries for an account in descending creation order.
 
-    Identical data to /api/v1/accounts/{id}/transactions but protected by X-Analytics-Key.
+    Identical data to /api/v1/accounts/{id}/transactions but protected
+    by X-Analytics-Key.
     """
     acct = get_account(db, account_id)
     if acct is None:

@@ -74,7 +74,9 @@ def test_audit_logs_shows_account_create(client):
 def test_audit_logs_shows_transfer_for_both_sides(client):
     sender = _make_account(client, "AuditSender", 10_000)
     receiver = _make_account(client, "AuditReceiver", 0)
-    _transfer(client, sender["account_id"], receiver["account_id"], 3_000, "audit-key-1")
+    _transfer(
+        client, sender["account_id"], receiver["account_id"], 3_000, "audit-key-1"
+    )
 
     sender_logs = client.get(
         f"/api/v1/analytics/accounts/{sender['account_id']}/audit-logs",
@@ -97,6 +99,13 @@ def test_audit_logs_endpoint_is_read_only(client):
     """
     acct = _make_account(client, "AuditReadOnly", 1_000)
     path = f"/api/v1/analytics/accounts/{acct['account_id']}/audit-logs"
-    assert client.get(path, headers={"X-Analytics-Key": ANALYTICS_KEY}).status_code == 200
-    assert client.put(path, headers={"X-Analytics-Key": ANALYTICS_KEY}).status_code == 405
-    assert client.delete(path, headers={"X-Analytics-Key": ANALYTICS_KEY}).status_code == 405
+    assert (
+        client.get(path, headers={"X-Analytics-Key": ANALYTICS_KEY}).status_code == 200
+    )
+    assert (
+        client.put(path, headers={"X-Analytics-Key": ANALYTICS_KEY}).status_code == 405
+    )
+    assert (
+        client.delete(path, headers={"X-Analytics-Key": ANALYTICS_KEY}).status_code
+        == 405
+    )
