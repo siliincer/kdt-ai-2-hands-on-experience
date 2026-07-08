@@ -38,3 +38,9 @@ async def get_redis_stream() -> AsyncGenerator[aioredis.Redis, None]:
         yield client
     finally:
         await client.close()
+
+
+async def close_redis_pools() -> None:
+    """앱 종료 시 전역 커넥션 풀의 소켓을 정리한다(main.py lifespan에서 호출)."""
+    await cache_pool.disconnect(inuse_connections=True)
+    await stream_pool.disconnect(inuse_connections=True)

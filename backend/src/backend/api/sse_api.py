@@ -7,6 +7,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.config import limiter
+from ..core.load_environment_var import settings
 from ..db.postgres import get_db
 from ..db.redis import get_redis_cache, get_redis_stream
 from ..models.chat_session import ChatSession
@@ -67,7 +69,9 @@ async def get_sse_ticket_context(
 
 
 @sse_router.get("/ticket", response_model=CommonResponse[SseTicketResponse])
+@limiter.limit(settings.SSE_TICKET_RATE_LIMIT)
 async def issue_sse_ticket(
+    request: Request,
     chat_session_id: UUID | None = None,
     current_user: User = Depends(get_current_user),
     redis: aioredis.Redis = Depends(get_redis_cache),
@@ -90,18 +94,24 @@ async def issue_sse_ticket(
 
 
 @sse_router.get("/connect", response_class=EventSourceResponse)
+@limiter.limit(settings.SSE_CONNECT_RATE_LIMIT)
 async def connect_sse(
     request: Request,
+    last_event_id: str | None = None,
     context: SseTicketContext = Depends(get_sse_ticket_context),
     redis_stream: aioredis.Redis = Depends(get_redis_stream),
 ) -> AsyncIterable[ServerSentEvent]:
     """발급받은 sse_session_id로 SSE 스트림에 연결한다.
 
     티켓에 바인딩된 chat_session_id 의 Redis Stream(agent:stream:{id})을
-    XREAD BLOCK 으로 중계한다. Last-Event-ID 헤더가 있으면 그 지점부터 재개.
+    XREAD BLOCK 으로 중계한다. 재개 지점은 다음 우선순위로 정한다:
+    Last-Event-ID 헤더 → last_event_id 쿼리 파라미터 → 없으면 처음(0-0)부터.
+
+    쿼리 폴백을 두는 이유: 네이티브 EventSource는 커스텀 헤더를 못 보내므로,
+    FE가 티켓을 재발급받아 수동 재연결할 때 헤더 대신 쿼리로 재개점을 전달한다.
     """
-    last_event_id = request.headers.get("Last-Event-ID")
+    resume_from = request.headers.get("Last-Event-ID") or last_event_id
     async for event in relay_agent_stream(
-        redis_stream, context.chat_session_id, last_event_id
+        redis_stream, context.chat_session_id, resume_from
     ):
         yield event

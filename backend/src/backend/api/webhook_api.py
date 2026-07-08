@@ -3,6 +3,7 @@ import secrets
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
+from ..core.config import limiter
 from ..core.load_environment_var import settings
 from ..db.redis import get_redis_stream
 from ..schemas.response import CommonResponse
@@ -28,6 +29,7 @@ def verify_agent_secret(x_agent_secret: str = Header(default="")) -> None:
     response_model=CommonResponse[dict],
     dependencies=[Depends(verify_agent_secret)],
 )
+@limiter.exempt
 async def receive_agent_webhook(
     payload: AgentWebhookPayload,
     redis_stream: aioredis.Redis = Depends(get_redis_stream),

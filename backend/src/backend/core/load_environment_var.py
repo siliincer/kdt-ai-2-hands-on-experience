@@ -49,6 +49,14 @@ class Settings(BaseSettings):
         default=SecretStr("change-me-agent-webhook"),
         description="Agent → 웹훅(POST /webhooks/agent) 호출 시 공유 시크릿.",
     )
+    SSE_TICKET_RATE_LIMIT: str = Field(
+        default="30/minute",
+        description="GET /sse/ticket slowapi 제한 (IP당). 인증·DB 세션 생성 게이트.",
+    )
+    SSE_CONNECT_RATE_LIMIT: str = Field(
+        default="60/minute",
+        description="GET /sse/connect slowapi 제한 (IP당). 재연결에 여유를 둔다.",
+    )
 
     # .env 파일 로드 설정 (pydantic v2 방식)
     model_config = SettingsConfigDict(

@@ -96,7 +96,9 @@ async def test_publish_agent_event_xadds_and_sets_ttl():
     redis_stream.xadd.assert_awaited_once()
     args, kwargs = redis_stream.xadd.call_args
     assert args[0] == agent_stream_key(chat_session_id)
-    assert args[1]["event_type"] == "tool_call"
+    # fields 는 positional/keyword 어느 쪽으로 전달돼도 통과하도록 조회
+    fields = kwargs.get("fields", args[1] if len(args) > 1 else None)
+    assert fields["event_type"] == "tool_call"
     assert kwargs.get("maxlen") is not None
     redis_stream.expire.assert_awaited_once()
 
