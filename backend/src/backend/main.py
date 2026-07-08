@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.check_db_conn import health_router
+from .api.sse_api import sse_router
 from .api.user_api import user_router
 from .core.config import CORS_OPTIONS, configure_app
 from .core.exceptions import exception_handlers
@@ -25,6 +26,7 @@ app = FastAPI(
 
 app.include_router(user_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(sse_router, prefix="/api/v1")
 
 configure_app(app)  # 일괄적인 설정값 주입
 

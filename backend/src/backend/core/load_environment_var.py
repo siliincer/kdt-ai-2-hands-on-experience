@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256")
     # HMAC using SHA-256
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
+    SSE_TICKET_TTL_SECONDS: int = Field(
+        default=120,
+        description="SSE 연결용 일회성 티켓 유효 시간(초)",
+    )
 
     # .env 파일 로드 설정 (pydantic v2 방식)
     model_config = SettingsConfigDict(

@@ -39,5 +39,6 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v --durations=10"
 filterwarnings = [
-    "ignore::starlette.exceptions.StarletteDeprecationWarning"
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+    "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning"
 ]
