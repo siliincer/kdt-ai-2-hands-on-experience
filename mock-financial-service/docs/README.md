@@ -23,7 +23,7 @@ X-Analytics-Key: analytics-demo-key
 ```
 
 - 인증: `X-Analytics-Key` 헤더 필수 (현재 데모 상수 `analytics-demo-key` — 프로덕션 전환 시 교체 필요, [`api-reference.md`](./api-reference.md) 인증 섹션 참고).
-- 엔드포인트 4개: `balance`, `ledger`, `snapshot`, `reconcile`. 상세 스펙/응답 예시는 [`api-reference.md`](./api-reference.md).
+- 엔드포인트 5개: `balance`, `ledger`, `snapshot`, `reconcile`, `audit-logs`. 상세 스펙/응답 예시는 [`api-reference.md`](./api-reference.md).
 - 실시간 값 필요하면 `balance`/`ledger` 사용. 캐시(마지막 새로고침 시점) 값 필요하면 `snapshot` 사용.
 
 ### 경로 2 — DB 직접 조회 (배치/집계 작업용)

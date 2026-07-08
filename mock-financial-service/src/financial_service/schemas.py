@@ -53,6 +53,18 @@ class LedgerEntryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AuditLogResponse(BaseModel):
+    audit_log_id: str
+    transaction_id: str | None
+    actor: str
+    action: str
+    reason: str
+    status: str
+    timestamp: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── Transfer ──────────────────────────────────────────────────────────────────
 
 

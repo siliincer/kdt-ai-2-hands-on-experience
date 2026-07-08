@@ -9,9 +9,24 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from .crud import NotFoundError, get_account, get_balance, get_ledger_entries, get_snapshot, reconcile_snapshot
+from .crud import (
+    NotFoundError,
+    get_account,
+    get_audit_logs,
+    get_balance,
+    get_ledger_entries,
+    get_snapshot,
+    reconcile_snapshot,
+)
 from .database import get_db
-from .schemas import BalanceResponse, ErrorResponse, LedgerEntryResponse, ReconciliationResponse, SnapshotResponse
+from .schemas import (
+    AuditLogResponse,
+    BalanceResponse,
+    ErrorResponse,
+    LedgerEntryResponse,
+    ReconciliationResponse,
+    SnapshotResponse,
+)
 
 # Demo-scope static API key for 정보계 read access.
 # Replace with env-var / secrets manager in production.
@@ -140,4 +155,44 @@ def get_analytics_ledger(
             created_at=e.created_at,
         )
         for e in entries
+    ]
+
+
+# ── GET /analytics/accounts/{account_id}/audit-logs ──────────────────────────
+
+
+@analytics_router.get(
+    "/accounts/{account_id}/audit-logs",
+    response_model=list[AuditLogResponse],
+    responses={404: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+    summary="Read audit logs linked to an account (정보계)",
+)
+def get_analytics_audit_logs(
+    account_id: str,
+    db: DbDep,
+    _auth: AnalyticsAuth,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """Return audit log entries linked to this account via its transactions.
+
+    Covers ACCOUNT_CREATE and TRANSFER/TRANSFER_FAILED entries where the
+    account was sender or receiver. Read-only — audit_logs stays DB-trigger
+    immutable regardless of this read path.
+    """
+    acct = get_account(db, account_id)
+    if acct is None:
+        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+    logs = get_audit_logs(db, account_id, limit=limit, offset=offset)
+    return [
+        AuditLogResponse(
+            audit_log_id=log.audit_log_id,
+            transaction_id=log.transaction_id,
+            actor=log.actor,
+            action=log.action,
+            reason=log.reason,
+            status=log.status,
+            timestamp=log.timestamp,
+        )
+        for log in logs
     ]

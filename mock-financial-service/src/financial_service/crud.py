@@ -70,12 +70,14 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
     db.flush()  # get account_id before ledger entry
 
     balance = 0
+    seed_transaction_id: str | None = None
     if payload.initial_balance > 0:
         # Seed credit (initial deposit has no counterpart — system account)
+        seed_transaction_id = _create_seed_transaction(
+            db, acct.account_id, payload.initial_balance
+        )
         entry = LedgerEntry(
-            transaction_id=_create_seed_transaction(
-                db, acct.account_id, payload.initial_balance
-            ),
+            transaction_id=seed_transaction_id,
             account_id=acct.account_id,
             entry_type="CREDIT",
             amount=payload.initial_balance,
@@ -90,6 +92,7 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
         action="ACCOUNT_CREATE",
         reason=f"New account created for {payload.owner}",
         status="success",
+        transaction_id=seed_transaction_id,
         payload_snapshot=json.dumps(
             {"owner": payload.owner, "initial_balance": payload.initial_balance}
         ),
@@ -133,6 +136,33 @@ def get_ledger_entries(
             select(LedgerEntry)
             .where(LedgerEntry.account_id == account_id)
             .order_by(LedgerEntry.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        .scalars()
+        .all()
+    )
+    return list(result)
+
+
+def get_audit_logs(
+    db: Session, account_id: str, limit: int = 50, offset: int = 0
+) -> list[AuditLog]:
+    """Audit logs linked to an account via the transaction it participated in.
+
+    Covers ACCOUNT_CREATE (seed transaction self-links to the new account) and
+    TRANSFER/TRANSFER_FAILED (transaction sender/receiver = account_id) — not
+    just AuditLog.actor, since actor stores owner name on create, not account_id.
+    """
+    result = (
+        db.execute(
+            select(AuditLog)
+            .join(Transaction, AuditLog.transaction_id == Transaction.transaction_id)
+            .where(
+                (Transaction.sender_account_id == account_id)
+                | (Transaction.receiver_account_id == account_id)
+            )
+            .order_by(AuditLog.timestamp.desc())
             .limit(limit)
             .offset(offset)
         )

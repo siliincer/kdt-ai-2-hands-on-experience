@@ -33,6 +33,7 @@ HTTP 401
 | GET | `/api/v1/analytics/accounts/{id}/ledger` | 원장 항목 목록 | ✅ 필요 |
 | GET | `/api/v1/analytics/accounts/{id}/snapshot` | 스냅샷 캐시 조회 (읽기 전용) | ✅ 필요 |
 | GET | `/api/v1/analytics/accounts/{id}/reconcile` | 스냅샷 vs 원장 정합성 검증 | ✅ 필요 |
+| GET | `/api/v1/analytics/accounts/{id}/audit-logs` | 계좌 관련 감사로그 조회 | ✅ 필요 |
 | POST | `/api/v1/accounts/{id}/snapshot` | 잔액 캐시 스냅샷 갱신 (계정계 라우터) | ❌ 불필요 (무인증) |
 
 ---
@@ -287,6 +288,68 @@ X-Analytics-Key: <key>
 | `drift_detected` | boolean | `cached_balance ≠ expected_balance` 이면 `true` |
 | `delta` | integer | `cached_balance - expected_balance` |
 | `reconciled_at` | string | 검증 실행 시각 (UTC ISO8601) |
+
+### Response 404
+
+```json
+{"error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found"}
+```
+
+---
+
+## 6. GET `/api/v1/analytics/accounts/{id}/audit-logs`
+
+계좌와 연관된 감사로그 목록 (페이지네이션 지원). `audit_logs` 는 DB 트리거로 UPDATE/DELETE 거부 — 이 엔드포인트는 읽기 전용, 이 경로로도 쓰기 불가.
+
+### Request
+
+```
+GET /api/v1/analytics/accounts/{account_id}/audit-logs?limit=50&offset=0
+X-Analytics-Key: <key>
+```
+
+### 연결 방식
+
+`audit_logs.transaction_id` 를 통해 `transactions.sender_account_id`/`receiver_account_id` 가 해당 계좌인 로그만 조회. `ACCOUNT_CREATE` 는 초기 입금(`initial_balance > 0`)이 있는 계좌만 seed transaction과 연결되어 조회됨 — 초기 잔액 0으로 생성된 계좌는 연결된 transaction이 없어 `ACCOUNT_CREATE` 로그가 이 경로로 안 보임(알려진 제약).
+
+### Response 200
+
+```json
+[
+  {
+    "audit_log_id": "a1b2c3d4-...",
+    "transaction_id": "f0e1d2c3-...",
+    "actor": "홍길동",
+    "action": "ACCOUNT_CREATE",
+    "reason": "New account created for 홍길동",
+    "status": "success",
+    "timestamp": "2026-07-01T09:00:00Z"
+  },
+  {
+    "audit_log_id": "b2c3d4e5-...",
+    "transaction_id": "e1f0d2c3-...",
+    "actor": "550e8400-e29b-41d4-a716-446655440000",
+    "action": "TRANSFER",
+    "reason": "Transfer completed",
+    "status": "success",
+    "timestamp": "2026-07-02T14:20:00Z"
+  }
+]
+```
+
+### Response Fields (per item)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `audit_log_id` | string | 감사로그 UUID |
+| `transaction_id` | string \| null | 연결된 트랜잭션 UUID (없으면 null) |
+| `actor` | string | 행위자 — 계좌생성 시 owner 명, 송금 시 sender account_id |
+| `action` | string | `ACCOUNT_CREATE` \| `TRANSFER` \| `TRANSFER_FAILED` |
+| `reason` | string | 사람이 읽을 수 있는 설명 |
+| `status` | string | `success` \| `failure` |
+| `timestamp` | datetime | 기록 시각 (UTC ISO8601) |
+
+정렬: `timestamp` 내림차순.
 
 ### Response 404
 

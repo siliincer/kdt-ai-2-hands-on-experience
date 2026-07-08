@@ -164,5 +164,5 @@ def reconcile(account_id, db) -> ReconciliationResult:
 | 데이터 원천 | `ledger_entries`, `accounts`, `transactions`, `audit_logs` | `v_infobank_account_balances`/`v_infobank_ledger_entries`/`v_account_snapshots` (뷰), `balance_snapshots` (캐시) |
 | 쓰기 권한 | 있음 | 없음 (읽기 전용) |
 | 잔액 계산 | 실시간 SUM | 캐시 또는 뷰 집계 |
-| 인증 | 없음 (데모 범위) | X-Analytics-Key 헤더 (GET 4개만; 스냅샷 갱신 POST는 계정계 쪽, 무인증) |
-| 엔드포인트 수 | 5개 (기존) + 갱신 POST 1개 | GET 4개 (snapshot/reconcile/balance/ledger) |
+| 인증 | 없음 (데모 범위) | X-Analytics-Key 헤더 (GET 5개만; 스냅샷 갱신 POST는 계정계 쪽, 무인증) |
+| 엔드포인트 수 | 5개 (기존) + 갱신 POST 1개 | GET 5개 (snapshot/reconcile/balance/ledger/audit-logs) |
