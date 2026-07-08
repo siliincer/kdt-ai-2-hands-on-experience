@@ -5,6 +5,7 @@ from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .analytics_router import analytics_router
+from .card_router import card_router
 from .database import Base, engine
 from .migrations import apply_analytics_views, apply_audit_triggers, apply_snapshot_schema
 from .routers import router
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(router, prefix="/api/v1")
+    app.include_router(card_router, prefix="/api/v1")
     app.include_router(analytics_router, prefix="/api/v1")
     return app
 

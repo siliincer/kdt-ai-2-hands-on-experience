@@ -14,6 +14,8 @@ from .crud import (
     get_account,
     get_audit_logs,
     get_balance,
+    get_card,
+    get_card_ledger_entries,
     get_ledger_entries,
     get_snapshot,
     reconcile_snapshot,
@@ -22,6 +24,8 @@ from .database import get_db
 from .schemas import (
     AuditLogResponse,
     BalanceResponse,
+    CardLedgerEntryResponse,
+    CardResponse,
     ErrorResponse,
     LedgerEntryResponse,
     ReconciliationResponse,
@@ -195,4 +199,63 @@ def get_analytics_audit_logs(
             timestamp=log.timestamp,
         )
         for log in logs
+    ]
+
+
+# ── GET /analytics/cards/{card_id} ───────────────────────────────────────────
+
+
+@analytics_router.get(
+    "/cards/{card_id}",
+    response_model=CardResponse,
+    responses={404: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+    summary="Read card details (정보계)",
+)
+def get_analytics_card(card_id: str, db: DbDep, _auth: AnalyticsAuth):
+    card = get_card(db, card_id)
+    if card is None:
+        _err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
+    return CardResponse(
+        card_id=card.card_id,
+        account_id=card.account_id,
+        limit=card.limit,
+        currency=card.currency,
+        created_at=card.created_at,
+    )
+
+
+# ── GET /analytics/cards/{card_id}/ledger ────────────────────────────────────
+
+
+@analytics_router.get(
+    "/cards/{card_id}/ledger",
+    response_model=list[CardLedgerEntryResponse],
+    responses={404: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+    summary="Read card ledger entries (정보계)",
+)
+def get_analytics_card_ledger(
+    card_id: str,
+    db: DbDep,
+    _auth: AnalyticsAuth,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """Return card-ledger entries (purchases) for a card in descending order.
+
+    Covers all entries: settled and unsettled. Settlement boundary is determined
+    by settlement_watermark_rowid on the latest CARD_SETTLEMENT Transaction.
+    Protected by X-Analytics-Key (정보계 read pattern).
+    """
+    card = get_card(db, card_id)
+    if card is None:
+        _err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
+    entries = get_card_ledger_entries(db, card_id, limit=limit, offset=offset)
+    return [
+        CardLedgerEntryResponse(
+            card_ledger_entry_id=e.card_ledger_entry_id,
+            card_id=e.card_id,
+            amount=e.amount,
+            created_at=e.created_at,
+        )
+        for e in entries
     ]
