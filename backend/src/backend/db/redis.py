@@ -8,13 +8,13 @@ from ..core.load_environment_var import settings
 # 전역 커넥션 풀 선언 (애플리케이션 생명주기 동안 유지)
 cache_pool = aioredis.ConnectionPool.from_url(
     str(settings.REDIS_CACHE_URL).strip(),
-    max_connections=20,
+    max_connections=2000,  # ai 서비스 규모에 맞게 조정
     decode_responses=True,  # 문자열로 자동 디코딩 처리 활성화 (선택)
 )
 
 stream_pool = aioredis.ConnectionPool.from_url(
     str(settings.REDIS_STREAM_URL).strip(),
-    max_connections=30,
+    max_connections=2000,  # ai 서비스 규모에 맞게 조정
     decode_responses=True,  # Stream 데이터 처리에 용이하도록 설정
 )
 

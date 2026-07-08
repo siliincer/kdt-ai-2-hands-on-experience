@@ -32,6 +32,24 @@ class Settings(BaseSettings):
         description="SSE 연결용 일회성 티켓 유효 시간(초)",
     )
 
+    # Agent Stream (Redis Streams 브릿지) Configuration
+    AGENT_STREAM_BLOCK_MS: int = Field(
+        default=15000,
+        description="XREAD BLOCK 대기 시간(ms). 타임아웃마다 keep-alive를 보낸다.",
+    )
+    AGENT_STREAM_MAXLEN: int = Field(
+        default=1000,
+        description="XADD 시 스트림 최대 길이(근사 MAXLEN ~). 재연결 리플레이 상한.",
+    )
+    AGENT_STREAM_TTL_SECONDS: int = Field(
+        default=3600,
+        description="agent:stream:{chat_session_id} 키의 TTL(초).",
+    )
+    AGENT_WEBHOOK_SECRET: SecretStr = Field(
+        default=SecretStr("change-me-agent-webhook"),
+        description="Agent → 웹훅(POST /webhooks/agent) 호출 시 공유 시크릿.",
+    )
+
     # .env 파일 로드 설정 (pydantic v2 방식)
     model_config = SettingsConfigDict(
         env_file=find_dotenv(),

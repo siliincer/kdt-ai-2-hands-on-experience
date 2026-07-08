@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..db.postgres import Base
 
 if TYPE_CHECKING:
-    from .audit_log import AuditLog
+    from .agent_audit_log import AuditLog
     from .chat_session import ChatSession
 
 

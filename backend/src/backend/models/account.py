@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .user import User
 
 
+# TODO: 계정계 서버를 mock-financial-service로 분리함에 따라 deprecate 예정
 class Account(Base):
     __tablename__ = "accounts"
 

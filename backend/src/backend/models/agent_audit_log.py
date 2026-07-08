@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .agent_execution import AgentExecution
 
 
+# 계정계 서버의 audit log가 아닌 agent execution의 audit log
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
