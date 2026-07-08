@@ -37,7 +37,7 @@ export function useCustomTanstackMutation<TData, TVariables = void>({
         method: 'POST', // 기본값 설정을 하되, 사용자가 fetchOptions로 PUT 등을 주면 덮어씌워짐
         headers: isJson ? { 'Content-Type': 'application/json' } : undefined,
         ...fetchOptions,
-        body: isJson ? JSON.stringify(variables) : (variables as BodyInit),
+        body: isJson ? JSON.stringify(variables) : (variables as any),
       });
     },
     ...options,

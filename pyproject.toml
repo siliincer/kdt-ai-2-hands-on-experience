@@ -6,7 +6,6 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "agent",
     "backend",
-    "mock-financial-service",
 ]
 
 [tool.uv]
@@ -16,13 +15,11 @@ package = false
 members = [
     "agent",
     "backend",
-    "mock-financial-service",
 ]
 
 [tool.uv.sources]
 agent = { workspace = true }
 backend = { workspace = true }
-mock-financial-service = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -39,7 +36,7 @@ dev = [
 # https://deptry.com/rules-violations/#standard-library-dependencies-dep005
 
 [tool.ruff]
-src = [".", "backend", "agent", "mock-financial-service"]
+src = [".", "backend", "agent"]
 line-length = 88
 target-version = "py311"
 # 노트북은 티칭용이라 lint/format 대상에서 제외 (ruff는 기본으로 ipynb 포함)
@@ -49,7 +46,7 @@ extend-exclude = ["*.ipynb"]
 select = ["E", "F", "I", "N", "W"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend", "agent", "mock_financial_service"]
+known-first-party = ["backend", "agent"]
 
 [tool.ruff.format]
 quote-style = "double"
