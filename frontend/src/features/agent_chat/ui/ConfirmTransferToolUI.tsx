@@ -2,15 +2,12 @@ import { useState } from 'react';
 
 import { Check, X } from 'lucide-react';
 
-import {
-  TransferCard,
-  type TransferConfirmValues,
-} from '@/features/transfer/TransferCard';
+import { TransferCard } from '@/features/transfer/TransferCard';
 
 import { useApprove } from '../model/approveContext';
 
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
-
+import type { TransferConfirmValues } from '@/features/transfer/types/interface.ts';
 interface ConfirmArgs {
   name?: string;
   bank?: string;
