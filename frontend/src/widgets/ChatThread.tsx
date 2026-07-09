@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
-  ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useThread,
+  useThreadRuntime,
 } from '@assistant-ui/react';
 import { LogOut, Moon, Send, SunMedium } from 'lucide-react';
+import TextareaAutosize from 'react-textarea-autosize';
 
 import { QUICK_PROMPTS } from '@/features/agent_chat/constants/constants';
 import { TOOL_UI_REGISTRY } from '@/features/agent_chat/ui/componentRegistry';
@@ -39,7 +41,8 @@ function UserMessage() {
 function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="mb-4 flex justify-start">
-      <div className="max-w-[85%] rounded-2xl border border-border bg-card px-4 py-2 text-sm text-foreground">
+      {/* 카드(툴 UI)가 넓게 보이도록 사용자 말풍선 직전까지 폭 확장 */}
+      <div className="w-full max-w-[92%] rounded-2xl border border-border bg-card px-4 py-2 text-sm text-foreground">
         {/* tool-call 로 끝나는 메시지(confirm 카드 등) 뒤에 붙던 "생각 중" 슬롯 비활성화 */}
         <MessagePrimitive.Parts
           components={ASSISTANT_PART_COMPONENTS}
@@ -131,19 +134,68 @@ function EmptyState() {
   );
 }
 
+/**
+ * 커스텀 컴포저(TextareaAutosize 기반).
+ * - Enter=전송, Shift+Enter=줄바꿈.
+ * - IME(한글/일본어 등) 조합 중 Enter 는 무시 → 조합 확정용 중복 Enter 로 인한 오전송/포커스 깨짐 방지.
+ * - 입력창은 minRows=1 에서 내용에 맞춰 늘다가 max-h(≈maxRows)에서 내부 스크롤.
+ * - 전송/Enter 는 **AI 렌더링 중(isRunning)에만 비활성화**(글자 수와 무관) → 답변을 하나씩 처리하도록 유도.
+ */
 function Composer() {
+  const thread = useThreadRuntime();
+  const isRunning = useThread((state) => state.isRunning);
+  const [text, setText] = useState('');
+  const isComposingRef = useRef(false);
+
+  const send = () => {
+    const trimmed = text.trim();
+    if (!trimmed || isRunning) return;
+    thread.append(trimmed);
+    setText('');
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    // IME 조합 중이면 전송하지 않는다(조합 확정 Enter 와 전송 Enter 분리).
+    if (
+      event.nativeEvent.isComposing ||
+      event.nativeEvent.keyCode === 229 ||
+      isComposingRef.current
+    ) {
+      return;
+    }
+    event.preventDefault();
+    send();
+  };
+
   return (
-    <ComposerPrimitive.Root className="flex items-center gap-2 border-t border-border px-4 py-3">
-      <ComposerPrimitive.Input
-        rows={1}
+    <div className="flex items-end gap-2 border-t border-border px-4 py-3">
+      <TextareaAutosize
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={handleKeyDown}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+        }}
+        onCompositionEnd={() => {
+          isComposingRef.current = false;
+        }}
         autoFocus
+        minRows={1}
+        maxRows={6}
         placeholder="무엇이든 물어보세요 (예: 이성한 신한 110 222 221 111)"
-        className="flex-1 resize-none rounded-full border border-border bg-input-background px-4 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        className="max-h-40 flex-1 resize-none overflow-y-auto rounded-2xl border border-border bg-input-background px-4 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
       />
-      <ComposerPrimitive.Send className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground">
+      <button
+        type="button"
+        onClick={send}
+        disabled={isRunning}
+        aria-label="전송"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground transition-opacity disabled:opacity-50"
+      >
         <Send className="h-4 w-4" />
-      </ComposerPrimitive.Send>
-    </ComposerPrimitive.Root>
+      </button>
+    </div>
   );
 }
 
