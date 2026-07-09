@@ -79,6 +79,67 @@ def test_provider_model_mismatch_falls_back_to_default(monkeypatch):
     assert captured["model"] == "gemini-2.5-flash"  # vertex 기본으로 복원
 
 
+def test_ollama_provider_builds_chat_ollama(monkeypatch):
+    """ollama 선택 시 OpenAI 키 없이 로컬 Ollama 설정으로 생성된다."""
+    import langchain_ollama
+
+    captured: dict = {}
+
+    class _StubOllama:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(langchain_ollama, "ChatOllama", _StubOllama)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2:3b")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    llm = get_llm()
+    assert isinstance(llm, _StubOllama)
+    assert captured["model"] == "llama3.2:3b"
+    assert captured["base_url"] == "http://host.docker.internal:11434"
+    assert captured["temperature"] == 0.0
+
+
+def test_ollama_provider_uses_default_model(monkeypatch):
+    import langchain_ollama
+
+    captured: dict = {}
+
+    class _StubOllama:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(langchain_ollama, "ChatOllama", _StubOllama)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    get_llm()
+    assert captured["model"] == "qwen2.5:3b"
+    assert captured["base_url"] == "http://localhost:11434"
+
+
+def test_ollama_model_mismatch_falls_back_to_default(monkeypatch):
+    import langchain_ollama
+
+    captured: dict = {}
+
+    class _StubOllama:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(langchain_ollama, "ChatOllama", _StubOllama)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")  # openai용 모델이 남은 상황
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+
+    get_llm()
+    assert captured["model"] == "qwen2.5:3b"
+
+
 def test_llm_model_env_overrides_default(monkeypatch):
     import langchain_google_vertexai
 

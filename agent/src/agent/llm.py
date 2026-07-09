@@ -8,6 +8,9 @@ LLM 인스턴스를 한 곳에서 만들어 재사용한다. 제공자는 환경
                               또는 GOOGLE_APPLICATION_CREDENTIALS(서비스 계정
                               JSON 경로) 필요. GOOGLE_CLOUD_PROJECT로 프로젝트,
                               VERTEX_LOCATION으로 리전 지정(기본 us-central1).
+  LLM_PROVIDER=ollama:        로컬/사내 Ollama 서버를 사용한다.
+                              OLLAMA_BASE_URL, OLLAMA_MODEL로 접속 대상과
+                              모델을 지정한다.
 
 공통:
   - LLM_MODEL로 모델 지정 (미지정 시 제공자별 기본값)
@@ -31,6 +34,7 @@ load_dotenv()
 _DEFAULT_MODELS = {
     "openai": "gpt-4o-mini",
     "vertex": "gemini-2.5-flash",
+    "ollama": "qwen2.5:3b",
 }
 
 
@@ -56,6 +60,10 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
         resolved_model = _DEFAULT_MODELS["vertex"]
     if provider == "openai" and resolved_model.startswith("gemini"):
         resolved_model = _DEFAULT_MODELS["openai"]
+    if provider == "ollama" and (
+        resolved_model.startswith("gpt") or resolved_model.startswith("gemini")
+    ):
+        resolved_model = _DEFAULT_MODELS["ollama"]
 
     if provider == "vertex":
         # vertex 미사용 환경에서 import 비용/의존 문제를 피하려고 지연 import
@@ -66,6 +74,16 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
             temperature=temperature,
             project=os.getenv("GOOGLE_CLOUD_PROJECT") or None,
             location=os.getenv("VERTEX_LOCATION", "us-central1"),
+        )
+
+    if provider == "ollama":
+        # Ollama 미사용 환경에서 import 비용/의존 문제를 피하려고 지연 import
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            model=os.getenv("OLLAMA_MODEL") or resolved_model,
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            temperature=temperature,
         )
 
     # 기본: openai (LLM_PROVIDER 미지정 포함 — 기존 동작 유지)
