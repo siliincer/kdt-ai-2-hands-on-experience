@@ -14,9 +14,10 @@ FastAPI 기반 Backend Gateway를 개발하는 디렉터리입니다.
 Python 의존성은 루트 `uv` workspace에서 관리합니다.
 
 ```bash
-uv sync
+uv sync --all-packages
 cd backend
-uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn src.backend.main:app --reload --host 0.0.0.0 --port 8000
+# fastapi dev src/backend/main.py --port 8000
 ```
 
 앱 진입점은 백엔드 코드 구조가 확정되면 업데이트합니다.

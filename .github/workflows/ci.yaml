@@ -67,8 +67,6 @@ jobs:
             ACCESS_TOKEN_EXPIRE_MINUTES
             LLM_PROVIDER
             BACKEND_BASE_URL
-            AGENT_SERVICE_URL
-            MOCK_FINANCIAL_SERVICE_URL
             VITE_API_BASE_URL
           )
 
