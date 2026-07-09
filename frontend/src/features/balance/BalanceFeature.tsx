@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router';
 
 import { accounts as mockAccounts } from '@/features/mockData/mockData';
 
-import type { BalanceData } from '@/shared/types/ui';
-
 import { BalanceCard } from './BalanceCard';
 import { AccountDetailCard } from './AccountDetailCard';
+
+import type { BalanceData } from '@/shared/types/ui';
 
 // 라우트(디버그) 잔존용 어댑터: 목데이터를 BalanceData 형태로. E단계에서 라우트째 제거.
 const MOCK_BALANCE: BalanceData = {

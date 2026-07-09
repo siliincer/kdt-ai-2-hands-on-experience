@@ -15,30 +15,7 @@ import { useState, type ClipboardEvent } from 'react';
 
 import { ERow } from './ERow';
 
-interface TransferPrefill {
-  name?: string;
-  bank?: string;
-  account?: string;
-  amtRaw?: string;
-  scheduled?: string;
-}
-
-export interface TransferConfirmValues {
-  name: string;
-  bank: string;
-  account: string;
-  amount: string;
-  time: string;
-}
-
-interface TransferCardProps {
-  prefill?: TransferPrefill;
-  /** 주어지면 confirm 모드: 내부 완료 화면 대신 이 콜백을 호출한다(HITL). */
-  onConfirm?: (values: TransferConfirmValues) => void;
-  onCancel?: () => void;
-  submitLabel?: string;
-  disabled?: boolean;
-}
+import type { TransferCardProps } from '@/features/transfer/types/interface.ts';
 
 export function TransferCard({
   prefill,
@@ -71,6 +48,7 @@ export function TransferCard({
     }
   };
 
+  // TODO: done 변수는 차후 지우기
   if (done) {
     return (
       <div className="flex flex-col items-center gap-2 py-4">
@@ -322,6 +300,9 @@ export function TransferCard({
                 time: timeOpt === 'now' ? '지금 바로' : schedDT,
               });
             } else {
+              // TODO: transfer card 자체적으로 성공 UI를 띄우는게 아니고
+              // onConfirm으로 서버에 전송 후 나중에 성공 메시지를 따로 받는다.
+              // agent 연결 후 done변수는 제거한다.
               setDone(true);
             }
           }}

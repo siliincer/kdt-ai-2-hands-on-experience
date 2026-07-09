@@ -1,18 +1,6 @@
 import { F, M } from '@/shared/constants/font';
-
-import type { BalanceData } from '@/shared/types/ui';
-
-interface BalanceCardProps {
-  data: BalanceData;
-  /** 카드 내 액션 → 자연어 프롬프트 전송(라우팅 대신 chat 흐름). */
-  onPrompt?: (text: string) => void;
-}
-
-const QUICK_ACTIONS = [
-  { label: '거래내역 보기', prompt: '거래 내역 보여줘' },
-  { label: '카드 청구서', prompt: '카드 청구서 보여줘' },
-  { label: '계좌 이체', prompt: '송금하고 싶어' },
-];
+import { QUICK_ACTIONS } from './constants/constants';
+import type { BalanceCardProps } from './types/interface';
 
 export function BalanceCard({ data, onPrompt }: BalanceCardProps) {
   const total =
