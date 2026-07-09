@@ -11,6 +11,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["20/minutes"])
 CORS_OPTIONS = {
     "allow_origins": [
         "http://localhost:5173",
+        "http://localhost:5199",
         "http://127.0.0.1:5173",
         # <차기 AWS EC2 클라우드 배포 주소>
     ],

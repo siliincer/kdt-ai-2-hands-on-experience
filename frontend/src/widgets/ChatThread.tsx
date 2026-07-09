@@ -14,12 +14,10 @@ import {
   ReasoningBlock,
   ToolProgressChip,
 } from '@/features/agent_chat/ui/messageParts';
-import { ThinkingIndicator } from '@/features/agent_chat/ui/ThinkingIndicator';
 import { logoutApi, useUserStore } from '@/entities/user';
 import { useTheme } from '@/shared/hooks/useTheme';
 
 const ASSISTANT_PART_COMPONENTS = {
-  Empty: ThinkingIndicator,
   Text: MessageText,
   Reasoning: ReasoningBlock,
   tools: {
@@ -42,7 +40,11 @@ function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="mb-4 flex justify-start">
       <div className="max-w-[85%] rounded-2xl border border-border bg-card px-4 py-2 text-sm text-foreground">
-        <MessagePrimitive.Parts components={ASSISTANT_PART_COMPONENTS} />
+        {/* tool-call 로 끝나는 메시지(confirm 카드 등) 뒤에 붙던 "생각 중" 슬롯 비활성화 */}
+        <MessagePrimitive.Parts
+          components={ASSISTANT_PART_COMPONENTS}
+          unstable_showEmptyOnNonTextEnd={false}
+        />
       </div>
     </MessagePrimitive.Root>
   );

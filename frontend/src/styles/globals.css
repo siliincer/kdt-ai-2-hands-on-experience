@@ -1,0 +1,23 @@
+/* Tailwind v4 는 버튼 기본 커서를 default 로 바꾼다.
+   상호작용 요소에 pointer 를 복원한다. 요소 선택자(낮은 우선순위)라
+   명시적 cursor-* 유틸리티 클래스는 그대로 우선한다. */
+button,
+[role='button'],
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[role='button'][aria-disabled='true'],
+button[disabled] {
+  cursor: not-allowed;
+}
+
+/* 네이티브 컨트롤(달력·시간 피커, 스크롤바 등)을 테마에 맞춘다.
+   다크모드에서 datetime-local 달력 아이콘/팝업이 안 보이던 문제 해결. */
+[data-theme='light'] {
+  color-scheme: light;
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+}

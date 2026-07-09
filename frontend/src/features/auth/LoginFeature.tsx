@@ -58,7 +58,7 @@ export default function LoginScreen({
 
   return (
     <div
-      className="flex flex-col items-center justify-center h-full px-6"
+      className="flex flex-col items-center justify-center h-full px-6 pb-8"
       style={{ background: NAVY, fontFamily: F }}
     >
       {/* Logo */}

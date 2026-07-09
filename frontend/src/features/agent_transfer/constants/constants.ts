@@ -7,6 +7,7 @@ const NAMED_EVENTS: AgentStreamEventType[] = [
   'status',
   'token',
   'tool_call',
+  'component',
   'need_approval',
   'done',
   'error',

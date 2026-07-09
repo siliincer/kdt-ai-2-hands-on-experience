@@ -112,12 +112,16 @@ export function convertMessage(message: ChatUiMessage): ThreadMessageLike {
     const toolArgs = part.approvalId
       ? { ...(part.args ?? {}), approvalId: part.approvalId }
       : (part.args ?? {});
+    // 툴 파트에 result 를 채워 "완료"로 표시한다. 그래야 done 으로 메시지가
+    // complete 된 뒤에도 렌더된다(미완료 tool-call 은 assistant-ui 가 숨김).
+    // 우리 confirm 은 자체 useApprove 로 처리하므로 result 는 표시에만 영향.
     return {
       type: 'tool-call' as const,
       toolCallId: part.toolCallId,
       toolName: part.toolName,
       args: toolArgs,
       argsText: part.argsText,
+      result: {},
     };
   });
 

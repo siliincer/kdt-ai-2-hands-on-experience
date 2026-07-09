@@ -1,15 +1,23 @@
 import { Wrench } from 'lucide-react';
 
+import { ThinkingIndicator } from './ThinkingIndicator';
+
 import type {
   ReasoningMessagePartComponent,
   TextMessagePartComponent,
   ToolCallMessagePartComponent,
 } from '@assistant-ui/react';
 
-/** 일반 텍스트 파트 (token 누적 / done 최종 문구) */
-export const MessageText: TextMessagePartComponent = ({ text }) => (
-  <p className="whitespace-pre-wrap text-sm leading-relaxed">{text}</p>
-);
+/**
+ * 텍스트 파트. 빈 텍스트(= assistant-ui 의 empty-running 플레이스홀더)일 때는
+ * "생각 중" 인디케이터를 보여준다(응답 대기 UX). 실제 토큰이 오면 텍스트로 대체.
+ */
+export const MessageText: TextMessagePartComponent = ({ text }) =>
+  text ? (
+    <p className="whitespace-pre-wrap text-sm leading-relaxed">{text}</p>
+  ) : (
+    <ThinkingIndicator />
+  );
 
 /** status 이벤트 → 접이식 느낌의 "진행 상황" 블록 (기본은 hidden 이라 override) */
 export const ReasoningBlock: ReasoningMessagePartComponent = ({ text }) => {

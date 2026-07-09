@@ -232,6 +232,8 @@ export function TransferCard({
               <button
                 key={amount}
                 type="button"
+                // 입력창 blur→편집 종료를 막아 프리셋 클릭이 정상 반영되게 한다
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => setAmtRaw(amount.replace(/,/g, ''))}
                 className="flex-1 rounded-lg bg-secondary py-1 text-[10px] font-medium text-secondary-foreground"
                 style={{ fontFamily: F }}
@@ -296,13 +298,6 @@ export function TransferCard({
           ) : null}
         </div>
       </ERow>
-
-      <p
-        className="mt-3 text-[10px] text-muted-foreground"
-        style={{ fontFamily: F }}
-      >
-        💡 클립보드 텍스트 붙여넣기 자동인식 지원
-      </p>
 
       <div className="mt-4 flex gap-2">
         <button

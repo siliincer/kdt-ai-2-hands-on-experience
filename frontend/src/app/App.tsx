@@ -5,6 +5,7 @@ import LoginFeature from '@/features/auth/LoginFeature';
 import SignupFeature from '@/features/auth/SignupFeature';
 import { useTheme } from '@/shared/hooks/useTheme';
 import { useUserStore } from '@/entities/user';
+import { onUnauthorized } from '@/shared/lib/authEvents';
 import { AppRouter } from './router';
 import type { AuthView } from '@/shared/types/types';
 
@@ -12,6 +13,7 @@ export default function App() {
   const { theme } = useTheme();
   const isLoggedIn = useUserStore((state) => state.isLoggedIn);
   const login = useUserStore((state) => state.login);
+  const logout = useUserStore((state) => state.logout);
   const [authView, setAuthView] = useState<AuthView>('login');
 
   useEffect(() => {
@@ -20,15 +22,20 @@ export default function App() {
     }
   }, [login]);
 
+  // 401(토큰 만료) 발생 시 자동 로그아웃 → 로그인 화면으로 리다이렉트
+  useEffect(() => onUnauthorized(() => logout()), [logout]);
+
   if (isLoggedIn) {
     return (
       <main
         data-theme={theme}
         className="min-h-screen bg-background text-foreground"
       >
-        <AssistantProvider>
-          <ChatThread />
-        </AssistantProvider>
+        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+          <AssistantProvider>
+            <ChatThread />
+          </AssistantProvider>
+        </div>
         <AppRouter />
         {/* TODO: AppRouter는 검수 후 개발자가 지울테니 ai가 지우지 마세요 */}
       </main>
