@@ -35,3 +35,7 @@ class ApproveRequest(BaseModel):
         default=None,
         description="사용자가 confirm 카드에서 수정한 값(예: 송금 파라미터).",
     )
+    component: str | None = Field(
+        default=None,
+        description="어떤 confirm 인지(transfer/autotransfer). 후속 턴 분기에 사용.",
+    )

@@ -6,7 +6,6 @@ import SignupFeature from '@/features/auth/SignupFeature';
 import { useTheme } from '@/shared/hooks/useTheme';
 import { useUserStore } from '@/entities/user';
 import { onUnauthorized } from '@/shared/lib/authEvents';
-import { AppRouter } from './router';
 import type { AuthView } from '@/shared/types/types';
 
 export default function App() {
@@ -36,8 +35,6 @@ export default function App() {
             <ChatThread />
           </AssistantProvider>
         </div>
-        <AppRouter />
-        {/* TODO: AppRouter는 검수 후 개발자가 지울테니 ai가 지우지 마세요 */}
       </main>
     );
   }

@@ -58,10 +58,14 @@ export interface ChatState {
 
 export interface ChatRuntime {
   runtime: AssistantRuntime;
-  /** confirm 카드(HITL)에서 승인/거절 시 호출 */
+  /**
+   * confirm 카드(HITL)에서 승인/거절 시 호출.
+   * `component` 로 어떤 confirm(transfer/autotransfer)인지 BE 에 알려 후속 턴을 분기한다.
+   */
   approve: (
     approvalId: string,
     decision: ApprovalDecision,
     args?: Record<string, unknown>,
+    component?: string,
   ) => Promise<void>;
 }

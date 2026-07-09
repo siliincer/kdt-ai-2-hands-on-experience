@@ -2,30 +2,27 @@ import { useState } from 'react';
 
 import { Check, X } from 'lucide-react';
 
-import { TransferCard } from '@/features/transfer/TransferCard';
+import { AutoTransferFormCard } from '@/features/autotransfer/AutoTrnasferFormCard';
 
 import { useApprove } from '../model/approveContext';
 
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
-import type { TransferConfirmValues } from '@/features/transfer/types/interface.ts';
+import type { AutoTransferConfirmValues } from '@/features/autotransfer/types/interface';
+
 interface ConfirmArgs {
-  name?: string;
-  bank?: string;
   account?: string;
   amount?: string;
-  time?: string;
+  day?: string;
   approvalId?: string;
 }
 
 /**
- * need_approval(confirm_transfer) 툴 파트 렌더러 (HITL).
- * 정보가 다 채워진 TransferCard 를 수정 가능한 상태로 띄우고,
- * 송금하기/취소 시 useApprove → POST /agent/approve 로 에이전트를 재개한다.
- *
- * (assistant-ui 0.14 에서 makeAssistantToolUI 는 deprecated 이므로
- *  MessagePrimitive.Parts 의 tools.by_name 오버라이드로 등록한다.)
+ * need_approval(confirm_autotransfer) 툴 파트 렌더러 (HITL).
+ * 프리필된 AutoTransferFormCard 를 수정 가능한 상태로 띄우고,
+ * 등록/취소 시 useApprove → POST /agent/approve 로 에이전트를 재개한다.
+ * (transfer 와 동일 패턴. component='autotransfer' 로 후속 턴을 분기시킨다.)
  */
-export const ConfirmTransferToolUI: ToolCallMessagePartComponent = ({
+export const ConfirmAutoTransferToolUI: ToolCallMessagePartComponent = ({
   args,
 }) => {
   const approve = useApprove();
@@ -34,7 +31,7 @@ export const ConfirmTransferToolUI: ToolCallMessagePartComponent = ({
 
   const respond = (
     decision: 'approve' | 'reject',
-    values?: TransferConfirmValues,
+    values?: AutoTransferConfirmValues,
   ) => {
     if (!confirmArgs.approvalId || outcome) return;
     setOutcome(decision);
@@ -42,7 +39,7 @@ export const ConfirmTransferToolUI: ToolCallMessagePartComponent = ({
       confirmArgs.approvalId,
       decision,
       values as unknown as Record<string, unknown>,
-      'transfer',
+      'autotransfer',
     );
   };
 
@@ -50,7 +47,7 @@ export const ConfirmTransferToolUI: ToolCallMessagePartComponent = ({
     return (
       <div className="my-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
         <X className="h-3.5 w-3.5" />
-        송금을 취소했어요.
+        자동이체 등록을 취소했어요.
       </div>
     );
   }
@@ -59,25 +56,20 @@ export const ConfirmTransferToolUI: ToolCallMessagePartComponent = ({
     return (
       <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
         <Check className="h-3.5 w-3.5" />
-        송금을 요청했어요.
+        자동이체 등록을 요청했어요.
       </div>
     );
   }
 
   return (
     <div className="mt-2 rounded-2xl border border-border bg-card p-4">
-      <TransferCard
+      <AutoTransferFormCard
         prefill={{
-          name: confirmArgs.name,
-          bank: confirmArgs.bank,
           account: confirmArgs.account,
-          amtRaw: confirmArgs.amount,
-          scheduled:
-            confirmArgs.time && confirmArgs.time !== '지금 바로'
-              ? confirmArgs.time
-              : undefined,
+          amount: confirmArgs.amount,
+          day: confirmArgs.day,
         }}
-        submitLabel="송금하기 →"
+        submitLabel="자동이체 등록 →"
         onConfirm={(values) => respond('approve', values)}
         onCancel={() => respond('reject')}
       />

@@ -13,6 +13,7 @@ export async function approveAgentAction(
   approvalId: string,
   decision: ApprovalDecision,
   args?: Record<string, unknown>,
+  component?: string,
 ): Promise<{ decision: string }> {
   const token = sessionStorage.getItem('rf_access_token') ?? '';
   return customFetch<{ decision: string }>(APPROVE_URL, {
@@ -26,6 +27,7 @@ export async function approveAgentAction(
       approval_id: approvalId,
       decision,
       args: args ?? null,
+      component: component ?? null,
     }),
   });
 }
