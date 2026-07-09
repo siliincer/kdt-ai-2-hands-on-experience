@@ -1,7 +1,11 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
 import { BalanceToolUI } from './BalanceToolUI';
+import { BudgetToolUI } from './BudgetToolUI';
+import { CardsToolUI } from './CardsToolUI';
 import { ConfirmTransferToolUI } from './ConfirmTransferToolUI';
+import { SpendingToolUI } from './SpendingToolUI';
+import { TransactionsToolUI } from './TransactionsToolUI';
 
 /**
  * assistant-ui tools.by_name 레지스트리.
@@ -11,5 +15,9 @@ import { ConfirmTransferToolUI } from './ConfirmTransferToolUI';
  */
 export const TOOL_UI_REGISTRY: Record<string, ToolCallMessagePartComponent> = {
   render_balance: BalanceToolUI,
+  render_spending: SpendingToolUI,
+  render_transactions: TransactionsToolUI,
+  render_budget: BudgetToolUI,
+  render_cards: CardsToolUI,
   confirm_transfer: ConfirmTransferToolUI,
 };

@@ -1,5 +1,13 @@
 import { useNavigate } from 'react-router';
+
+import { cards } from '@/features/mockData/mockData';
+
+import type { CardsData } from '@/shared/types/ui';
+
 import { CardInfoCard } from './CardInfoCard';
+
+// 라우트(디버그) 잔존용 어댑터: 목데이터를 CardsData 형태로. E단계에서 라우트째 제거.
+const MOCK_CARDS: CardsData = { cards };
 
 export default function CardFeature() {
   const navigate = useNavigate();
@@ -22,7 +30,7 @@ export default function CardFeature() {
           홈으로
         </button>
       </div>
-      <CardInfoCard onNavigate={navigate} />
+      <CardInfoCard data={MOCK_CARDS} onPrompt={() => navigate('/bill')} />
     </div>
   );
 }

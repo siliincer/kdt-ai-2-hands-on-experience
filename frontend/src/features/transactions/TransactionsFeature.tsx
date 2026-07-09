@@ -1,5 +1,16 @@
 import { useNavigate } from 'react-router';
+
+import { ALL_TX_ITEM } from '@/features/mockData/mockData';
+
+import type { TransactionsData } from '@/shared/types/ui';
+
 import { TransactionsCard } from './TransactionCard';
+
+// 라우트(디버그) 잔존용 어댑터: 목데이터를 TransactionsData 형태로. E단계에서 라우트째 제거.
+const MOCK_TRANSACTIONS: TransactionsData = {
+  months: ['2025-06', '2025-05', '2025-04', '2025-03', '2025-02'],
+  items: ALL_TX_ITEM,
+};
 
 export default function TransactionsFeature() {
   const navigate = useNavigate();
@@ -22,7 +33,7 @@ export default function TransactionsFeature() {
           홈으로
         </button>
       </div>
-      <TransactionsCard />
+      <TransactionsCard data={MOCK_TRANSACTIONS} />
     </div>
   );
 }

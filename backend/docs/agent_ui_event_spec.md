@@ -4,9 +4,10 @@
 
 > **목적**: 웹훅 호출만으로 프론트(assistant-ui chat) 화면에 카드/폼/진행표시를 렌더링한다.
 
-> **상태**: `status/token/tool_call/need_approval/done/error` 는 **구현됨**.
+> **상태**: `status/token/tool_call/need_approval/done/error` **구현됨**.
 
-> `component` 및 각 컴포넌트 `data` 스키마는 **Phase 5-D 목표 계약**(구현 예정).
+> `component` 시그널 + `balance/spending/transactions/budget/cards` 카드 및 UI Data API **구현됨**(Phase 5-D).
+> `account_detail` 카드는 미구현(계약만 존재).
 
 ---
 
@@ -361,3 +362,5 @@ curl -s -X POST http://localhost:8000/api/v1/webhooks/agent \
 ## 10. 버전
 
 - v0.1 (2026-07-08) — 최초 명세. `component` 이벤트/스키마는 Phase 5-D 에서 FE 구현.
+- v0.2 (2026-07-09) — `balance/spending/transactions/budget/cards` 카드 + UI Data API
+  (`GET /ui/{spending,transactions,budget,cards}`) 구현. mock 드라이버 키워드 매칭 확장.

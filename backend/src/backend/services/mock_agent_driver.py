@@ -23,10 +23,26 @@ _STEP_DELAY_SECONDS = 0.5
 # 송금 의도로 볼 키워드
 _TRANSFER_KEYWORDS = ("송금", "보내", "이체", "transfer")
 
-# 읽기전용 카드 의도 → component 키
+# 읽기전용 카드 의도 → component 키 (앞쪽 우선 매칭)
 _COMPONENT_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
     (("잔액", "자산", "balance"), "balance"),
+    (("소비", "지출", "spending"), "spending"),
+    (("거래 내역", "거래내역", "내역", "transactions"), "transactions"),
+    (("예산", "구독", "budget"), "budget"),
+    (("카드", "청구서", "cards"), "cards"),
 ]
+
+# component 별 안내 문구(status/component/done 텍스트)
+_COMPONENT_MESSAGES: dict[str, tuple[str, str]] = {
+    "balance": ("자산 현황을 불러왔어요.", "다른 도움이 필요하시면 말씀해 주세요."),
+    "spending": (
+        "이번 달 소비 분석을 준비했어요.",
+        "카테고리를 눌러 상세 내역을 볼 수 있어요.",
+    ),
+    "transactions": ("거래 내역을 불러왔어요.", "월을 선택해 기간별로 확인해 보세요."),
+    "budget": ("예산 현황을 불러왔어요.", "예산과 구독을 관리해 보세요."),
+    "cards": ("보유하신 카드를 불러왔어요.", "카드를 눌러 자세히 확인해 보세요."),
+}
 
 # 파싱 실패 시 사용할 샘플(스크린샷 기준)
 _SAMPLE_ARGS = {
@@ -131,6 +147,7 @@ async def run_initial_turn(chat_session_id: UUID, message: str) -> None:
         if component is not None:
             # 읽기전용 카드: 데이터는 싣지 않고 렌더 시그널만(ADR-002).
             # FE 가 UI Data API 로 데이터를 별도 fetch 한다.
+            component_text, done_text = _COMPONENT_MESSAGES[component]
             await _emit(
                 redis_stream,
                 chat_session_id,
@@ -142,14 +159,14 @@ async def run_initial_turn(chat_session_id: UUID, message: str) -> None:
                 redis_stream,
                 chat_session_id,
                 AgentStreamEventType.COMPONENT,
-                "자산 현황을 불러왔어요.",
+                component_text,
                 metadata={"component": component},
             )
             await _emit(
                 redis_stream,
                 chat_session_id,
                 AgentStreamEventType.DONE,
-                "다른 도움이 필요하시면 말씀해 주세요.",
+                done_text,
             )
             return
 

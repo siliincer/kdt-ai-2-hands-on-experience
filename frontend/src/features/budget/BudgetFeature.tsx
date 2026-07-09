@@ -1,6 +1,13 @@
 import { useNavigate } from 'react-router';
 
+import { budgetItems, subItems } from '@/features/mockData/mockData';
+
+import type { BudgetData } from '@/shared/types/ui';
+
 import { BudgetCard } from './BudgetCard';
+
+// 라우트(디버그) 잔존용 어댑터: 목데이터를 BudgetData 형태로. E단계에서 라우트째 제거.
+const MOCK_BUDGET: BudgetData = { budgetItems, subItems };
 
 export default function BudgetFeature() {
   const navigate = useNavigate();
@@ -23,7 +30,7 @@ export default function BudgetFeature() {
           홈으로
         </button>
       </div>
-      <BudgetCard />
+      <BudgetCard data={MOCK_BUDGET} />
     </div>
   );
 }

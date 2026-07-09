@@ -1,5 +1,23 @@
 import { useNavigate } from 'react-router';
+
+import {
+  barData,
+  pieData,
+  monthlySpend,
+  catTx,
+} from '@/features/mockData/mockData';
+
+import type { SpendingData } from '@/shared/types/ui';
+
 import { SpendingCard } from './SpendingCard';
+
+// 라우트(디버그) 잔존용 어댑터: 목데이터를 SpendingData 형태로. E단계에서 라우트째 제거.
+const MOCK_SPENDING: SpendingData = {
+  pie: pieData,
+  bar: barData,
+  monthly: monthlySpend,
+  catTx,
+};
 
 export default function SpendingFeature() {
   const navigate = useNavigate();
@@ -26,7 +44,7 @@ export default function SpendingFeature() {
           홈으로
         </button>
       </div>
-      <SpendingCard onNavigate={navigate} />
+      <SpendingCard data={MOCK_SPENDING} onPrompt={() => navigate('/')} />
     </div>
   );
 }
