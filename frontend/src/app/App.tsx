@@ -1,54 +1,72 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { AssistantProvider } from './providers/AssistantProvider';
+import ChatThread from '@/widgets/ChatThread';
+import LoginFeature from '@/features/auth/LoginFeature';
+import SignupFeature from '@/features/auth/SignupFeature';
+import { useTheme } from '@/shared/hooks/useTheme';
+import { useUserStore } from '@/entities/user';
+import { onUnauthorized } from '@/shared/lib/authEvents';
+import { AppRouter } from './router';
+import type { AuthView } from '@/shared/types/types';
 
-function App() {
-  // 1. useQuery를 사용하여 로컬 서버의 데이터를 조회합니다.
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['localData'], // 캐싱에 사용할 유니크한 키값
-    queryFn: async () => {
-      const response = await fetch(`/backendApi/api/v1/users`);
+export default function App() {
+  const { theme } = useTheme();
+  const isLoggedIn = useUserStore((state) => state.isLoggedIn);
+  const login = useUserStore((state) => state.login);
+  const logout = useUserStore((state) => state.logout);
+  const [authView, setAuthView] = useState<AuthView>('login');
 
-      if (!response.ok) {
-        throw new Error('서버에서 데이터를 가져오지 못했습니다.');
-      }
+  useEffect(() => {
+    if (sessionStorage.getItem('rf_logged_in') === '1') {
+      login({ id: 'restored', name: '사용자' });
+    }
+  }, [login]);
 
-      return response.json();
-    },
-  });
+  // 401(토큰 만료) 발생 시 자동 로그아웃 → 로그인 화면으로 리다이렉트
+  useEffect(() => onUnauthorized(() => logout()), [logout]);
+
+  if (isLoggedIn) {
+    return (
+      <main
+        data-theme={theme}
+        className="min-h-screen bg-background text-foreground"
+      >
+        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+          <AssistantProvider>
+            <ChatThread />
+          </AssistantProvider>
+        </div>
+        <AppRouter />
+        {/* TODO: AppRouter는 검수 후 개발자가 지울테니 ai가 지우지 마세요 */}
+      </main>
+    );
+  }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-slate-900 text-white">
-      <h1 className="text-4xl font-bold text-emerald-400 animate-pulse">
-        Tailwind v4 세팅 완료!
-      </h1>
-
-      {/* 2. 상태별 UI 처리 */}
-      <div className="flex flex-col items-center gap-4">
-        {isLoading && (
-          <p className="text-slate-400 animate-pulse">데이터 로딩 중...</p>
-        )}
-
-        {isError && <p className="text-rose-400">에러 발생: {error.message}</p>}
-
-        {data && (
-          <div className="rounded-lg bg-slate-800 p-4 border border-slate-700">
-            <p className="text-sm text-slate-400 mb-2">서버 응답 데이터:</p>
-            <pre className="text-emerald-300 font-mono">
-              {JSON.stringify(data, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {/* 3. 수동으로 다시 불러오고 싶을 때 누르는 버튼 */}
-        <button
-          onClick={() => refetch()}
-          disabled={isLoading}
-          className="mt-2 rounded-lg bg-emerald-500 px-6 py-3 font-semibold text-slate-900 transition-colors hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500"
+    <main
+      data-theme={theme}
+      className="min-h-screen bg-background text-foreground"
+    >
+      <div className="mx-auto flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+        <div
+          className="w-full rounded-4xl border border-border bg-card/95 p-6 shadow-[0_32px_80px_rgba(15,23,42,0.18)] backdrop-blur-sm"
+          style={{ maxWidth: 480 }}
         >
-          {isLoading ? '새로고침 중...' : '데이터 다시 불러오기'}
-        </button>
+          {authView === 'login' ? (
+            <LoginFeature
+              onLogin={() => {
+                sessionStorage.setItem('rf_logged_in', '1');
+              }}
+              onGoToSignup={() => setAuthView('signup')}
+            />
+          ) : (
+            <SignupFeature
+              onSignupSuccess={() => setAuthView('login')}
+              onBackToLogin={() => setAuthView('login')}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
-
-export default App;

@@ -3,20 +3,26 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import backend.models  # noqa: F401
+from backend.core.load_environment_var import settings
+
+# 🌟 이 한 줄로 __init__.py 안의 모든 모델 클래스가 메모리에 등록됩니다.
+# Import the model modules so their tables and metadata are registered.
+from backend.db.postgres import Base
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
+# 🌟 pydantic-settings에서 읽어온 실제 DB URL을 Alembic 설정에 강제로 주입합니다.
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# this is basically a fileConfig object
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

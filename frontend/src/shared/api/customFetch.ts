@@ -4,6 +4,7 @@ import {
   handleBackendError,
 } from './api_exception_handler';
 import { APIError } from '../error/APIError';
+import { emitUnauthorized } from '../lib/authEvents';
 import type { CommonResponse } from './api_exception_handler';
 
 export async function customFetch<T>(
@@ -15,6 +16,17 @@ export async function customFetch<T>(
 
     // 500 등 HTTP 에러 상태코드이거나 response.ok가 false인 경우
     if (!response.ok) {
+      // 401: 토큰 만료/인증 실패 → 전역 로그아웃 시그널(리프레시 토큰 미도입).
+      // ErrorBoundary 대신 로그인 화면으로 리다이렉트되도록 App 이 구독한다.
+      if (response.status === 401) {
+        emitUnauthorized();
+        throw new APIError(
+          '세션이 만료되었습니다. 다시 로그인해 주세요.',
+          { code: 'UNAUTHORIZED' },
+          401,
+        );
+      }
+
       let errorBody: unknown;
       try {
         // 백엔드가 보낸 에러 JSON 읽기 시도

@@ -26,6 +26,7 @@ dev = [
     "deptry>=0.25.1",
     "pre-commit>=4.0.0",
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "python-dotenv>=1.0.0",
     "ruff>=0.8.0",
@@ -43,11 +44,14 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend"]
+known-first-party = ["backend", "agent"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.ruff.lint.per-file-ignores]
+"backend/migrations/env.py" = ["F401"]
 
 [tool.pytest.ini_options]
 python_files = "test_*.py"

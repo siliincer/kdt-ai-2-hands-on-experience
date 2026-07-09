@@ -41,6 +41,30 @@ jobs:
           else
             uv run python -c "import agent; print('agent import ok')"
           fi
+
+      - name: Validate env example
+        run: |
+          required_keys=(
+            APP_ENV
+            LOG_LEVEL
+            DATABASE_URL
+            REDIS_CACHE_URL
+            REDIS_STREAM_URL
+            JWT_SECRET_KEY
+            JWT_ALGORITHM
+            ACCESS_TOKEN_EXPIRE_MINUTES
+            LLM_PROVIDER
+            BACKEND_BASE_URL
+            VITE_API_BASE_URL
+          )
+
+          for key in "${required_keys[@]}"; do
+            if ! grep -q "^${key}=" .env.example; then
+              echo "Missing required key in .env.example: ${key}"
+              exit 1
+            fi
+          done
+
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest

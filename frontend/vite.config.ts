@@ -38,5 +38,26 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+    },
+    build: {
+      // 1안: 경고 수치를 현실적으로 높이기 (어차피 한 화면에 다 보여야 하므로)
+      chunkSizeWarningLimit: 1000,
+      rolldownOptions: {
+        output: {
+          codeSplitting: true,
+          // 2안: node_modules의 무거운 패키지들을 별도 파일(vendor)로 강제 분리
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              return 'vendor';
+            }
+          },
+          // TODO: React.lazy 최적화
+        },
+      },
+    },
   };
 });
