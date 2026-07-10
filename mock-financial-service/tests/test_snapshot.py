@@ -32,12 +32,13 @@ def _refresh(client, account_id: str) -> dict:
     return r.json()
 
 
-def _transfer(client, sender_id: str, receiver_id: str, amount: int, key: str):
+def _transfer(client, sender: dict, receiver: dict, amount: int, key: str):
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender_id,
-            "receiver_account_id": receiver_id,
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": amount,
         },
         headers={"Idempotency-Key": key},
@@ -126,9 +127,7 @@ def test_snapshot_watermark_advances_after_transfer(client, db_engine):
     assert wm1 is not None
 
     # Transfer adds a DEBIT to sender
-    _transfer(
-        client, sender["account_id"], receiver["account_id"], 30_000, "wm-test-001"
-    )
+    _transfer(client, sender, receiver, 30_000, "wm-test-001")
 
     # Second snapshot — must have higher watermark
     snap2 = _refresh(client, sender["account_id"])
@@ -169,9 +168,7 @@ def test_snapshot_cached_balance_after_transfer(client):
     sender = _make_account(client, "CacheSender", 200_000)
     receiver = _make_account(client, "CacheReceiver", 0)
 
-    _transfer(
-        client, sender["account_id"], receiver["account_id"], 50_000, "cache-test-001"
-    )
+    _transfer(client, sender, receiver, 50_000, "cache-test-001")
 
     snap = _refresh(client, sender["account_id"])
     assert snap["cached_balance"] == 150_000
@@ -185,9 +182,7 @@ def test_snapshot_sum_credit_and_debit_correct(client):
     sender = _make_account(client, "SumSender", 100_000)
     receiver = _make_account(client, "SumReceiver", 0)
 
-    _transfer(
-        client, sender["account_id"], receiver["account_id"], 40_000, "sum-test-001"
-    )
+    _transfer(client, sender, receiver, 40_000, "sum-test-001")
 
     snap = _refresh(client, sender["account_id"])
     # sender: 1 CREDIT (initial 100k) + 1 DEBIT (40k)

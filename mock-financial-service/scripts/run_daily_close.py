@@ -30,8 +30,7 @@ def main() -> int:
         db.close()
 
     print(
-        f"[daily-close] business_date={resolved_date} "
-        f"accounts_closed={len(snapshots)}"
+        f"[daily-close] business_date={resolved_date} accounts_closed={len(snapshots)}"
     )
     for row in snapshots:
         print(

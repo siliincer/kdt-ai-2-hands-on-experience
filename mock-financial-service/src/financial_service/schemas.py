@@ -23,6 +23,8 @@ class AccountCreate(BaseModel):
 class AccountResponse(BaseModel):
     account_id: str
     owner: str
+    bank_name: str
+    account_number: str
     balance: int
     currency: str
     created_at: datetime
@@ -69,8 +71,9 @@ class AuditLogResponse(BaseModel):
 
 
 class TransferRequest(BaseModel):
-    sender_account_id: str
-    receiver_account_id: str
+    sender_account_number: str
+    receiver_bank_name: str
+    receiver_account_number: str
     amount: int = Field(..., gt=0)
 
     @field_validator("amount")
@@ -85,6 +88,10 @@ class TransferResponse(BaseModel):
     transfer_id: str
     from_account: str
     to_account: str
+    sender_bank_name: str
+    sender_account_number: str
+    receiver_bank_name: str
+    receiver_account_number: str
     amount: int
     status: str
     created_at: datetime

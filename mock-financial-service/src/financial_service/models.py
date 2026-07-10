@@ -1,5 +1,6 @@
 """SQLAlchemy ORM models for double-entry ledger."""
 
+import random
 import uuid
 from datetime import date, datetime, timezone
 
@@ -7,6 +8,9 @@ from sqlalchemy import BigInteger, Date, DateTime, Enum, ForeignKey, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+
+# 이 mock 서비스가 표현하는 단일 은행명 — 모든 계좌에 고정 부여
+BANK_NAME = "KDT은행"
 
 
 def _uuid() -> str:
@@ -17,11 +21,26 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _generate_account_number() -> str:
+    """국내 은행 계좌번호 관용 포맷(3-3-6자리)으로 랜덤 생성."""
+    return (
+        f"{random.randint(0, 999):03d}-"
+        f"{random.randint(0, 999):03d}-"
+        f"{random.randint(0, 999999):06d}"
+    )
+
+
 class Account(Base):
     __tablename__ = "accounts"
 
     account_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     owner: Mapped[str] = mapped_column(String(255), nullable=False)
+    bank_name: Mapped[str] = mapped_column(
+        String(50), nullable=False, default=BANK_NAME
+    )
+    account_number: Mapped[str] = mapped_column(
+        String(20), nullable=False, unique=True, default=_generate_account_number
+    )
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KRW")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now

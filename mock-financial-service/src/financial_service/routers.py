@@ -17,6 +17,7 @@ from .crud import (
     transfer,
 )
 from .database import get_db
+from .models import BANK_NAME
 from .schemas import (
     AccountCreate,
     AccountResponse,
@@ -51,6 +52,8 @@ def create_account_endpoint(payload: AccountCreate, db: DbDep):
     return AccountResponse(
         account_id=acct.account_id,
         owner=acct.owner,
+        bank_name=acct.bank_name,
+        account_number=acct.account_number,
         balance=balance,
         currency=acct.currency,
         created_at=acct.created_at,
@@ -73,6 +76,8 @@ def get_account_endpoint(account_id: str, db: DbDep):
     return AccountResponse(
         account_id=acct.account_id,
         owner=acct.owner,
+        bank_name=acct.bank_name,
+        account_number=acct.account_number,
         balance=balance,
         currency=acct.currency,
         created_at=acct.created_at,
@@ -184,6 +189,10 @@ def transfer_endpoint(
         transfer_id=txn.transaction_id,
         from_account=txn.sender_account_id,
         to_account=txn.receiver_account_id,
+        sender_bank_name=BANK_NAME,
+        sender_account_number=payload.sender_account_number,
+        receiver_bank_name=payload.receiver_bank_name,
+        receiver_account_number=payload.receiver_account_number,
         amount=txn.amount,
         status=txn.status,
         created_at=txn.created_at,

@@ -22,12 +22,23 @@ def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
     return r.json()
 
 
-def _transfer(client, sender_id: str, receiver_id: str, amount: int, key: str):
+def _transfer(client, sender, receiver, amount: int, key: str):
+    """`sender`/`receiver` may be an account dict, or a bare account_number
+    string (used for nonexistent-account test cases)."""
+    if isinstance(sender, dict):
+        sender = sender["account_number"]
+    if isinstance(receiver, dict):
+        receiver_bank = receiver["bank_name"]
+        receiver_number = receiver["account_number"]
+    else:
+        receiver_bank = "KDT은행"
+        receiver_number = receiver
     return client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender_id,
-            "receiver_account_id": receiver_id,
+            "sender_account_number": sender,
+            "receiver_bank_name": receiver_bank,
+            "receiver_account_number": receiver_number,
             "amount": amount,
         },
         headers={"Idempotency-Key": key},
@@ -96,8 +107,8 @@ class TestAuditLogTransferSuccess:
 
         r = _transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             10_000,
             "al-success-001",
         )
@@ -114,13 +125,11 @@ class TestAuditLogTransferSuccess:
         )
 
     def test_success_audit_actor_is_sender(self, client, db_engine):
-        """성공 감사로그 actor == sender_account_id."""
+        """성공 감사로그 actor == sender_account_number."""
         sender = _make_account(client, "AL_S2", 50_000)
         receiver = _make_account(client, "AL_R2", 0)
 
-        r = _transfer(
-            client, sender["account_id"], receiver["account_id"], 5_000, "al-actor-001"
-        )
+        r = _transfer(client, sender, receiver, 5_000, "al-actor-001")
         assert r.status_code == 200
         txn_id = r.json()["transfer_id"]
 
@@ -134,8 +143,8 @@ class TestAuditLogTransferSuccess:
             ).fetchone()
 
         assert row is not None, "Success audit log not found"
-        assert row[0] == sender["account_id"], (
-            f"actor mismatch: {row[0]} != {sender['account_id']}"
+        assert row[0] == sender["account_number"], (
+            f"actor mismatch: {row[0]} != {sender['account_number']}"
         )
 
     def test_success_audit_has_transaction_id(self, client, db_engine):
@@ -143,9 +152,7 @@ class TestAuditLogTransferSuccess:
         sender = _make_account(client, "AL_S3", 50_000)
         receiver = _make_account(client, "AL_R3", 0)
 
-        r = _transfer(
-            client, sender["account_id"], receiver["account_id"], 1_000, "al-txnid-001"
-        )
+        r = _transfer(client, sender, receiver, 1_000, "al-txnid-001")
         assert r.status_code == 200
         txn_id = r.json()["transfer_id"]
 
@@ -174,8 +181,8 @@ class TestAuditLogTransferFailure:
 
         r = _transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             999_999,
             "al-fail-insuf-001",
         )
@@ -193,8 +200,8 @@ class TestAuditLogTransferFailure:
 
         _transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             100_000,
             "al-fail-insuf-002",
         )
@@ -206,7 +213,7 @@ class TestAuditLogTransferFailure:
                     "WHERE action = 'TRANSFER_FAILED' AND actor = :actor "
                     "ORDER BY rowid DESC LIMIT 1"
                 ),
-                {"actor": sender["account_id"]},
+                {"actor": sender["account_number"]},
             ).fetchone()
 
         assert row is not None, "Failure audit log not found"
@@ -217,9 +224,9 @@ class TestAuditLogTransferFailure:
     def test_account_not_found_writes_failure_audit(self, client, db_engine):
         """없는계좌 송금 시도 → status=failure AuditLog 생성."""
         sender = _make_account(client, "AL_NFSender", 10_000)
-        ghost_id = "00000000-0000-0000-0000-000000000000"
+        ghost_id = "000-000-000000"
 
-        r = _transfer(client, sender["account_id"], ghost_id, 1_000, "al-fail-nf-001")
+        r = _transfer(client, sender, ghost_id, 1_000, "al-fail-nf-001")
         assert r.status_code == 404
 
         with db_engine.connect() as conn:
@@ -229,7 +236,7 @@ class TestAuditLogTransferFailure:
                     "WHERE action = 'TRANSFER_FAILED' AND actor = :actor "
                     "ORDER BY rowid DESC LIMIT 1"
                 ),
-                {"actor": sender["account_id"]},
+                {"actor": sender["account_number"]},
             ).fetchone()
 
         assert row is not None, "No failure audit for account-not-found transfer"
@@ -241,9 +248,7 @@ class TestAuditLogTransferFailure:
         """자기송금 시도 → status=failure AuditLog 생성."""
         acct = _make_account(client, "AL_SelfSender", 10_000)
 
-        r = _transfer(
-            client, acct["account_id"], acct["account_id"], 1_000, "al-fail-self-001"
-        )
+        r = _transfer(client, acct, acct, 1_000, "al-fail-self-001")
         assert r.status_code == 422
 
         with db_engine.connect() as conn:
@@ -253,7 +258,7 @@ class TestAuditLogTransferFailure:
                     "WHERE action = 'TRANSFER_FAILED' AND actor = :actor "
                     "ORDER BY rowid DESC LIMIT 1"
                 ),
-                {"actor": acct["account_id"]},
+                {"actor": acct["account_number"]},
             ).fetchone()
 
         assert row is not None, "No failure audit for self-transfer"
@@ -270,8 +275,8 @@ class TestAuditLogTransferFailure:
         # First transfer succeeds
         r1 = _transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             1_000,
             "al-conflict-key-001",
         )
@@ -280,8 +285,8 @@ class TestAuditLogTransferFailure:
         # Same key, different payload → 409
         r2 = _transfer(
             client,
-            sender["account_id"],
-            other["account_id"],
+            sender,
+            other,
             2_000,
             "al-conflict-key-001",
         )
@@ -294,7 +299,7 @@ class TestAuditLogTransferFailure:
                     "WHERE action = 'TRANSFER_FAILED' AND actor = :actor "
                     "ORDER BY rowid DESC LIMIT 1"
                 ),
-                {"actor": sender["account_id"]},
+                {"actor": sender["account_number"]},
             ).fetchone()
 
         assert row is not None, "No failure audit for idempotency conflict"
@@ -309,8 +314,8 @@ class TestAuditLogTransferFailure:
 
         r = _transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             99_999,
             "al-fail-nulltxn-001",
         )
@@ -323,7 +328,7 @@ class TestAuditLogTransferFailure:
                     "WHERE action = 'TRANSFER_FAILED' AND actor = :actor "
                     "ORDER BY rowid DESC LIMIT 1"
                 ),
-                {"actor": sender["account_id"]},
+                {"actor": sender["account_number"]},
             ).fetchone()
 
         assert row is not None
@@ -344,19 +349,15 @@ class TestAuditLogCompleteness:
         receiver = _make_account(client, "AL_Complete_R", 0)
 
         # 1 success
-        r1 = _transfer(
-            client, sender["account_id"], receiver["account_id"], 1_000, "al-comp-001"
-        )
+        r1 = _transfer(client, sender, receiver, 1_000, "al-comp-001")
         assert r1.status_code == 200
 
         # 2 failures
-        r2 = _transfer(
-            client, sender["account_id"], receiver["account_id"], 999_999, "al-comp-002"
-        )
+        r2 = _transfer(client, sender, receiver, 999_999, "al-comp-002")
         assert r2.status_code == 422
 
-        ghost = "00000000-0000-0000-0000-111111111111"
-        r3 = _transfer(client, sender["account_id"], ghost, 500, "al-comp-003")
+        ghost = "000-000-111111"
+        r3 = _transfer(client, sender, ghost, 500, "al-comp-003")
         assert r3.status_code == 404
 
         with db_engine.connect() as conn:
@@ -365,14 +366,14 @@ class TestAuditLogCompleteness:
                     "SELECT COUNT(*) FROM audit_logs "
                     "WHERE action = 'TRANSFER' AND actor = :actor"
                 ),
-                {"actor": sender["account_id"]},
+                {"actor": sender["account_number"]},
             ).scalar()
             failure_count = conn.execute(
                 text(
                     "SELECT COUNT(*) FROM audit_logs "
                     "WHERE action = 'TRANSFER_FAILED' AND actor = :actor"
                 ),
-                {"actor": sender["account_id"]},
+                {"actor": sender["account_number"]},
             ).scalar()
 
         assert success_count == 1, f"Expected 1 success audit, got {success_count}"
