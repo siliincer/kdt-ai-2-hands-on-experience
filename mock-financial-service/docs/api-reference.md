@@ -21,7 +21,7 @@ HTTP 401
 {"error_code": "UNAUTHORIZED", "message": "Valid X-Analytics-Key required"}
 ```
 
-키는 현재 소스에 하드코딩된 데모용 상수 (`ANALYTICS_API_KEY = "analytics-demo-key"`, `analytics_router.py`) — 프로덕션 전환 시 환경변수/시크릿 매니저로 교체 필요. 데모 스코프에서는 env var 아님.
+키는 환경변수 `ANALYTICS_API_KEY` 로 설정 (`analytics_router.py`에서 `os.environ.get("ANALYTICS_API_KEY", "analytics-demo-key")`) — 설정 안 하면 로컬/데모용 기본값 `analytics-demo-key` 사용. 공유 환경/프로덕션에서는 반드시 환경변수로 오버라이드(또는 시크릿 매니저 연동)할 것.
 
 ---
 

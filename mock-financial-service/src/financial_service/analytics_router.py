@@ -4,6 +4,7 @@ All routes under /analytics/ require X-Analytics-Key header.
 Existing 계정계 endpoints remain unauthenticated (out-of-scope for auth retrofit).
 """
 
+import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -31,9 +32,9 @@ from .schemas import (
     SnapshotResponse,
 )
 
-# Demo-scope static API key for 정보계 read access.
-# Replace with env-var / secrets manager in production.
-ANALYTICS_API_KEY = "analytics-demo-key"
+# 정보계 read access API key. Default keeps local/demo runs working with no
+# setup; override via env var for any shared or non-local environment.
+ANALYTICS_API_KEY = os.environ.get("ANALYTICS_API_KEY", "analytics-demo-key")
 
 analytics_router = APIRouter(prefix="/analytics", tags=["정보계"])
 

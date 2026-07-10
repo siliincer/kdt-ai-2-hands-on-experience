@@ -1,9 +1,9 @@
 """SQLAlchemy ORM models for double-entry ledger."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import BigInteger, Date, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -171,6 +171,32 @@ class BalanceSnapshot(Base):
     sum_credit: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sum_debit: Mapped[int] = mapped_column(BigInteger, nullable=False)
     refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+
+    account: Mapped["Account"] = relationship("Account")
+
+
+class DailyClosingSnapshot(Base):
+    """일일 마감(EOD) 배치 결과 — 계좌×영업일 조합당 1행, append-only 이력.
+
+    balance_snapshots(단일행 덮어쓰기)와 달리 영업일별로 행이 누적된다.
+    business_date 당 1행만 존재하도록 복합 PK로 강제 — 같은 날 배치를 여러 번
+    돌려도 중복 insert 없음 (run_daily_closing()의 exists-check가 1차 방어,
+    PK가 최종 방어선).
+    """
+
+    __tablename__ = "daily_closing_snapshots"
+
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.account_id"), primary_key=True
+    )
+    business_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    closing_balance: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sum_credit: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sum_debit: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    last_entry_rowid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )
 

@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from .models import (
     BalanceSnapshot,
     Card,
     CardLedgerEntry,
+    DailyClosingSnapshot,
     LedgerEntry,
     Transaction,
 )
@@ -481,6 +482,105 @@ def reconcile_snapshot(db: Session, account_id: str) -> dict:
         "delta": delta,
         "reconciled_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Daily Closing (EOD batch) ──────────────────────────────────────────────────
+
+
+def run_daily_closing(
+    db: Session, business_date: date | None = None
+) -> tuple[date, list[DailyClosingSnapshot]]:
+    """EOD 마감 배치 — 모든 계좌를 대상으로 영업일당 1행 insert.
+
+    실제 cron/스케줄러 없음 — scripts/run_daily_close.py 를 OS cron(자정)에
+    등록해 호출하거나, 이 함수를 감싼 POST /api/v1/batch/daily-close 로 수동
+    트리거. 같은 business_date에 이미 마감된 계좌는 스킵(idempotent) — 재실행
+    해도 중복 행 없음(모델의 (account_id, business_date) 복합 PK가 최종 방어).
+    """
+    if business_date is None:
+        business_date = datetime.now(timezone.utc).date()
+
+    accounts = db.execute(select(Account)).scalars().all()
+    created: list[DailyClosingSnapshot] = []
+
+    for acct in accounts:
+        existing = db.execute(
+            select(DailyClosingSnapshot).where(
+                DailyClosingSnapshot.account_id == acct.account_id,
+                DailyClosingSnapshot.business_date == business_date,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            continue  # already closed for this business_date — idempotent skip
+
+        sum_credit = int(
+            db.execute(
+                select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                .where(LedgerEntry.account_id == acct.account_id)
+                .where(LedgerEntry.entry_type == "CREDIT")
+            ).scalar()
+            or 0
+        )
+        sum_debit = int(
+            db.execute(
+                select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                .where(LedgerEntry.account_id == acct.account_id)
+                .where(LedgerEntry.entry_type == "DEBIT")
+            ).scalar()
+            or 0
+        )
+        last_rowid = db.execute(
+            text("SELECT MAX(rowid) FROM ledger_entries WHERE account_id = :aid"),
+            {"aid": acct.account_id},
+        ).scalar()
+
+        row = DailyClosingSnapshot(
+            account_id=acct.account_id,
+            business_date=business_date,
+            closing_balance=sum_credit - sum_debit,
+            sum_credit=sum_credit,
+            sum_debit=sum_debit,
+            last_entry_rowid=last_rowid,
+        )
+        db.add(row)
+        created.append(row)
+
+    _append_audit(
+        db,
+        actor="SYSTEM_BATCH",
+        action="DAILY_CLOSE",
+        reason=(
+            f"Daily closing batch for {business_date}: {len(created)} accounts closed"
+        ),
+        status="success",
+        payload_snapshot=json.dumps(
+            {
+                "business_date": business_date.isoformat(),
+                "accounts_closed": len(created),
+            }
+        ),
+    )
+    db.commit()
+    for row in created:
+        db.refresh(row)
+    return business_date, created
+
+
+def list_daily_closings(
+    db: Session, account_id: str, limit: int = 50, offset: int = 0
+) -> list[DailyClosingSnapshot]:
+    result = (
+        db.execute(
+            select(DailyClosingSnapshot)
+            .where(DailyClosingSnapshot.account_id == account_id)
+            .order_by(DailyClosingSnapshot.business_date.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        .scalars()
+        .all()
+    )
+    return list(result)
 
 
 # ── Card ──────────────────────────────────────────────────────────────────────
