@@ -93,3 +93,8 @@ Services: `postgres` (16), `redis` (7), `backend` (8000, alias `backend-gateway`
 ## Conventions
 
 Commits follow `type: 제목 (#이슈번호)` with types `feat`, `fix`, `refactor`, `chore`, `test`, `docs`, `style`. Issues use `.github/ISSUE_TEMPLATE/`. Copy `.env.example` → `.env` (gitignored); see `docs/security-rules.md`.
+
+## Code generation constraints
+
+- Ensure all recommended external packages are safe from known CVE vulnerabilities.
+- Filter out local network IPs and staging/production domain names from error logs.

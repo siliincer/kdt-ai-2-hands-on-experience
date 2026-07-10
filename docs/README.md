@@ -1,11 +1,6 @@
 # Docs
 
-프로젝트 공통 문서와 운영 가이드를 관리하는 디렉터리입니다.
-
-## 문서 목록
-
-- [local-development.md](local-development.md) — 로컬 실행 명령 가이드
-- [security-rules.md](security-rules.md) — 보안 규칙
+프로젝트 문서와 운영 가이드를 관리하는 디렉터리입니다.
 
 ## 서비스별 문서
 
@@ -14,6 +9,7 @@
 
 ## 예정 문서
 
-- 환경변수 설명
-- 배포 절차
+- `local-development.md`: 로컬 개발 환경과 Docker Compose 실행 방법
+- `security-rules.md`: Secret, 로그, PR 보안 규칙
+- `aws-ec2-deploy.md`: AWS EC2, ECR, Docker Compose 기반 배포 방향
 - 장애 대응 Runbook
