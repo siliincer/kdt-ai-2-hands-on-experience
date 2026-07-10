@@ -6,6 +6,7 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "agent",
     "backend",
+    "financial-service",
 ]
 
 [tool.uv]
@@ -15,11 +16,13 @@ package = false
 members = [
     "agent",
     "backend",
+    "mock-financial-service",
 ]
 
 [tool.uv.sources]
 agent = { workspace = true }
 backend = { workspace = true }
+financial-service = { workspace = true }
 
 [dependency-groups]
 dev = [

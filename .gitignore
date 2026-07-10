@@ -252,6 +252,8 @@ claude.local.md
 *.sqlite
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
 *.log
 
 # claude
@@ -260,3 +262,9 @@ claude.local.md
 # Custom
 AI_CONTEXT/
 # AI_CONTEXT: 개인적으로 바이브 코딩 간 작업 상황 기록한 폴더임
+
+# Claude Code local session state
+.claude/
+
+# PR description drafts (not repo content)
+PR_DESCRIPTION.md
