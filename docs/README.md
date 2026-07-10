@@ -11,5 +11,6 @@
 
 - `local-development.md`: 로컬 개발 환경과 Docker Compose 실행 방법
 - `security-rules.md`: Secret, 로그, PR 보안 규칙
-- `aws-ec2-deploy.md`: AWS EC2, ECR, Docker Compose 기반 배포 방향
+- `aws-ec2-demo-deploy.md`: 현재 EC2 시연 배포 상태와 재기동 절차
+- `aws-ec2-deploy.md`: 이전 EC2/ECR 배포 방향 초안
 - 장애 대응 Runbook

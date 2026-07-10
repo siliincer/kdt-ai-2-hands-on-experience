@@ -1,5 +1,9 @@
 # AWS EC2 Deploy
 
+> 현재 실제 시연 배포 상태와 재기동 절차는
+> [`docs/aws-ec2-demo-deploy.md`](./aws-ec2-demo-deploy.md)를 기준으로 한다.
+> 이 문서는 ECR/자동 배포까지 확장할 때 참고할 방향성 초안이다.
+
 이 문서는 AWS EC2에서 Docker Compose 기반으로 프로젝트를 시연/운영할 수 있도록 만들기 위한 배포 방향을 정리합니다.
 
 현재 기준은 AWS App Runner나 Amplify 중심 배포가 아니라, EC2 한 대에서 ECR 이미지, Docker Compose, Nginx를 조합하는 구조입니다.

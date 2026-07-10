@@ -78,7 +78,8 @@ EC2를 켠 상태에서 아래를 확인했다.
 
 ```text
 GET /                  -> frontend 정적 페이지 응답
-GET /health            -> ok
+GET /health            -> backend health 응답
+GET /nginx-health      -> ok
 GET /backendApi/       -> {"message":"안녕하세요!"}
 GET /agent/health      -> {"status":"ok"}
 POST /agent/chat       -> 잔액 조회 응답 성공
@@ -88,6 +89,7 @@ POST /agent/chat       -> 잔액 조회 응답 성공
 
 ```bash
 curl http://15.164.26.234/health
+curl http://15.164.26.234/nginx-health
 curl http://15.164.26.234/backendApi/
 curl http://15.164.26.234/agent/health
 curl -X POST http://15.164.26.234/agent/chat \

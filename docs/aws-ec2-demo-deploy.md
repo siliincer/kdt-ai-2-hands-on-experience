@@ -16,7 +16,8 @@
 ## Routing
 
 - `/`: frontend 정적 빌드 (`frontend/dist`)
-- `/health`: nginx health
+- `/health`: backend health (`backend:8000/health`)
+- `/nginx-health`: nginx 자체 health
 - `/backendApi/`: backend (`backend:8000`)
 - `/agent/`: agent (`agent:8001`)
 
@@ -72,6 +73,7 @@ sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.
 
 ```bash
 curl http://15.164.26.234/health
+curl http://15.164.26.234/nginx-health
 curl http://15.164.26.234/backendApi/
 curl http://15.164.26.234/agent/health
 curl -X POST http://15.164.26.234/agent/chat \
