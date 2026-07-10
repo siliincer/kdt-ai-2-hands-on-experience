@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..db.postgres import get_db
 from ..models.user import User
 from ..schemas.response import CommonResponse
 from ..schemas.ui import (
@@ -23,9 +25,12 @@ ui_router = APIRouter(prefix="/ui", tags=["UI Data"])
 
 
 @ui_router.get("/balance", response_model=CommonResponse[BalanceData])
-async def read_balance(current_user: User = Depends(get_current_user)):
+async def read_balance(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
     """자산 현황 카드 데이터 (component:balance 시그널 후 FE 가 조회, ADR-002)."""
-    data = await get_balance_view(current_user.id)
+    data = await get_balance_view(current_user.id, session)
     return success_response(message="자산 현황을 조회했습니다.", data=data)
 
 
@@ -40,12 +45,13 @@ async def read_spending(current_user: User = Depends(get_current_user)):
 async def read_transactions(
     month: str | None = None,
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
 ):
     """거래 내역 카드 데이터 (component:transactions 시그널 후 FE 가 조회).
 
     쿼리 `month`(예: 2025-06)로 특정 월만 조회할 수 있다(생략 시 전체).
     """
-    data = await get_transactions_view(current_user.id, month)
+    data = await get_transactions_view(current_user.id, month, session)
     return success_response(message="거래 내역을 조회했습니다.", data=data)
 
 

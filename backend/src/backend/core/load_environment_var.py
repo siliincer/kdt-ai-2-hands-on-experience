@@ -22,6 +22,24 @@ class Settings(BaseSettings):
     REDIS_STREAM_URL: AnyUrl = AnyUrl("redis://redis:6380/0")
     # redis://[호스트이름]:[포트번호]/[데이터베이스_번호]
 
+    # mock-financial-service(계정계/정보계) 연동 Configuration
+    FINANCIAL_CLIENT: str = Field(
+        default="mock",
+        description="계정계 데이터 소스: mock(내장 픽스처) | http(실서비스 호출)",
+    )
+    MOCK_FINANCIAL_SERVICE_URL: str = Field(
+        default="http://localhost:8002",
+        description="mock-financial-service base URL (FINANCIAL_CLIENT=http일 때 사용)",
+    )
+    FINANCIAL_ANALYTICS_KEY: SecretStr = Field(
+        default=SecretStr("analytics-demo-key"),
+        description="정보계(analytics) 읽기 API 키 (X-Analytics-Key 헤더)",
+    )
+    FINANCIAL_DEMO_ACCOUNT_ID: str = Field(
+        default="",
+        description="Phase 1 데모 시드: 매핑된 Account 없을 때 fallback account_id",
+    )
+
     # Auth Configuration
     JWT_SECRET_KEY: SecretStr = SecretStr("change-me-in-local")
     JWT_ALGORITHM: str = Field(default="HS256")

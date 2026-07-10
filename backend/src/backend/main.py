@@ -12,14 +12,21 @@ from .api.webhook_api import webhook_router
 from .core.config import CORS_OPTIONS, configure_app
 from .core.exceptions import exception_handlers
 from .db.redis import close_redis_pools
+from .migration.migration import run_migrations
+from .services.financial import close_financial_client
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Perform startup tasks here (e.g., connect to database, initialize resources)
+    run_migrations()
+    # TODO: 시간되면 print문은 loguru같은 전문 로거로 변경
+    print("마이그레이션 적용 완료")
     yield  # 제어권 넘기는 제너레이터
-    # 종료 시: Redis 커넥션 풀 소켓 정리 (SSE 스트림/캐시 풀 graceful shutdown)
+    # 종료 시: Redis 커넥션 풀 + 계정계 HTTP 클라이언트 graceful shutdown
     await close_redis_pools()
+    await close_financial_client()
+    print("레디스 풀 종료 완료, 계정계 HTTP 클라이언트 종료 완료")
 
 
 app = FastAPI(

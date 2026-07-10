@@ -29,6 +29,12 @@ class Account(Base):
     balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="KRW")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # mock-financial-service(계정계) 원장의 account_id 매핑. 잔액/원장의 권위는
+    # 계정계로 이관되므로 이 컬럼이 로컬 User <-> 외부 계좌를 잇는다.
+    # nullable: 프로비저닝(Phase 2) 전 기존 행 호환.
+    external_account_id: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True
+    )
 
     user: Mapped["User"] = relationship(
         back_populates="accounts",
