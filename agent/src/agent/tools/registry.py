@@ -18,7 +18,9 @@ from agent.tools.bank_tools import (
     execute_transfer,
     extract_balance_slots,
     extract_transfer_slots,
+    fetch_account_list,
     fetch_balance,
+    generate_account_list_response,
     generate_balance_response,
     generate_transfer_response,
     request_transfer_approval,
@@ -41,6 +43,9 @@ TOOL_REGISTRY = {
     "apply_account_selection": apply_account_selection,
     "fetch_balance": fetch_balance,
     "generate_balance_response": generate_balance_response,
+    # 계좌 목록 조회
+    "fetch_account_list": fetch_account_list,
+    "generate_account_list_response": generate_account_list_response,
     # 타인 송금 — 슬롯 추출 / 입력 확인
     "extract_transfer_slots": extract_transfer_slots,
     "check_recipient_input": check_recipient_input,

@@ -16,9 +16,26 @@ from agent.llm import get_llm
 from agent.paths import WORKFLOWS_PATH
 
 # 폴백용 키워드 규칙(LLM 실패 시에만 사용)
+# LLM 미사용(키 없음) 시 폴백. 위에서부터 먼저 매칭되는 규칙이 이긴다.
+# LLM 경로는 시트 example_utterance로 분류하므로, 이 키워드는 그 보조판이다.
 _KEYWORD_RULES = [
     (("보내", "송금", "이체", "에게", "한테"), "wf_external_transfer"),
     (("잔액", "통장", "얼마 있어", "얼마야"), "wf_balance_inquiry"),
+    (("옮겨", "본인 계좌", "내 계좌로"), "wf_internal_transfer"),
+    (("기본 계좌", "기본 출금", "나가게 해", "출금 계좌로"), "wf_set_default_account"),
+    (
+        ("별칭", "이라고 해", "이라 해", "이라 불러", "라고 불러", "이름 붙"),
+        "wf_set_account_alias",
+    ),
+    (
+        ("계좌 목록", "계좌 뭐", "무슨 계좌", "어떤 계좌", "계좌 다 보"),
+        "wf_account_list",
+    ),
+    (
+        ("거래내역", "거래 내역", "결제 내역", "이용 내역", "사용 내역", "입출금 내역"),
+        "wf_transaction_history",
+    ),
+    (("얼마 썼", "얼마 쓴", "지출", "소비"), "wf_period_amount_summary"),
 ]
 
 

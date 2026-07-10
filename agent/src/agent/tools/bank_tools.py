@@ -264,6 +264,47 @@ def apply_account_selection(state: dict) -> dict:
     return {"balance.selected_accounts": selected, "route_key": "selected"}
 
 
+# ── 계좌 목록 조회 (wf_account_list) ────────────────────────────────────────────
+
+
+def fetch_account_list(state: dict) -> dict:
+    """사용자의 전체 계좌 목록을 account.list로 반환한다.
+
+    Tool_v2 계약: in=user_id, out=account.list. 원장은 bank_client 경유(직접 접근 금지).
+    route_key: 계좌 있으면 success / 없으면 empty / 조회 실패 error.
+    """
+    user_id = state.get("user_id")
+    try:
+        accounts = _accounts(user_id)
+    except BankClientError:
+        return {"route_key": "error"}
+    if not accounts:
+        return {"account.list": [], "route_key": "empty"}
+    items = [
+        {
+            "account_id": a["account_id"],
+            "account_name": a["account_name"],
+            "balance": a["balance"],
+            "currency": a.get("currency", "KRW"),
+        }
+        for a in accounts
+    ]
+    return {"account.list": items, "route_key": "success"}
+
+
+def generate_account_list_response(state: dict) -> dict:
+    """account.list를 사람이 읽을 응답 문장으로 만든다 (규칙 기반, 결정적).
+
+    목록 표시라 LLM 없이 계좌명·잔액을 그대로 나열한다 (수치 왜곡 방지).
+    """
+    items = _data(state).get("account.list") or []
+    if not items:
+        return {"route_key": "failed"}
+    lines = [f"- {a['account_name']}: {a['balance']:,}원" for a in items]
+    text = "보유하신 계좌 목록입니다.\n" + "\n".join(lines)
+    return {"final_response": text, "route_key": "success"}
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 타인 송금 (wf_external_transfer) — Tool_v2 계약 구현
 #
