@@ -1,0 +1,136 @@
+prompt_injection_block:
+  rule_name: 정책 우회 차단
+  applies_to_scope: global
+  applies_to_ids:
+  - '*'
+  condition:
+    contains_any:
+    - 이전 지침 무시
+    - 승인 없이
+  action: block
+  risk_level_override: R5
+  user_message: 이 요청은 안전 정책상 실행할 수 없습니다.
+  enabled: true
+unauthorized_account_access:
+  rule_name: 타인 계좌 조회 차단
+  applies_to_scope: global
+  applies_to_ids:
+  - '*'
+  condition:
+    expression: target_owner == 'other' AND action_type == 'inquiry'
+  action: block
+  risk_level_override: R5
+  user_message: 권한 없는 금융 정보는 조회할 수 없습니다.
+  enabled: true
+missing_required_slot:
+  rule_name: 필수 정보 누락 시 추가 질문
+  applies_to_scope: workflow
+  applies_to_ids:
+  - wf_external_transfer
+  - wf_withdrawal
+  - wf_deposit
+  - wf_auto_savings
+  condition:
+    expression: required_slot_missing == true
+  action: ask_clarification
+  risk_level_override: null
+  user_message: 필요한 정보를 먼저 확인할게요.
+  enabled: true
+insufficient_balance:
+  rule_name: 잔액 부족 시 실행 중단
+  applies_to_scope: tool
+  applies_to_ids:
+  - withdraw_money
+  - execute_transfer
+  - transfer_between_own_accounts
+  - create_auto_savings_rule
+  condition:
+    expression: balance < amount
+  action: block
+  risk_level_override: R4
+  user_message: 잔액이 부족해 실행할 수 없습니다.
+  enabled: true
+high_amount_transfer:
+  rule_name: 고액 송금 추가 인증
+  applies_to_scope: tool
+  applies_to_ids:
+  - execute_transfer
+  condition:
+    expression: amount >= 1000000
+  action: require_additional_auth
+  risk_level_override: R4
+  user_message: 고액 송금이므로 추가 인증이 필요합니다.
+  enabled: true
+new_recipient_warning:
+  rule_name: 신규 수취인 경고
+  applies_to_scope: tool
+  applies_to_ids:
+  - execute_transfer
+  condition:
+    expression: recipient_is_new == true
+  action: warn
+  risk_level_override: R4
+  user_message: 처음 보내는 수취인입니다. 수취인 정보를 다시 확인해주세요.
+  enabled: true
+approval_required_for_execution:
+  rule_name: 실행 Tool 승인 필수
+  applies_to_scope: tool
+  applies_to_ids:
+  - deposit_money
+  - withdraw_money
+  - transfer_between_own_accounts
+  - execute_transfer
+  - create_auto_savings_rule
+  condition:
+    expression: approval_status != 'approved'
+  action: require_approval
+  risk_level_override: null
+  user_message: 실행 전 사용자 승인이 필요합니다.
+  enabled: true
+post_result_validation:
+  rule_name: 실행 결과 검증
+  applies_to_scope: tool
+  applies_to_ids:
+  - deposit_money
+  - withdraw_money
+  - transfer_between_own_accounts
+  - execute_transfer
+  - create_auto_savings_rule
+  condition:
+    expression: tool_result.status != 'success'
+  action: ask_clarification
+  risk_level_override: null
+  user_message: 실행 결과를 확인하지 못했습니다. 다시 확인이 필요합니다.
+  enabled: true
+tool_abuse_block:
+  rule_name: 비정상 호출 차단
+  applies_to_scope: global
+  applies_to_ids:
+  - '*'
+  condition:
+    expression: action_count >= 50
+  action: block
+  risk_level_override: R5
+  user_message: 이 요청은 안전 정책상 실행할 수 없습니다.
+  enabled: true
+pii_masking:
+  rule_name: 개인 민감 정보 마스킹
+  applies_to_scope: global
+  applies_to_ids: []
+  condition:
+    expression: personal_info == true
+  action: info_masking
+  risk_level_override: R0
+  user_message: (없이 자동 마스킹 처리)
+  enabled: false
+high_amount_transfer_block:
+  rule_name: 고액 송금 차단
+  applies_to_scope: tool
+  applies_to_ids:
+  - execute_transfer
+  condition:
+    expression: amount >= 10000000
+  action: block
+  risk_level_override: R5
+  user_message: 1회 10,000,000원 이상 송금은 진행할 수 없습니다.
+  enabled: true
