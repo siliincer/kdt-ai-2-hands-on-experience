@@ -532,7 +532,8 @@ docker compose up -d --build
 - `LLM_MODEL`: 모델 지정 (미지정 시 openai=gpt-4o-mini,
   vertex=gemini-2.5-flash, ollama=qwen2.5:3b)
 - `OPENAI_API_KEY`: openai 사용 시 필요 (없으면 규칙 기반 폴백으로 완주)
-- `OLLAMA_BASE_URL` / `OLLAMA_MODEL`: ollama 사용 시. Ollama 서버는 로컬
+- `OLLAMA_BASE_URL` / `OLLAMA_MODEL`: ollama 사용 시. 명시적으로
+  `get_llm(model=...)`을 호출하면 그 값이 `OLLAMA_MODEL`보다 우선한다. Ollama 서버는 로컬
   개발 머신에서만 실행하고, 배포 서버에는 Ollama 런타임을 올리지 않는다.
   Docker 컨테이너에서 호스트 Ollama에 붙을 때는
   `OLLAMA_BASE_URL=http://host.docker.internal:11434`를 사용한다.

@@ -103,6 +103,23 @@ def test_ollama_provider_builds_chat_ollama(monkeypatch):
     assert captured["temperature"] == 0.0
 
 
+def test_ollama_explicit_model_overrides_env(monkeypatch):
+    import langchain_ollama
+
+    captured: dict = {}
+
+    class _StubOllama:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(langchain_ollama, "ChatOllama", _StubOllama)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_MODEL", "qwen2.5:3b")
+
+    get_llm(model="llama3.2:3b")
+    assert captured["model"] == "llama3.2:3b"
+
+
 def test_ollama_provider_uses_default_model(monkeypatch):
     import langchain_ollama
 
@@ -155,3 +172,10 @@ def test_llm_model_env_overrides_default(monkeypatch):
 
     get_llm()
     assert captured["model"] == "gemini-2.5-pro"
+
+
+def test_unknown_provider_raises_clear_error(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+
+    with pytest.raises(RuntimeError, match="지원하지 않는 LLM_PROVIDER"):
+        get_llm()

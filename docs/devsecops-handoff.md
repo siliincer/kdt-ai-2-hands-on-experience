@@ -68,6 +68,10 @@ Elastic IP: 15.164.26.234
 - `/opt/kdt-team3/app/.env`
 - `/opt/kdt-team3/app/frontend/dist`
 
+`docker-compose.ec2.yml`과 `nginx/ec2.conf`는 레포에 포함한다. EC2에서는 nginx
+`80/tcp`를 공개한다. backend/agent/postgres/redis 포트는 `127.0.0.1` 바인딩이라
+외부에는 열리지 않는다.
+
 ## 확인한 연결
 
 EC2를 켠 상태에서 아래를 확인했다.
@@ -152,7 +156,7 @@ ssh -i ~/.ssh/kdt-team3-ec2 ec2-user@15.164.26.234
 
 ```bash
 cd /opt/kdt-team3/app
-sudo docker compose -f docker-compose.yml -f docker-compose.ec2.yml ps
+sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml ps
 ```
 
 필요 시 재빌드/재기동:
@@ -160,7 +164,7 @@ sudo docker compose -f docker-compose.yml -f docker-compose.ec2.yml ps
 ```bash
 cd /opt/kdt-team3/app
 git pull
-sudo docker compose -f docker-compose.yml -f docker-compose.ec2.yml up -d --build
+sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml up -d --build
 ```
 
 frontend만 다시 빌드해야 할 때:
@@ -169,23 +173,11 @@ frontend만 다시 빌드해야 할 때:
 cd /opt/kdt-team3/app/frontend
 sudo docker run --rm -v "$PWD":/app -w /app node:24-alpine sh -c "npm ci && npm run build"
 cd /opt/kdt-team3/app
-sudo docker compose -f docker-compose.yml -f docker-compose.ec2.yml up -d nginx
+sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml up -d nginx
 ```
-
-## 개발 진행 중인 부분
-
-현재 연결 검증은 완료했지만, 기능 전체가 완성된 것은 아니다.
-
-- frontend 채팅 UI는 추가 개발이 필요하다.
-- frontend가 최종적으로 backend를 경유해 agent를 호출할지, `/agent/`를 직접 호출할지는
-  팀 합의가 필요하다. 현재 인프라는 둘 다 테스트 가능하게 열어둔 상태다.
-- RDS 연결은 현재 시연 범위에서 제외했다.
-- mock-financial-service는 현재 EC2 compose에 포함하지 않았다.
-- HTTPS/도메인은 제외했다.
 
 ## 팀 공유 요약
 
-- 도메인은 사지 않는다.
 - 시연 주소는 EC2가 켜져 있을 때 `http://15.164.26.234`다.
 - 평소에는 비용 절감을 위해 EC2를 꺼둔다.
 - EC2를 켜면 같은 Elastic IP로 다시 접근할 수 있다.

@@ -10,8 +10,8 @@
 - Security Group: `sg-01b29ee586e77a107`
 - SSH key: `~/.ssh/kdt-team3-ec2`
 - App path: `/opt/kdt-team3/app`
-- Compose override: `/opt/kdt-team3/app/docker-compose.ec2.yml`
-- Nginx config: `/opt/kdt-team3/app/nginx/ec2.conf`
+- Compose override: `docker-compose.ec2.yml`
+- Nginx config: `nginx/ec2.conf`
 
 ## Routing
 
@@ -19,6 +19,10 @@
 - `/health`: nginx health
 - `/backendApi/`: backend (`backend:8000`)
 - `/agent/`: agent (`agent:8001`)
+
+EC2에서는 `docker-compose.ec2.yml`로 nginx의 `80/tcp`를 공개한다. 기본 compose의
+backend/agent/postgres/redis 포트는 `127.0.0.1`에만 바인딩되어 외부에는 열리지
+않는다.
 
 ## Ollama policy
 
@@ -61,7 +65,7 @@ aws ec2 start-instances \
 ```bash
 ssh -i ~/.ssh/kdt-team3-ec2 ec2-user@15.164.26.234
 cd /opt/kdt-team3/app
-sudo docker compose -f docker-compose.yml -f docker-compose.ec2.yml ps
+sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml ps
 ```
 
 외부 검증:

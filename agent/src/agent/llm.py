@@ -42,6 +42,34 @@ def _provider() -> str:
     return os.getenv("LLM_PROVIDER", "openai").strip().lower()
 
 
+def _resolve_model(provider: str, model: str | None) -> str:
+    if provider == "ollama":
+        resolved_model = (
+            model
+            or os.getenv("OLLAMA_MODEL")
+            or os.getenv("LLM_MODEL")
+            or _DEFAULT_MODELS["ollama"]
+        )
+    else:
+        resolved_model = (
+            model
+            or os.getenv("LLM_MODEL")
+            or _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
+        )
+
+    # 제공자-모델 불일치 보호: 예전 .env에 남은 다른 제공자용 모델명이
+    # 조용히 404를 내지 않도록 해당 제공자 기본 모델로 되돌린다.
+    if provider == "vertex" and resolved_model.startswith("gpt"):
+        return _DEFAULT_MODELS["vertex"]
+    if provider == "openai" and resolved_model.startswith("gemini"):
+        return _DEFAULT_MODELS["openai"]
+    if provider == "ollama" and (
+        resolved_model.startswith("gpt") or resolved_model.startswith("gemini")
+    ):
+        return _DEFAULT_MODELS["ollama"]
+    return resolved_model
+
+
 @lru_cache(maxsize=4)
 def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel:
     """LLM_PROVIDER에 맞는 챗 모델 인스턴스를 반환한다 (같은 설정은 캐시).
@@ -49,21 +77,13 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
     환경변수를 바꿨다면 get_llm.cache_clear()를 호출해야 반영된다.
     """
     provider = _provider()
-    resolved_model = (
-        model
-        or os.getenv("LLM_MODEL")
-        or _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
-    )
-    # 제공자-모델 불일치 보호: 예전 .env에 남은 다른 제공자용 모델명이
-    # 조용히 404를 내지 않도록 해당 제공자 기본 모델로 되돌린다.
-    if provider == "vertex" and resolved_model.startswith("gpt"):
-        resolved_model = _DEFAULT_MODELS["vertex"]
-    if provider == "openai" and resolved_model.startswith("gemini"):
-        resolved_model = _DEFAULT_MODELS["openai"]
-    if provider == "ollama" and (
-        resolved_model.startswith("gpt") or resolved_model.startswith("gemini")
-    ):
-        resolved_model = _DEFAULT_MODELS["ollama"]
+    if provider not in _DEFAULT_MODELS:
+        supported = ", ".join(sorted(_DEFAULT_MODELS))
+        raise RuntimeError(
+            f"지원하지 않는 LLM_PROVIDER입니다: {provider}. 지원 값: {supported}"
+        )
+
+    resolved_model = _resolve_model(provider, model)
 
     if provider == "vertex":
         # vertex 미사용 환경에서 import 비용/의존 문제를 피하려고 지연 import
@@ -81,7 +101,7 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
         from langchain_ollama import ChatOllama
 
         return ChatOllama(
-            model=os.getenv("OLLAMA_MODEL") or resolved_model,
+            model=resolved_model,
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
             temperature=temperature,
         )
@@ -91,6 +111,6 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
         raise RuntimeError(
             "OPENAI_API_KEY가 설정되지 않았습니다. "
             ".env.example을 .env로 복사하고 키를 입력하거나, "
-            "LLM_PROVIDER=vertex로 Vertex AI를 사용하세요."
+            "LLM_PROVIDER=vertex 또는 LLM_PROVIDER=ollama를 사용하세요."
         )
     return ChatOpenAI(model=resolved_model, temperature=temperature)
