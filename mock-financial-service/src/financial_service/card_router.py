@@ -5,9 +5,9 @@ Charge endpoint requires Idempotency-Key header
 (same pattern as POST /api/v1/transfers).
 """
 
-from typing import Annotated
+from typing import Annotated, cast
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
 from .crud import (
@@ -19,6 +19,7 @@ from .crud import (
     settle_card,
 )
 from .database import get_db
+from .err import _err
 from .schemas import (
     CardChargeRequest,
     CardChargeResponse,
@@ -31,10 +32,6 @@ from .schemas import (
 card_router = APIRouter(tags=["카드"])
 
 DbDep = Annotated[Session, Depends(get_db)]
-
-
-def _err(status: int, code: str, msg: str):
-    raise HTTPException(status_code=status, detail={"error_code": code, "message": msg})
 
 
 # ── POST /cards — create card ─────────────────────────────────────────────────
@@ -52,6 +49,7 @@ def create_card_endpoint(payload: CardCreate, db: DbDep):
         card = create_card(db, payload)
     except NotFoundError as e:
         _err(404, e.error_code, e.message)
+
     return CardResponse(
         card_id=card.card_id,
         account_id=card.account_id,
@@ -142,11 +140,14 @@ def settle_card_endpoint(card_id: str, db: DbDep):
     except NotFoundError as e:
         _err(404, e.error_code, e.message)
 
+    settlement_watermark_rowid = cast(int, txn.settlement_watermark_rowid)
+    settlement_card_id = cast(str, txn.settlement_card_id)
+
     return CardSettleResponse(
         transaction_id=txn.transaction_id,
-        card_id=txn.settlement_card_id,
+        card_id=settlement_card_id,
         settled_amount=txn.amount,
-        settlement_watermark_rowid=txn.settlement_watermark_rowid,
+        settlement_watermark_rowid=settlement_watermark_rowid,
         status=txn.status,
         created_at=txn.created_at,
     )

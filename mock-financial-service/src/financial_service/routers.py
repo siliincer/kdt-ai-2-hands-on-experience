@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from .crud import (
@@ -17,6 +17,7 @@ from .crud import (
     transfer,
 )
 from .database import get_db
+from .err import _err
 from .schemas import (
     AccountCreate,
     AccountResponse,
@@ -31,11 +32,6 @@ from .schemas import (
 router = APIRouter()
 
 DbDep = Annotated[Session, Depends(get_db)]
-
-
-def _err(status: int, code: str, msg: str):
-    raise HTTPException(status_code=status, detail={"error_code": code, "message": msg})
-
 
 # ── 1. POST /accounts — create account ───────────────────────────────────────
 

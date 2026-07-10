@@ -20,6 +20,7 @@ from .crud import (
     reconcile_snapshot,
 )
 from .database import get_db
+from .err import _err
 from .schemas import (
     AuditLogResponse,
     BalanceResponse,
@@ -55,10 +56,6 @@ def _require_analytics_key(
 
 
 AnalyticsAuth = Annotated[None, Depends(_require_analytics_key)]
-
-
-def _err(status: int, code: str, msg: str):
-    raise HTTPException(status_code=status, detail={"error_code": code, "message": msg})
 
 
 # ── GET /analytics/accounts/{account_id}/snapshot ────────────────────────────

@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `frontend/` — **real**: the official React app (npm, Feature-Sliced Design).
 - `fe_example/` — legacy Figma-exported prototype, kept for reference (separate from `frontend/`).
 - `agent/` — **real**: LangGraph financial agent (ported from fin-ai) behind FastAPI (`agent.main:app`, port 8001). YAML-driven workflows (`src/agent/config/`, regenerated from the team's Google Sheet via `agent/scripts/sync_config_from_sheets.py`), `interrupt()`-based human-in-the-loop over HTTP (`POST /chat`; echo `thread_id` back only on `waiting_input`), MemorySaver checkpointer (single worker only), keyword fallbacks so it runs without `OPENAI_API_KEY`. State = fixed system fields + a single `data` dict channel keyed by namespaced dotted keys (`balance.account_hint`) — LangGraph drops undeclared top-level keys, so business data must go through `data`; tools return flat deltas and the engine splits system vs. data keys (`subgraph_builder.SYSTEM_KEYS`). Both `wf_balance_inquiry` and `wf_external_transfer` work end-to-end (transfer's approval/auth/warning tools call `interrupt()` themselves — idempotent pre-interrupt code, one interrupt per node execution, ambiguous approval replies cancel conservatively). Walkthrough notebooks with baked outputs live in `agent/notebooks/`; see `agent/docs/README.md` (the single consolidated doc — architecture, contracts, change routines).
-- `app/` — planned Capacitor mobile app (README only). `mock-financial-service/`, `db/` — placeholders.
+- `app/` — planned Capacitor mobile app (README only). `mock-financial-service/`, — placeholders.
 
 ## Python workspace (backend + agent)
 
@@ -39,7 +39,7 @@ uv run ruff format .             # CI runs `ruff format --check .`
 uv lock --check                  # lockfile sync (CI gate)
 uv run pytest backend            # per-service tests
 uv run pytest backend/tests/test_exceptions_response.py::test_name   # single test
-uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000  # run backend
+uv run uvicorn backend.src.backend.main:app --reload --host 0.0.0.0 --port 8000  # run backend
 ```
 
 Each service pyproject sets `pythonpath = ["src"]`, `testpaths = ["tests"]`, `test_*.py` discovery. CI falls back to an import check when a service has no tests.
