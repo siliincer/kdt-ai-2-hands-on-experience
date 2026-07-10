@@ -96,6 +96,76 @@ async def test_get_ledger_returns_list_and_404_empty():
 
 
 @pytest.mark.asyncio
+async def test_create_account_posts_owner_and_returns_payload():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/accounts"
+        import json
+
+        body = json.loads(request.content)
+        assert body == {"owner": "홍길동", "initial_balance": 1000000}
+        return httpx.Response(
+            201,
+            json={
+                "account_id": "acc-new",
+                "owner": "홍길동",
+                "balance": 1000000,
+                "currency": "KRW",
+                "created_at": "2026-07-10T00:00:00Z",
+            },
+        )
+
+    client = _client(handler)
+    created = await client.create_account("홍길동", 1000000)
+    assert created["account_id"] == "acc-new"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_create_account_error_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"error_code": "VALIDATION_ERROR"})
+
+    client = _client(handler)
+    with pytest.raises(FinancialServiceError):
+        await client.create_account("", 0)
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_transfer_sends_idempotency_key_and_body():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/transfers"
+        assert request.headers["Idempotency-Key"] == "idem-1"
+        import json
+
+        body = json.loads(request.content)
+        assert body == {
+            "sender_account_id": "s",
+            "receiver_account_id": "r",
+            "amount": 7000,
+        }
+        return httpx.Response(200, json={"transfer_id": "t1", "status": "COMPLETED"})
+
+    client = _client(handler)
+    res = await client.transfer("s", "r", 7000, "idem-1")
+    assert res["transfer_id"] == "t1"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_transfer_error_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"error_code": "INSUFFICIENT_BALANCE"})
+
+    client = _client(handler)
+    with pytest.raises(FinancialServiceError):
+        await client.transfer("s", "r", 999999999, "idem-2")
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_error_handler_returns_503_envelope():
     response = await financial_service_error_handler(None, FinancialServiceError())  # type: ignore
     assert response.status_code == 503

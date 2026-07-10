@@ -9,14 +9,19 @@ agent:stream:{chat_session_id} 에 status/tool_call/need_approval/done 을 XADD 
 """
 
 import asyncio
+import logging
 import re
 from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
 
+from ..db.postgres import AsyncSessionLocal
 from ..db.redis import stream_pool
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 from .agent_stream_producer import publish_agent_event
+from .financial.transfer_service import execute_external_transfer
+
+logger = logging.getLogger(__name__)
 
 _STEP_DELAY_SECONDS = 0.5
 
@@ -264,10 +269,12 @@ async def run_after_approval(
     decision: str,
     args: dict | None,
     component: str | None = None,
+    user_id: UUID | None = None,
 ) -> None:
     """confirm 카드 승인/거절 이후의 후속 턴을 발행한다.
 
     `component` 로 어떤 confirm(transfer/autotransfer)인지 구분한다(FE 가 전달).
+    `user_id` 가 있으면 송금 승인 시 계정계 실이체를 시도한다(Phase 2).
     """
     redis_stream = aioredis.Redis(connection_pool=stream_pool)
     try:
@@ -277,7 +284,7 @@ async def run_after_approval(
             )
         else:
             await _run_transfer_result(
-                redis_stream, chat_session_id, approval_id, decision, args
+                redis_stream, chat_session_id, approval_id, decision, args, user_id
             )
     finally:
         await redis_stream.aclose()
@@ -289,6 +296,7 @@ async def _run_transfer_result(
     approval_id: str,
     decision: str,
     args: dict | None,
+    user_id: UUID | None = None,
 ) -> None:
     if decision != "approve":
         await _emit(
@@ -316,12 +324,32 @@ async def _run_transfer_result(
         "송금을 실행하고 있어요...",
         metadata={"tool": "transfer", "approval_id": approval_id},
     )
+    await _execute_transfer_best_effort(user_id, amount, approval_id)
     await _emit(
         redis_stream,
         chat_session_id,
         AgentStreamEventType.DONE,
         f"{name}님께 {int(amount):,}원을 보냈어요. ✓",
     )
+
+
+async def _execute_transfer_best_effort(
+    user_id: UUID | None, amount, approval_id: str
+) -> None:
+    """승인 시 계정계 실이체(best-effort). 실패/미설정은 삼킨다(결정 D).
+
+    이 드라이버는 임시 스텁이라 실이체 실패가 챗 흐름을 깨지 않게 격리한다.
+    background task 라 요청 세션이 닫힌 뒤이므로 새 세션을 연다.
+    """
+    if user_id is None:
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            await execute_external_transfer(
+                db, user_id, int(amount), idempotency_key=approval_id
+            )
+    except Exception:
+        logger.warning("transfer execution skipped in driver")
 
 
 async def _run_autotransfer_result(

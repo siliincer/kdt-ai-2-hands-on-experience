@@ -5,6 +5,7 @@ from ..core.security import get_password_hash, verify_password
 from ..models.user import User
 from ..repository.user_repository import create_user, get_user_by_email
 from ..security.jwt import create_access_token
+from .financial.provisioning import provision_account_for_user
 
 
 async def signup_user(
@@ -22,6 +23,10 @@ async def signup_user(
     user = await create_user(
         session, email=email, password_hash=password_hash, name=name
     )
+
+    # 계정계 계좌 프로비저닝(http 모드). best-effort — 장애여도 회원가입은 성공(결정 D).
+    await provision_account_for_user(session, user)
+
     return user
 
 

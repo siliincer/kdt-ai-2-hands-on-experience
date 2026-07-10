@@ -1,30 +1,24 @@
 """SQLAlchemy ORM models for double-entry ledger."""
 
-import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
-
-
-def _uuid() -> str:
-    return str(uuid.uuid4())
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+from .utils import get_now, get_uuid
 
 
 class Account(Base):
     __tablename__ = "accounts"
 
-    account_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    account_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=get_uuid
+    )
     owner: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KRW")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
+        DateTime(timezone=True), nullable=False, default=get_now
     )
 
     ledger_entries: Mapped[list["LedgerEntry"]] = relationship(
@@ -38,14 +32,14 @@ class Card(Base):
 
     __tablename__ = "cards"
 
-    card_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    card_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=get_uuid)
     account_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("accounts.account_id"), nullable=False, index=True
     )
     limit: Mapped[int] = mapped_column(BigInteger, nullable=False)  # spending cap
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KRW")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
+        DateTime(timezone=True), nullable=False, default=get_now
     )
 
     account: Mapped["Account"] = relationship("Account", back_populates="cards")
@@ -60,7 +54,7 @@ class CardLedgerEntry(Base):
     __tablename__ = "card_ledger_entries"
 
     card_ledger_entry_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid
+        String(36), primary_key=True, default=get_uuid
     )
     card_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("cards.card_id"), nullable=False, index=True
@@ -72,7 +66,7 @@ class CardLedgerEntry(Base):
         String(255), unique=True, nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
+        DateTime(timezone=True), nullable=False, default=get_now
     )
 
     card: Mapped["Card"] = relationship("Card", back_populates="ledger_entries")
@@ -90,7 +84,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     transaction_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid
+        String(36), primary_key=True, default=get_uuid
     )
     idempotency_key: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
@@ -115,7 +109,7 @@ class Transaction(Base):
         BigInteger, nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
+        DateTime(timezone=True), nullable=False, default=get_now
     )
 
     ledger_entries: Mapped[list["LedgerEntry"]] = relationship(
@@ -128,7 +122,9 @@ class LedgerEntry(Base):
 
     __tablename__ = "ledger_entries"
 
-    entry_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    entry_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=get_uuid
+    )
     transaction_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("transactions.transaction_id"), nullable=False
     )
@@ -142,7 +138,7 @@ class LedgerEntry(Base):
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)  # always positive
     running_balance: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
+        DateTime(timezone=True), nullable=False, default=get_now
     )
 
     account: Mapped["Account"] = relationship(
@@ -171,7 +167,7 @@ class BalanceSnapshot(Base):
     sum_credit: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sum_debit: Mapped[int] = mapped_column(BigInteger, nullable=False)
     refreshed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
+        DateTime(timezone=True), nullable=False, default=get_now
     )
 
     account: Mapped["Account"] = relationship("Account")
@@ -183,7 +179,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     audit_log_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid
+        String(36), primary_key=True, default=get_uuid
     )
     transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     actor: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -194,5 +190,5 @@ class AuditLog(Base):
     )
     payload_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
+        DateTime(timezone=True), nullable=False, default=get_now
     )

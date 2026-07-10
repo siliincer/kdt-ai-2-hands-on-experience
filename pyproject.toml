@@ -62,3 +62,6 @@ indent-style = "space"
 [tool.pytest.ini_options]
 python_files = "test_*.py"
 addopts = "-v --durations=10"
+
+[tool.deptry]
+extend_exclude = ["tests"]

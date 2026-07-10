@@ -20,7 +20,6 @@ from .crud import (
     reconcile_snapshot,
 )
 from .database import get_db
-from .err import _err
 from .schemas import (
     AuditLogResponse,
     BalanceResponse,
@@ -31,6 +30,7 @@ from .schemas import (
     ReconciliationResponse,
     SnapshotResponse,
 )
+from .utils import throw_err
 
 # Demo-scope static API key for 정보계 read access.
 # Replace with env-var / secrets manager in production.
@@ -75,10 +75,10 @@ def get_snapshot_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     """
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     snap = get_snapshot(db, account_id)
     if snap is None:
-        _err(
+        throw_err(
             404,
             "SNAPSHOT_NOT_FOUND",
             f"No snapshot for {account_id}. "
@@ -104,7 +104,7 @@ def reconcile_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     """
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     result = reconcile_snapshot(db, account_id)
     return result
 
@@ -125,7 +125,7 @@ def get_analytics_balance(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     """
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
     return BalanceResponse(
         account_id=account_id, balance=balance, currency=acct.currency
@@ -155,7 +155,7 @@ def get_analytics_ledger(
     """
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     entries = get_ledger_entries(db, account_id, limit=limit, offset=offset)
     return [
         LedgerEntryResponse(
@@ -194,7 +194,7 @@ def get_analytics_audit_logs(
     """
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     logs = get_audit_logs(db, account_id, limit=limit, offset=offset)
     return [
         AuditLogResponse(
@@ -222,7 +222,7 @@ def get_analytics_audit_logs(
 def get_analytics_card(card_id: str, db: DbDep, _auth: AnalyticsAuth):
     card = get_card(db, card_id)
     if card is None:
-        _err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
+        throw_err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
     return CardResponse(
         card_id=card.card_id,
         account_id=card.account_id,
@@ -256,7 +256,7 @@ def get_analytics_card_ledger(
     """
     card = get_card(db, card_id)
     if card is None:
-        _err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
+        throw_err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
     entries = get_card_ledger_entries(db, card_id, limit=limit, offset=offset)
     return [
         CardLedgerEntryResponse(

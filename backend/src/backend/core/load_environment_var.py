@@ -39,6 +39,10 @@ class Settings(BaseSettings):
         default="",
         description="Phase 1 데모 시드: 매핑된 Account 없을 때 fallback account_id",
     )
+    FINANCIAL_DEMO_RECEIVER_ACCOUNT_ID: str = Field(
+        default="",
+        description="Phase 2 데모: 송금 수취 계좌 account_id. 비우면 실제 이체 미실행",
+    )
 
     # Auth Configuration
     JWT_SECRET_KEY: SecretStr = SecretStr("change-me-in-local")

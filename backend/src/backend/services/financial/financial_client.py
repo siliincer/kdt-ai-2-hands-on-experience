@@ -16,7 +16,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from ...core.load_environment_var import settings
-from .constants import _ANALYTICS_PREFIX
+from .constants import _ACCOUNTS_PATH, _ANALYTICS_PREFIX, _TRANSFERS_PATH
 
 
 class FinancialServiceError(Exception):
@@ -80,6 +80,46 @@ class FinancialServiceClient:
             return []
         if response.status_code >= 400:
             raise FinancialServiceError(f"원장 조회 실패: HTTP {response.status_code}")
+        return response.json()
+
+    async def create_account(self, owner: str, initial_balance: int = 0) -> dict:
+        """계정계 계좌 생성(POST /accounts, 무인증). 실패 시 FinancialServiceError.
+
+        프로비저닝 전용. 반환 dict 의 account_id 를 로컬 매핑에 저장한다.
+        """
+        response = await self._request(
+            "POST",
+            _ACCOUNTS_PATH,
+            json={"owner": owner, "initial_balance": initial_balance},
+        )
+        if response.status_code >= 400:
+            raise FinancialServiceError(f"계좌 생성 실패: HTTP {response.status_code}")
+        return response.json()
+
+    async def transfer(
+        self,
+        sender_account_id: str,
+        receiver_account_id: str,
+        amount: int,
+        idempotency_key: str,
+    ) -> dict:
+        """계정계 송금(POST /transfers). Idempotency-Key 필수(멱등 재시도 안전).
+
+        실패(4xx/5xx/커넥션)는 FinancialServiceError. 동일 키+동일 payload 재호출은
+        계정계가 기존 트랜잭션을 그대로 반환한다(safe replay).
+        """
+        response = await self._request(
+            "POST",
+            _TRANSFERS_PATH,
+            json={
+                "sender_account_id": sender_account_id,
+                "receiver_account_id": receiver_account_id,
+                "amount": amount,
+            },
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        if response.status_code >= 400:
+            raise FinancialServiceError(f"송금 실패: HTTP {response.status_code}")
         return response.json()
 
 

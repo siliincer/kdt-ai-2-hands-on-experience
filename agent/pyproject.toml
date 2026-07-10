@@ -33,3 +33,6 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v --durations=10"
+
+[tool.deptry]
+extend_exclude = ["tests"]
