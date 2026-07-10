@@ -30,10 +30,62 @@ class Account(Base):
     ledger_entries: Mapped[list["LedgerEntry"]] = relationship(
         "LedgerEntry", back_populates="account"
     )
+    cards: Mapped[list["Card"]] = relationship("Card", back_populates="account")
+
+
+class Card(Base):
+    """카드 — 계정당 N개, 자체 한도(limit)와 카드 원장 보유."""
+
+    __tablename__ = "cards"
+
+    card_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.account_id"), nullable=False, index=True
+    )
+    limit: Mapped[int] = mapped_column(BigInteger, nullable=False)  # spending cap
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KRW")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+
+    account: Mapped["Account"] = relationship("Account", back_populates="cards")
+    ledger_entries: Mapped[list["CardLedgerEntry"]] = relationship(
+        "CardLedgerEntry", back_populates="card"
+    )
+
+
+class CardLedgerEntry(Base):
+    """카드 원장 — 구매 시점에만 기록, 계정 잔액 미변경 (결제 전까지)."""
+
+    __tablename__ = "card_ledger_entries"
+
+    card_ledger_entry_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=_uuid
+    )
+    card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("cards.card_id"), nullable=False, index=True
+    )
+    amount: Mapped[int] = mapped_column(
+        BigInteger, nullable=False
+    )  # charge amount, non-negative
+    idempotency_key: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+
+    card: Mapped["Card"] = relationship("Card", back_populates="ledger_entries")
 
 
 class Transaction(Base):
-    """송금 거래 헤더 — 멱등성 키 추적."""
+    """송금 거래 헤더 — 멱등성 키 추적.
+
+    settlement_type discriminator:
+      NULL             → normal transfer
+      CARD_SETTLEMENT  → card deferred-settlement (tagged with settlement_card_id,
+                         settlement_watermark_rowid)
+    """
 
     __tablename__ = "transactions"
 
@@ -53,6 +105,14 @@ class Transaction(Base):
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     status: Mapped[str] = mapped_column(
         Enum("success", "failure", name="transaction_status"), nullable=False
+    )
+    # Settlement discriminator fields (null for normal transfers)
+    settlement_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    settlement_card_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    settlement_watermark_rowid: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
@@ -91,6 +151,30 @@ class LedgerEntry(Base):
     transaction: Mapped["Transaction"] = relationship(
         "Transaction", back_populates="ledger_entries"
     )
+
+
+class BalanceSnapshot(Base):
+    """정보계 잔액 캐시 — 계정당 1행, 갱신 시 덮어쓰기.
+
+    cached_balance = SUM(CREDIT) - SUM(DEBIT) up to last_entry_rowid.
+    캐시일 뿐 — canonical balance는 항상 ledger_entries에서 재계산.
+    """
+
+    __tablename__ = "balance_snapshots"
+
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.account_id"), primary_key=True
+    )
+    cached_balance: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # SQLite rowid high-water-mark: entries with rowid <= this value are covered
+    last_entry_rowid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    sum_credit: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sum_debit: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+
+    account: Mapped["Account"] = relationship("Account")
 
 
 class AuditLog(Base):
