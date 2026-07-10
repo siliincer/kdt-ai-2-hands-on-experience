@@ -23,6 +23,8 @@ class AccountCreate(BaseModel):
 class AccountResponse(BaseModel):
     account_id: str
     owner: str
+    bank_name: str
+    account_number: str
     balance: int
     currency: str
     created_at: datetime

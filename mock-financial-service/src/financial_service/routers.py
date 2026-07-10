@@ -51,6 +51,8 @@ def create_account_endpoint(payload: AccountCreate, db: DbDep):
     return AccountResponse(
         account_id=acct.account_id,
         owner=acct.owner,
+        bank_name=acct.bank_name,
+        account_number=acct.account_number,
         balance=balance,
         currency=acct.currency,
         created_at=acct.created_at,
@@ -73,6 +75,8 @@ def get_account_endpoint(account_id: str, db: DbDep):
     return AccountResponse(
         account_id=acct.account_id,
         owner=acct.owner,
+        bank_name=acct.bank_name,
+        account_number=acct.account_number,
         balance=balance,
         currency=acct.currency,
         created_at=acct.created_at,

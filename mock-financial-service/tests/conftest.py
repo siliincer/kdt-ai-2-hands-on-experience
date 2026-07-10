@@ -46,3 +46,32 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
         yield c
+
+
+# ── Canonical mock-data fixtures ───────────────────────────────────────────────
+# These expose the shared canonical dataset (dicts) from financial_service.mock_data.
+# Same dataset consumed by dev-DB seed, demo fixtures, and pytest tests.
+
+
+@pytest.fixture()
+def accounts() -> list[dict]:
+    """Return canonical list of 5 Account dicts (no DB required)."""
+    from financial_service.mock_data import MOCK_ACCOUNTS
+
+    return list(MOCK_ACCOUNTS)
+
+
+@pytest.fixture()
+def cards() -> list[dict]:
+    """Return canonical list of 5-10 Card dicts with valid account_id FKs."""
+    from financial_service.mock_data import MOCK_CARDS
+
+    return list(MOCK_CARDS)
+
+
+@pytest.fixture()
+def card_products() -> list[dict]:
+    """Return canonical list of 20 CardProduct dicts (standalone catalog, no Card FK)."""
+    from financial_service.mock_data import MOCK_CARD_PRODUCTS
+
+    return list(MOCK_CARD_PRODUCTS)
