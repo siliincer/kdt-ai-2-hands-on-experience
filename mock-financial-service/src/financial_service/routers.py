@@ -13,7 +13,6 @@ from .crud import (
     get_account,
     get_balance,
     get_ledger_entries,
-    refresh_snapshot,
     transfer,
 )
 from .database import get_db
@@ -24,7 +23,6 @@ from .schemas import (
     BalanceResponse,
     ErrorResponse,
     LedgerEntryResponse,
-    SnapshotResponse,
     TransferRequest,
     TransferResponse,
 )
@@ -131,28 +129,6 @@ def get_transactions_endpoint(
         )
         for e in entries
     ]
-
-
-# ── 5a. POST /accounts/{account_id}/snapshot — refresh balance cache ─────────
-
-
-@router.post(
-    "/accounts/{account_id}/snapshot",
-    response_model=SnapshotResponse,
-    status_code=200,
-    responses={404: {"model": ErrorResponse}},
-    summary="Refresh per-account balance snapshot (정보계 cache)",
-)
-def refresh_snapshot_endpoint(account_id: str, db: DbDep):
-    """Overwrite single-row balance cache for account.
-
-    Idempotent: calling N times leaves exactly 1 row with the latest watermark.
-    """
-    acct = get_account(db, account_id)
-    if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
-    snap = refresh_snapshot(db, account_id)
-    return snap
 
 
 # ── 5. POST /transfers — transfer ────────────────────────────────────────────

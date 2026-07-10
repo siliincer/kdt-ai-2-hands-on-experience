@@ -41,6 +41,10 @@ class Account(Base):
     account_number: Mapped[str] = mapped_column(
         String(20), nullable=False, unique=True, default=_generate_account_number
     )
+    # canonical live balance — updated atomically with every ledger_entries write
+    # (same DB transaction). _get_balance() (full SUM over ledger_entries) exists
+    # only to verify this value is legit — see crud.reconcile_balance().
+    balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KRW")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
@@ -170,30 +174,6 @@ class LedgerEntry(Base):
     transaction: Mapped["Transaction"] = relationship(
         "Transaction", back_populates="ledger_entries"
     )
-
-
-class BalanceSnapshot(Base):
-    """정보계 잔액 캐시 — 계정당 1행, 갱신 시 덮어쓰기.
-
-    cached_balance = SUM(CREDIT) - SUM(DEBIT) up to last_entry_rowid.
-    캐시일 뿐 — canonical balance는 항상 ledger_entries에서 재계산.
-    """
-
-    __tablename__ = "balance_snapshots"
-
-    account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.account_id"), primary_key=True
-    )
-    cached_balance: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    # SQLite rowid high-water-mark: entries with rowid <= this value are covered
-    last_entry_rowid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    sum_credit: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    sum_debit: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    refreshed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
-
-    account: Mapped["Account"] = relationship("Account")
 
 
 class DailyClosingSnapshot(Base):

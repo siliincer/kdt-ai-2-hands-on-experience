@@ -4,12 +4,14 @@
 
 ### 원칙
 
-단일 `balance` 컬럼 갱신 방식 사용 안 함. 모든 잔액 변동은 `ledger_entries` 테이블에 차변(DEBIT)/대변(CREDIT) **쌍**으로 기록된다.
+원장 기록 없이 `balance` 컬럼만 단독으로 갱신하는 방식은 사용 안 함. 모든 잔액 변동은 `ledger_entries` 테이블에 차변(DEBIT)/대변(CREDIT) **쌍**으로 기록된다.
 
 ```
 canonical_balance = SUM(amount WHERE entry_type='CREDIT')
                   - SUM(amount WHERE entry_type='DEBIT')
 ```
+
+`accounts.balance` 컬럼은 이 계산 결과를 저장한 값이며, 원장 쓰기와 같은 DB 트랜잭션 안에서 항상 함께 갱신된다(§5 참고) — "원장 따로, balance 컬럼 따로"가 아니라 원장이 유일한 진실 소스이고 `balance`는 그 소스와 원자적으로 동기화된 저장값이다.
 
 ### 근거
 
@@ -81,76 +83,63 @@ END;
 
 ---
 
-## 5. 잔액 캐시 스냅샷 (balance_snapshots)
+## 5. 잔액 컬럼의 원자적 갱신 (Account.balance)
 
-### 목적
+### 배경
 
-정보계(analytics)가 매 요청마다 원장 집계 쿼리를 실행하지 않도록 **파생 캐시** 제공.
+과거 설계는 `accounts`에 balance 컬럼이 없었고, 정보계가 매 요청마다 원장 집계 쿼리를 실행하지 않도록 `balance_snapshots`라는 별도 캐시 테이블(계좌당 1행, 수동 새로고침, 고수위표 `last_entry_rowid`로 커버 범위 추적)을 뒀다. 이 캐시는 새로고침 시점 이후의 거래를 반영하지 못해 stale 가능성이 항상 존재했고, "지금 stale한 것"과 "계산 로직 자체가 틀린 것"을 구분하기 위해 정합성 검증도 고수위표 범위로 스코프를 좁혀야 했다.
 
-### 스키마
+### 현재 설계
 
-```sql
-CREATE TABLE balance_snapshots (
-    account_id          TEXT PRIMARY KEY REFERENCES accounts(account_id),
-    cached_balance      INTEGER NOT NULL,
-    last_entry_rowid    INTEGER,          -- 고수위표(high-water mark), ledger_entries.rowid
-    sum_credit          INTEGER NOT NULL,
-    sum_debit           INTEGER NOT NULL,
-    refreshed_at        DATETIME NOT NULL
-);
+`accounts` 테이블에 `balance` 컬럼(canonical, `BigInteger`)이 존재하며, 원장에 쓰는 모든 경로 — `transfer()`, `settle_card()`, `create_account()`의 초기입금 — 가 `LedgerEntry` INSERT와 **같은 DB 트랜잭션/커밋 안에서** `Account.balance`를 함께 갱신한다.
+
+```
+BEGIN
+  INSERT INTO ledger_entries (entry_type='DEBIT',  account=sender,   ...)
+  INSERT INTO ledger_entries (entry_type='CREDIT', account=receiver, ...)
+  UPDATE accounts SET balance = balance - amount WHERE account_id = sender
+  UPDATE accounts SET balance = balance + amount WHERE account_id = receiver
+COMMIT
 ```
 
-### 핵심 제약
+별도의 갱신/새로고침 단계가 없으므로 캐시 무효화 문제 자체가 발생하지 않는다 — "아직 새로고침 안 된 상태"라는 개념이 존재하지 않는다. `GET /accounts/{id}/balance`, `GET /analytics/accounts/{id}/balance` 둘 다 이 저장된 컬럼을 그대로 읽는다(`crud.get_balance()`, O(1)).
 
-1. **계좌당 1행만 존재** — 스냅샷 갱신은 UPSERT (overwrite), append-only 아님.
-2. **canonical balance 아님** — `cached_balance = sum_credit - sum_debit` 이지만, `last_entry_rowid` 까지만 계산된 값. 새 원장 항목 추가 후 갱신 전까지 stale.
-3. **단일 계좌 범위 갱신** — `POST /api/v1/accounts/{id}/snapshot` 으로만 갱신. 일괄 갱신 없음, 스케줄러 없음.
-4. **소스 오브 트루스 아님** — 잔액의 최종 권위는 항상 `ledger_entries` SUM.
-
-### 고수위표(High-Water Mark) 의미
-
-`last_entry_rowid` 는 스냅샷 계산에 포함된 마지막 원장 항목의 SQLite `rowid`(정수, 자동증가) — `entry_id`(UUID)와는 다른 값이니 혼동 주의. 정합성 검증(reconciliation) 시 이 rowid까지의 원장 항목만 재집계하여 비교.
-
-**왜 "지금까지 전체"가 아니라 "이 rowid까지만" 비교하는가:**
-
-캐시(`cached_balance`)는 마지막 새로고침 시점 값. 그 이후 새 거래가 들어오면 원장은 늘어나지만 캐시는 그대로 — 이건 정상적인 stale 상태지, 버그 아님. 만약 reconcile이 "지금 원장 전체"와 캐시를 비교하면, 새 거래가 하나만 생겨도 항상 불일치로 뜸(오탐/false positive) — 매번 refresh 안 했다고 재검증에 걸리는 꼴.
-
-고수위표로 비교 범위를 "캐시 계산 당시 시점"으로 고정하면, reconcile은 "그 시점까지의 계산이 맞았는가"만 검증 — 즉 stale(정상, 새 거래 때문)과 corrupt(비정상, 캐시 계산 로직 자체의 버그)를 구분해낸다. 이게 이 필드의 존재 이유.
-
-**SQLite 기반 구현**: `rowid`는 SQLite 내장 자동증가 정수(`database.py`에서 `sqlite:///./financial.db` 사용, `crud.py`의 `refresh_snapshot()`이 `SELECT MAX(rowid) FROM ledger_entries WHERE account_id = ...` 로 조회). Postgres 전환 시 `rowid` 개념이 없으므로 별도 auto-increment 시퀀스 컬럼으로 교체 필요 — README의 Postgres 전환 체크리스트에 이 항목 추가 필요.
+원장 전체를 SUM(CREDIT)-SUM(DEBIT)로 재계산하는 `_get_balance()`는 더 이상 읽기 경로에서 쓰이지 않는다 — 저장된 `Account.balance`가 legit한지 검증하는 용도로만 남아 있다(§6 참고).
 
 ---
 
 ## 6. 정합성 검증 (Reconciliation)
 
-스냅샷과 원장 간 drift 감지 순수 함수.
+저장된 `Account.balance`(canonical) vs 원장 전체 재집계 간 drift 감지 순수 함수. 워터마크나 시점 스코프 없이 항상 원장 전체를 재집계한다 — 캐시가 없으므로 "이 시점까지만 비교"할 이유가 없어졌기 때문이다.
 
 ```python
-def reconcile(account_id, db) -> ReconciliationResult:
-    snapshot = get_snapshot(db, account_id)
-    # 스냅샷의 고수위표까지 원장 재집계
-    recomputed = recompute_balance_up_to(db, account_id, snapshot.last_entry_rowid)
-    delta = snapshot.cached_balance - recomputed
-    drift_detected = (delta != 0)
-    return ReconciliationResult(
-        account_id=account_id,
-        cached_balance=snapshot.cached_balance,
-        expected_balance=recomputed,
-        drift_detected=drift_detected,
-        delta=delta,
-        reconciled_at=utcnow(),
-    )
+def reconcile_balance(db, account_id) -> dict:
+    acct = get_account(db, account_id)
+    stored_balance = acct.balance  # canonical, 저장된 컬럼
+
+    sum_credit = ...  # ledger_entries 전체 CREDIT 합계
+    sum_debit = ...   # ledger_entries 전체 DEBIT 합계
+    expected_balance = sum_credit - sum_debit
+    delta = stored_balance - expected_balance
+
+    return {
+        "cached_balance": stored_balance,
+        "expected_balance": expected_balance,
+        "drift_detected": delta != 0,
+        "delta": delta,
+        ...
+    }
 ```
 
 - 잠금 없음, blocking 없음, 쓰기 동결 없음.
 - drift 감지만 — 자동 수정 없음.
-- 검증 결과는 로그/응답으로 반환.
+- **정상 흐름에서 drift는 항상 0**이다. `Account.balance`는 원장 쓰기와 원자적으로 갱신되므로 "아직 반영 안 된 최근 거래" 같은 정상적 불일치 경로가 없다 — `drift_detected=true`는 곧 저장값과 원장이 실제로 어긋난 버그를 의미하며, 예전처럼 "새로고침 지연"으로 해석해서는 안 된다.
 
 ---
 
 ## 7. 읽기 전용 뷰 (v_infobank_account_balances 외)
 
-정보계가 직접 DB 접근 시 사용하는 뷰 3개: `v_infobank_account_balances` (실시간 집계 `balance`), `v_infobank_ledger_entries` (원장 조인), `v_account_snapshots` (캐시 조인, 스냅샷 시점 기준).
+정보계가 직접 DB 접근 시 사용하는 뷰 2개: `v_infobank_account_balances` (원장에서 실시간 집계한 `balance`), `v_infobank_ledger_entries` (원장 조인). 두 뷰 모두 `accounts.balance` 저장 컬럼과 독립적으로 원장에서 즉시 계산하며, 정상 흐름에서는 항상 같은 값을 낸다.
 
 - 뷰를 통한 접근은 convention 기반 read-only (SQLite mode=ro 미사용).
 - 뷰는 SELECT 전용 DDL이므로 INSERT/UPDATE/DELETE 불가.
@@ -161,8 +150,8 @@ def reconcile(account_id, db) -> ReconciliationResult:
 
 | 구분 | 계정계 (Core Banking) | 정보계 (Analytics) |
 |------|-----------------------|---------------------|
-| 데이터 원천 | `ledger_entries`, `accounts`, `transactions`, `audit_logs` | `v_infobank_account_balances`/`v_infobank_ledger_entries`/`v_account_snapshots` (뷰), `balance_snapshots` (캐시) |
+| 데이터 원천 | `ledger_entries`, `accounts`(`balance` 포함), `transactions`, `audit_logs` | `v_infobank_account_balances`/`v_infobank_ledger_entries` (뷰) |
 | 쓰기 권한 | 있음 | 없음 (읽기 전용) |
-| 잔액 계산 | 실시간 SUM | 캐시 또는 뷰 집계 |
-| 인증 | 없음 (데모 범위) | X-Analytics-Key 헤더 (GET 5개만; 스냅샷 갱신 POST는 계정계 쪽, 무인증) |
-| 엔드포인트 수 | 5개 (기존) + 갱신 POST 1개 | GET 5개 (snapshot/reconcile/balance/ledger/audit-logs) |
+| 잔액 계산 | 저장된 `accounts.balance` 컬럼 (원장 쓰기와 원자적으로 동기화) | 뷰 집계 (저장된 컬럼과 항상 동일한 값) |
+| 인증 | 없음 (데모 범위) | X-Analytics-Key 헤더 (GET 4개) |
+| 엔드포인트 수 | 5개 | GET 4개 (reconcile/balance/ledger/audit-logs) |

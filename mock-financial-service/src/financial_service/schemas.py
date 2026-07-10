@@ -99,18 +99,7 @@ class TransferResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── Snapshot / 정보계 ──────────────────────────────────────────────────────────
-
-
-class SnapshotResponse(BaseModel):
-    account_id: str
-    cached_balance: int
-    last_entry_rowid: int | None
-    sum_credit: int
-    sum_debit: int
-    refreshed_at: datetime
-
-    model_config = {"from_attributes": True}
+# ── Balance reconciliation / 정보계 ────────────────────────────────────────────
 
 
 class ReconciliationResponse(BaseModel):
@@ -119,7 +108,6 @@ class ReconciliationResponse(BaseModel):
     expected_balance: int
     sum_credit: int
     sum_debit: int
-    last_entry_rowid: int | None
     drift_detected: bool
     delta: int
     reconciled_at: str
