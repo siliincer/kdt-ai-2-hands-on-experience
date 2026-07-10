@@ -528,9 +528,14 @@ docker compose up -d --build
 
 관련 환경변수 (`.env.example`):
 
-- `LLM_PROVIDER`: `openai`(기본) | `vertex` — LLM 제공자 선택
-- `LLM_MODEL`: 모델 지정 (미지정 시 openai=gpt-4o-mini, vertex=gemini-2.5-flash)
+- `LLM_PROVIDER`: `openai`(기본) | `vertex` | `ollama` — LLM 제공자 선택
+- `LLM_MODEL`: 모델 지정 (미지정 시 openai=gpt-4o-mini,
+  vertex=gemini-2.5-flash, ollama=qwen2.5:3b)
 - `OPENAI_API_KEY`: openai 사용 시 필요 (없으면 규칙 기반 폴백으로 완주)
+- `OLLAMA_BASE_URL` / `OLLAMA_MODEL`: ollama 사용 시. Ollama 서버는 로컬
+  개발 머신에서만 실행하고, 배포 서버에는 Ollama 런타임을 올리지 않는다.
+  Docker 컨테이너에서 호스트 Ollama에 붙을 때는
+  `OLLAMA_BASE_URL=http://host.docker.internal:11434`를 사용한다.
 - `GOOGLE_CLOUD_PROJECT` / `VERTEX_LOCATION`: vertex 사용 시. 인증은 로컬
   ADC(`gcloud auth application-default login`) 또는
   `GOOGLE_APPLICATION_CREDENTIALS`(서비스 계정 JSON — 컨테이너용)
@@ -658,7 +663,7 @@ fin-ai에는 실행 엔진이 두 벌 존재했다. 순차 실행기(`workflow_e
 - [x] `wf_external_transfer` tool을 Tool_v2 계약대로 구현 — 완료 (5-3절)
 - [x] `data/mock_bank.py` → `mock-financial-service`(8002) HTTP 연동 — 완료
       (`HttpBankClient` + `BANK_CLIENT=http`, 4절. 로컬 기본값은 여전히 `local`)
-- [x] `LLM_PROVIDER` 환경변수 지원 — 완료 (openai/vertex 전환, 7절)
+- [x] `LLM_PROVIDER` 환경변수 지원 — 완료 (openai/vertex/ollama 전환, 7절)
 - [x] 가드레일 `expression` 조건 타입 구현 — 완료 (5-3절.
       `guardrail_engine._evaluate_expression`, global/tool scope 규칙 활성)
 - [ ] 송금 답변 파싱(승인/금액 등)을 키워드에서 LLM 보강으로 확장
