@@ -92,8 +92,9 @@ def test_transfer_happy(client):
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender["account_id"],
-            "receiver_account_id": receiver["account_id"],
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": 100_000,
         },
         headers={"Idempotency-Key": "transfer-key-001"},
@@ -129,8 +130,9 @@ def test_transfer_insufficient_balance(client):
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender["account_id"],
-            "receiver_account_id": receiver["account_id"],
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": 999_999,
         },
         headers={"Idempotency-Key": "overdrawn-001"},
@@ -149,8 +151,9 @@ def test_transfer_negative_amount_rejected(client):
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender["account_id"],
-            "receiver_account_id": receiver["account_id"],
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": -500,
         },
         headers={"Idempotency-Key": "neg-amount-001"},
@@ -164,8 +167,9 @@ def test_transfer_missing_account(client):
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": "00000000-0000-0000-0000-000000000000",
-            "receiver_account_id": receiver["account_id"],
+            "sender_account_number": "000-000-000000",
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": 1_000,
         },
         headers={"Idempotency-Key": "ghost-sender-001"},
@@ -181,8 +185,9 @@ def test_transfer_self_transfer(client):
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": acct["account_id"],
-            "receiver_account_id": acct["account_id"],
+            "sender_account_number": acct["account_number"],
+            "receiver_bank_name": acct["bank_name"],
+            "receiver_account_number": acct["account_number"],
             "amount": 1_000,
         },
         headers={"Idempotency-Key": "self-transfer-001"},
@@ -207,8 +212,9 @@ def test_idempotency_key_conflict(client):
     r1 = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender["account_id"],
-            "receiver_account_id": receiver1["account_id"],
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver1["bank_name"],
+            "receiver_account_number": receiver1["account_number"],
             "amount": 1_000,
         },
         headers={"Idempotency-Key": "idem-conflict-key"},
@@ -219,8 +225,9 @@ def test_idempotency_key_conflict(client):
     r2 = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender["account_id"],
-            "receiver_account_id": receiver2["account_id"],
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver2["bank_name"],
+            "receiver_account_number": receiver2["account_number"],
             "amount": 9_999,
         },
         headers={"Idempotency-Key": "idem-conflict-key"},
@@ -236,8 +243,9 @@ def test_idempotency_safe_replay(client):
     receiver = make_account(client, "ReplayReceiver", 0)
 
     payload = {
-        "sender_account_id": sender["account_id"],
-        "receiver_account_id": receiver["account_id"],
+        "sender_account_number": sender["account_number"],
+        "receiver_bank_name": receiver["bank_name"],
+        "receiver_account_number": receiver["account_number"],
         "amount": 50_000,
     }
     headers = {"Idempotency-Key": "replay-safe-001"}

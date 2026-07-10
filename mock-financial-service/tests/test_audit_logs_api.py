@@ -21,12 +21,13 @@ def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
     return r.json()
 
 
-def _transfer(client, sender_id: str, receiver_id: str, amount: int, key: str) -> dict:
+def _transfer(client, sender: dict, receiver: dict, amount: int, key: str) -> dict:
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender_id,
-            "receiver_account_id": receiver_id,
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": amount,
         },
         headers={"Idempotency-Key": key},
@@ -74,9 +75,7 @@ def test_audit_logs_shows_account_create(client):
 def test_audit_logs_shows_transfer_for_both_sides(client):
     sender = _make_account(client, "AuditSender", 10_000)
     receiver = _make_account(client, "AuditReceiver", 0)
-    _transfer(
-        client, sender["account_id"], receiver["account_id"], 3_000, "audit-key-1"
-    )
+    _transfer(client, sender, receiver, 3_000, "audit-key-1")
 
     sender_logs = client.get(
         f"/api/v1/analytics/accounts/{sender['account_id']}/audit-logs",

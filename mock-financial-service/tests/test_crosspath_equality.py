@@ -71,21 +71,22 @@ def xp_client(xp_engine):
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_account(client, owner: str, initial_balance: int = 0) -> str:
+def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
     r = client.post(
         "/api/v1/accounts",
         json={"owner": owner, "initial_balance": initial_balance},
     )
     assert r.status_code == 201, r.text
-    return r.json()["account_id"]
+    return r.json()
 
 
-def _transfer(client, sender_id: str, receiver_id: str, amount: int, key: str) -> None:
+def _transfer(client, sender: dict, receiver: dict, amount: int, key: str) -> None:
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender_id,
-            "receiver_account_id": receiver_id,
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": amount,
         },
         headers={"Idempotency-Key": key},
@@ -160,7 +161,8 @@ def _rest_ledger(client, account_id: str) -> list[dict]:
 def test_crosspath_balance_initial_deposit(xp_client):
     """View balance == analytics REST balance for freshly created account."""
     client, engine = xp_client
-    acct_id = _make_account(client, "XPInitial", 42_000)
+    acct = _make_account(client, "XPInitial", 42_000)
+    acct_id = acct["account_id"]
 
     assert _view_balance(engine, acct_id) == _rest_balance(client, acct_id) == 42_000
 
@@ -168,9 +170,11 @@ def test_crosspath_balance_initial_deposit(xp_client):
 def test_crosspath_balance_after_transfer(xp_client):
     """View balance == analytics REST balance after a transfer for both sides."""
     client, engine = xp_client
-    sender_id = _make_account(client, "XPSender", 100_000)
-    receiver_id = _make_account(client, "XPReceiver", 0)
-    _transfer(client, sender_id, receiver_id, 40_000, "xp-bal-001")
+    sender = _make_account(client, "XPSender", 100_000)
+    receiver = _make_account(client, "XPReceiver", 0)
+    sender_id = sender["account_id"]
+    receiver_id = receiver["account_id"]
+    _transfer(client, sender, receiver, 40_000, "xp-bal-001")
 
     sender_view = _view_balance(engine, sender_id)
     sender_rest = _rest_balance(client, sender_id)
@@ -190,7 +194,8 @@ def test_crosspath_balance_after_transfer(xp_client):
 def test_crosspath_balance_zero_account(xp_client):
     """View balance == analytics REST balance == 0 for zero-balance account."""
     client, engine = xp_client
-    acct_id = _make_account(client, "XPZero", 0)
+    acct = _make_account(client, "XPZero", 0)
+    acct_id = acct["account_id"]
 
     assert _view_balance(engine, acct_id) == _rest_balance(client, acct_id) == 0
 
@@ -203,7 +208,8 @@ def test_crosspath_balance_zero_account(xp_client):
 def test_crosspath_ledger_initial_credit(xp_client):
     """View ledger entry_id/type/amount == analytics REST ledger for single CREDIT."""
     client, engine = xp_client
-    acct_id = _make_account(client, "XPLedCredit", 20_000)
+    acct = _make_account(client, "XPLedCredit", 20_000)
+    acct_id = acct["account_id"]
 
     view_entries = _view_ledger(engine, acct_id)
     rest_entries = _rest_ledger(client, acct_id)
@@ -219,9 +225,11 @@ def test_crosspath_ledger_initial_credit(xp_client):
 def test_crosspath_ledger_after_transfer(xp_client):
     """View ledger entry_ids/types/amounts == analytics REST ledger after transfer."""
     client, engine = xp_client
-    sender_id = _make_account(client, "XPLedSender", 80_000)
-    receiver_id = _make_account(client, "XPLedReceiver", 0)
-    _transfer(client, sender_id, receiver_id, 30_000, "xp-led-001")
+    sender = _make_account(client, "XPLedSender", 80_000)
+    receiver = _make_account(client, "XPLedReceiver", 0)
+    sender_id = sender["account_id"]
+    receiver_id = receiver["account_id"]
+    _transfer(client, sender, receiver, 30_000, "xp-led-001")
 
     for acct_id, label in [(sender_id, "sender"), (receiver_id, "receiver")]:
         view_entries = _view_ledger(engine, acct_id)
@@ -243,7 +251,8 @@ def test_crosspath_ledger_after_transfer(xp_client):
 def test_crosspath_ledger_empty_account(xp_client):
     """Both paths return empty list for zero-balance account with no entries."""
     client, engine = xp_client
-    acct_id = _make_account(client, "XPLedEmpty", 0)
+    acct = _make_account(client, "XPLedEmpty", 0)
+    acct_id = acct["account_id"]
 
     view_entries = _view_ledger(engine, acct_id)
     rest_entries = _rest_ledger(client, acct_id)
@@ -254,13 +263,16 @@ def test_crosspath_ledger_empty_account(xp_client):
 def test_crosspath_multiple_transfers_consistency(xp_client):
     """View and REST agree after multiple transfers — IDs, types, amounts identical."""
     client, engine = xp_client
-    alice_id = _make_account(client, "XPAlice", 500_000)
-    bob_id = _make_account(client, "XPBob", 100_000)
-    carol_id = _make_account(client, "XPCarol", 0)
+    alice = _make_account(client, "XPAlice", 500_000)
+    bob = _make_account(client, "XPBob", 100_000)
+    carol = _make_account(client, "XPCarol", 0)
+    alice_id = alice["account_id"]
+    bob_id = bob["account_id"]
+    carol_id = carol["account_id"]
 
-    _transfer(client, alice_id, bob_id, 50_000, "xp-multi-001")
-    _transfer(client, alice_id, carol_id, 75_000, "xp-multi-002")
-    _transfer(client, bob_id, carol_id, 20_000, "xp-multi-003")
+    _transfer(client, alice, bob, 50_000, "xp-multi-001")
+    _transfer(client, alice, carol, 75_000, "xp-multi-002")
+    _transfer(client, bob, carol, 20_000, "xp-multi-003")
 
     for acct_id, label in [(alice_id, "alice"), (bob_id, "bob"), (carol_id, "carol")]:
         vb = _view_balance(engine, acct_id)

@@ -2,17 +2,19 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .models import (
+    BANK_NAME,
     Account,
     AuditLog,
     BalanceSnapshot,
     Card,
     CardLedgerEntry,
+    DailyClosingSnapshot,
     LedgerEntry,
     Transaction,
 )
@@ -132,6 +134,12 @@ def get_account(db: Session, account_id: str) -> Account | None:
     ).scalar_one_or_none()
 
 
+def get_account_by_number(db: Session, account_number: str) -> Account | None:
+    return db.execute(
+        select(Account).where(Account.account_number == account_number)
+    ).scalar_one_or_none()
+
+
 def get_balance(db: Session, account_id: str) -> int:
     return _get_balance(db, account_id)
 
@@ -202,8 +210,9 @@ def _write_failure_audit(
         transaction_id=None,
         payload_snapshot=json.dumps(
             {
-                "sender": payload.sender_account_id,
-                "receiver": payload.receiver_account_id,
+                "sender": payload.sender_account_number,
+                "receiver_bank": payload.receiver_bank_name,
+                "receiver": payload.receiver_account_number,
                 "amount": payload.amount,
                 "idempotency_key": idempotency_key,
                 "error_code": error_code,
@@ -220,8 +229,9 @@ def transfer(
 ) -> Transaction:
     phash = _payload_hash(
         {
-            "sender_account_id": payload.sender_account_id,
-            "receiver_account_id": payload.receiver_account_id,
+            "sender_account_number": payload.sender_account_number,
+            "receiver_bank_name": payload.receiver_bank_name,
+            "receiver_account_number": payload.receiver_account_number,
             "amount": payload.amount,
         }
     )
@@ -235,7 +245,7 @@ def transfer(
         if existing.payload_hash != phash:
             _write_failure_audit(
                 db,
-                actor=payload.sender_account_id,
+                actor=payload.sender_account_number,
                 reason="Idempotency key reused with different payload",
                 error_code="IDEMPOTENCY_CONFLICT",
                 payload=payload,
@@ -248,31 +258,42 @@ def transfer(
 
     try:
         # Validate accounts
-        if payload.sender_account_id == payload.receiver_account_id:
+        if payload.sender_account_number == payload.receiver_account_number:
             raise ValidationError("SELF_TRANSFER", "Sender and receiver must differ")
 
-        sender = get_account(db, payload.sender_account_id)
-        if sender is None:
-            raise NotFoundError(
-                "ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_id} not found"
+        # 이 mock 서비스는 단일 은행만 표현 — receiver_bank_name이 그 은행이 아니면 거절
+        if payload.receiver_bank_name != BANK_NAME:
+            raise ValidationError(
+                "BANK_NOT_SUPPORTED",
+                f"Unsupported bank: {payload.receiver_bank_name} (only {BANK_NAME})",
             )
 
-        receiver = get_account(db, payload.receiver_account_id)
+        sender = get_account_by_number(db, payload.sender_account_number)
+        if sender is None:
+            raise NotFoundError(
+                "ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_number} not found"
+            )
+
+        receiver = get_account_by_number(db, payload.receiver_account_number)
         if receiver is None:
             raise NotFoundError(
-                "ACCOUNT_NOT_FOUND", f"Receiver {payload.receiver_account_id} not found"
+                "ACCOUNT_NOT_FOUND",
+                f"Receiver {payload.receiver_account_number} not found",
             )
+
+        sender_id = sender.account_id
+        receiver_id = receiver.account_id
 
         if payload.amount <= 0:
             raise ValidationError("INVALID_AMOUNT", "Amount must be positive integer")
 
-        sender_balance = _get_balance(db, payload.sender_account_id)
+        sender_balance = _get_balance(db, sender_id)
         if sender_balance < payload.amount:
             raise ValidationError(
                 "INSUFFICIENT_BALANCE", f"Balance {sender_balance} < {payload.amount}"
             )
 
-        receiver_balance = _get_balance(db, payload.receiver_account_id)
+        receiver_balance = _get_balance(db, receiver_id)
 
         # Capture pre-transfer total for post-commit integrity assertion
         pre_transfer_total = sender_balance + receiver_balance
@@ -281,8 +302,8 @@ def transfer(
         txn = Transaction(
             idempotency_key=idempotency_key,
             payload_hash=phash,
-            sender_account_id=payload.sender_account_id,
-            receiver_account_id=payload.receiver_account_id,
+            sender_account_id=sender_id,
+            receiver_account_id=receiver_id,
             amount=payload.amount,
             status="success",
         )
@@ -292,14 +313,14 @@ def transfer(
         # Double-entry: DEBIT sender, CREDIT receiver (atomic pair)
         debit = LedgerEntry(
             transaction_id=txn.transaction_id,
-            account_id=payload.sender_account_id,
+            account_id=sender_id,
             entry_type="DEBIT",
             amount=payload.amount,
             running_balance=sender_balance - payload.amount,
         )
         credit = LedgerEntry(
             transaction_id=txn.transaction_id,
-            account_id=payload.receiver_account_id,
+            account_id=receiver_id,
             entry_type="CREDIT",
             amount=payload.amount,
             running_balance=receiver_balance + payload.amount,
@@ -309,15 +330,18 @@ def transfer(
 
         _append_audit(
             db,
-            actor=payload.sender_account_id,
+            actor=payload.sender_account_number,
             action="TRANSFER",
-            reason=f"Transfer {payload.amount} KRW to {payload.receiver_account_id}",
+            reason=(
+                f"Transfer {payload.amount} KRW to {payload.receiver_account_number}"
+            ),
             status="success",
             transaction_id=txn.transaction_id,
             payload_snapshot=json.dumps(
                 {
-                    "sender": payload.sender_account_id,
-                    "receiver": payload.receiver_account_id,
+                    "sender": payload.sender_account_number,
+                    "receiver_bank": payload.receiver_bank_name,
+                    "receiver": payload.receiver_account_number,
                     "amount": payload.amount,
                     "idempotency_key": idempotency_key,
                 }
@@ -330,7 +354,7 @@ def transfer(
         db.rollback()
         _write_failure_audit(
             db,
-            actor=payload.sender_account_id,
+            actor=payload.sender_account_number,
             reason=exc.message,
             error_code=exc.error_code,
             payload=payload,
@@ -339,8 +363,8 @@ def transfer(
         raise
 
     # Runtime integrity assertion: total balance must be preserved after commit
-    post_sender_balance = _get_balance(db, payload.sender_account_id)
-    post_receiver_balance = _get_balance(db, payload.receiver_account_id)
+    post_sender_balance = _get_balance(db, txn.sender_account_id)
+    post_receiver_balance = _get_balance(db, txn.receiver_account_id)
     post_transfer_total = post_sender_balance + post_receiver_balance
     assert post_transfer_total == pre_transfer_total, (
         f"Balance integrity violation: pre={pre_transfer_total}, "
@@ -481,6 +505,105 @@ def reconcile_snapshot(db: Session, account_id: str) -> dict:
         "delta": delta,
         "reconciled_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Daily Closing (EOD batch) ──────────────────────────────────────────────────
+
+
+def run_daily_closing(
+    db: Session, business_date: date | None = None
+) -> tuple[date, list[DailyClosingSnapshot]]:
+    """EOD 마감 배치 — 모든 계좌를 대상으로 영업일당 1행 insert.
+
+    실제 cron/스케줄러 없음 — scripts/run_daily_close.py 를 OS cron(자정)에
+    등록해 호출하거나, 이 함수를 감싼 POST /api/v1/batch/daily-close 로 수동
+    트리거. 같은 business_date에 이미 마감된 계좌는 스킵(idempotent) — 재실행
+    해도 중복 행 없음(모델의 (account_id, business_date) 복합 PK가 최종 방어).
+    """
+    if business_date is None:
+        business_date = datetime.now(timezone.utc).date()
+
+    accounts = db.execute(select(Account)).scalars().all()
+    created: list[DailyClosingSnapshot] = []
+
+    for acct in accounts:
+        existing = db.execute(
+            select(DailyClosingSnapshot).where(
+                DailyClosingSnapshot.account_id == acct.account_id,
+                DailyClosingSnapshot.business_date == business_date,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            continue  # already closed for this business_date — idempotent skip
+
+        sum_credit = int(
+            db.execute(
+                select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                .where(LedgerEntry.account_id == acct.account_id)
+                .where(LedgerEntry.entry_type == "CREDIT")
+            ).scalar()
+            or 0
+        )
+        sum_debit = int(
+            db.execute(
+                select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                .where(LedgerEntry.account_id == acct.account_id)
+                .where(LedgerEntry.entry_type == "DEBIT")
+            ).scalar()
+            or 0
+        )
+        last_rowid = db.execute(
+            text("SELECT MAX(rowid) FROM ledger_entries WHERE account_id = :aid"),
+            {"aid": acct.account_id},
+        ).scalar()
+
+        row = DailyClosingSnapshot(
+            account_id=acct.account_id,
+            business_date=business_date,
+            closing_balance=sum_credit - sum_debit,
+            sum_credit=sum_credit,
+            sum_debit=sum_debit,
+            last_entry_rowid=last_rowid,
+        )
+        db.add(row)
+        created.append(row)
+
+    _append_audit(
+        db,
+        actor="SYSTEM_BATCH",
+        action="DAILY_CLOSE",
+        reason=(
+            f"Daily closing batch for {business_date}: {len(created)} accounts closed"
+        ),
+        status="success",
+        payload_snapshot=json.dumps(
+            {
+                "business_date": business_date.isoformat(),
+                "accounts_closed": len(created),
+            }
+        ),
+    )
+    db.commit()
+    for row in created:
+        db.refresh(row)
+    return business_date, created
+
+
+def list_daily_closings(
+    db: Session, account_id: str, limit: int = 50, offset: int = 0
+) -> list[DailyClosingSnapshot]:
+    result = (
+        db.execute(
+            select(DailyClosingSnapshot)
+            .where(DailyClosingSnapshot.account_id == account_id)
+            .order_by(DailyClosingSnapshot.business_date.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        .scalars()
+        .all()
+    )
+    return list(result)
 
 
 # ── Card ──────────────────────────────────────────────────────────────────────
