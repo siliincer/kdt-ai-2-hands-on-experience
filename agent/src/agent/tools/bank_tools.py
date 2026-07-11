@@ -1314,6 +1314,268 @@ def generate_setting_response(state: dict) -> dict:
     return {"final_response": text, "route_key": "success"}
 
 
+# ── 본인 계좌 간 이체 (wf_internal_transfer) ────────────────────────────────────
+#
+# verify_amount/verify_from_account/check_balance는 _ns/_dget로 transfer와
+# 공유한다(itx.* 네임스페이스). 승인/실행 직전검사/실행은 라우트 계약이
+# transfer와 달라(수취인 없음, allowed/blocked 2갈래뿐 등) 전용 tool로 둔다.
+
+# "A에서 B(으)로 5만원 옮겨/이체" 패턴에서 출금힌트/입금힌트/금액을 뽑는다.
+_ITX_PATTERN = re.compile(r"(.+?)에서(.+?)(?:으로|로)(.+?)(?:옮겨|이체)")
+
+
+def extract_internal_transfer_slots(state: dict) -> dict:
+    """본인이체 발화에서 출금/입금 계좌 힌트와 금액을 추출한다."""
+    text = (state.get("user_input") or "").replace(" ", "")
+    updates: dict = {"route_key": "extracted"}
+    m = _ITX_PATTERN.search(text)
+    if m:
+        updates["itx.from_account"] = m.group(1)
+        updates["itx.to_hint"] = m.group(2)
+        amount = _parse_amount(m.group(3))
+        if amount is not None:
+            updates["itx.amount"] = amount
+    return updates
+
+
+def verify_to_account(state: dict) -> dict:
+    """입금 계좌를 확정한다 (출금 계좌 제외, 본인이체 전용).
+
+    후보가 정확히 하나면 자동 확정. 여러 개면 select_needed. 없으면 invalid.
+    """
+    try:
+        user_id = state.get("user_id")
+        accounts = _accounts(user_id)
+        from_account = _dget(state, "from_account") or {}
+        pool = [
+            a for a in accounts if a.get("account_id") != from_account.get("account_id")
+        ]
+        if not pool:
+            return {
+                "route_key": "invalid",
+                "final_response": "입금할 다른 계좌가 없습니다.",
+            }
+        hint = (_dget(state, "to_hint") or "").replace(" ", "")
+        candidates = (
+            [a for a in pool if hint in a.get("account_name", "").replace(" ", "")]
+            if hint
+            else pool
+        )
+        if len(candidates) == 1:
+            return {"itx.to_account": candidates[0], "route_key": "verified"}
+        options = candidates or pool
+        return {
+            "route_key": "select_needed",
+            "prompt_message": f"어느 계좌로 입금할까요?\n{_account_options(options)}",
+            "prompt_ui": _account_card_ui(options),
+        }
+    except Exception:
+        return {
+            "route_key": "invalid",
+            "final_response": "입금 계좌 확인 중 문제가 발생했습니다.",
+        }
+
+
+def _parse_itx_approval_reply(reply: str) -> str:
+    """본인이체 승인 카드 답변 → route_key. 해석 불가는 보수적으로 cancelled."""
+    text = str(reply).strip()
+    if _is_cancel(text):
+        return "cancelled"
+    if "금액" in text:
+        return "edit_amount"
+    if "출금" in text:
+        return "edit_from_account"
+    if "입금" in text:
+        return "edit_to_account"
+    if "계좌" in text:
+        return "edit_from_account"
+    approve_keywords = ("승인", "확인", "네", "응", "보내", "진행", "예")
+    if any(keyword in text for keyword in approve_keywords):
+        return "approved"
+    if text.replace(" ", "") in {"송금하기", "송금", "이체하기", "이체"}:
+        return "approved"
+    return "cancelled"
+
+
+def request_itx_approval(state: dict) -> dict:
+    """본인이체 승인 카드를 보여주고 승인/취소/수정 답변을 받는다 (interrupt).
+
+    approved 시 승인 요약(itx.approval)을 기록해 실행 직전 검사가
+    승인 내용과 실제 실행 내용의 일치를 대조할 수 있게 한다.
+    """
+    data = _data(state)
+    from_account = data.get("itx.from_account") or {}
+    to_account = data.get("itx.to_account") or {}
+    amount = data.get("itx.amount") or 0
+
+    card = (
+        "[본인이체 확인]\n"
+        f"  보내는 계좌: {from_account.get('account_name', '?')}\n"
+        f"  받는 계좌  : {to_account.get('account_name', '?')}\n"
+        f"  금액       : {amount:,}원\n"
+        "진행하려면 '승인', 중단하려면 '취소',\n"
+        "수정하려면 '금액 수정' / '출금 계좌 수정' / '입금 계좌 수정'을 입력해주세요."
+    )
+    reply = interrupt(
+        {
+            "prompt": card,
+            "prompt_for": "itx.approval_decision",
+            "ui": ConfirmModalUi(
+                type="confirm_modal",
+                display={
+                    "from_account_name": from_account.get("account_name"),
+                    "to_account_name": to_account.get("account_name"),
+                    "amount": amount,
+                },
+                actions=[
+                    "송금하기",
+                    "취소",
+                    "금액 수정",
+                    "출금 계좌 수정",
+                    "입금 계좌 수정",
+                ],
+            ).model_dump(exclude_none=True),
+        }
+    )
+
+    route = _parse_itx_approval_reply(str(reply))
+    updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
+    if route == "approved":
+        updates["itx.approval"] = {
+            "from_account_id": from_account.get("account_id"),
+            "to_account_id": to_account.get("account_id"),
+            "amount": amount,
+        }
+    elif route == "cancelled":
+        updates["final_response"] = (
+            "이체를 취소했습니다."
+            if _is_cancel(str(reply))
+            else "확인할 수 없는 답변이라 이체를 취소했습니다. 다시 시도해주세요."
+        )
+    elif route == "edit_amount":
+        updates["itx.amount"] = None
+        updates["prompt_message"] = "새 이체 금액을 입력해주세요 (예: 3만원)."
+        updates["prompt_ui"] = _number_input_ui()
+    elif route == "edit_from_account":
+        updates["itx.from_account"] = None
+        updates["prompt_message"] = "어느 계좌에서 이체할까요?"
+        try:
+            updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+        except BankClientError:
+            pass
+    elif route == "edit_to_account":
+        updates["itx.to_account"] = None
+        updates["prompt_message"] = "어느 계좌로 이체할까요?"
+        try:
+            updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+        except BankClientError:
+            pass
+    return updates
+
+
+def run_itx_pre_execution_guardrail(state: dict) -> dict:
+    """본인이체 정책 검사 (전용) — check_balance 이후·승인 이전에 실행된다.
+
+    시트 라우팅상 이 스텝은 승인(review_internal_transfer)보다 앞에 있어
+    transfer의 동명 스텝(승인 후 위변조 대조)과 역할이 다르다. 여기서는
+    승인 대조 없이 잔액·정책(고액 등)만 검사한다. 라우트가 allowed/blocked
+    두 갈래뿐이라(시트 계약) 모든 실패 사유를 blocked로 묶는다.
+    """
+    try:
+        user_id = state.get("user_id")
+        data = _data(state)
+        account = data.get("itx.from_account") or {}
+        amount = data.get("itx.amount")
+
+        live = _live_account(user_id, account.get("account_id"))
+        if not live or not isinstance(amount, int) or live["balance"] < amount:
+            return {
+                "route_key": "blocked",
+                "final_response": (
+                    "잔액이 부족하거나 계좌 확인에 실패해 이체를 차단했습니다."
+                ),
+            }
+
+        context = {"amount": amount, "balance": live["balance"]}
+        triggered = GuardrailEngine.check("tool", context, target_id="execute_transfer")
+        blocked = [r for r in triggered if r.get("action") == "block"]
+        if blocked:
+            decision = GuardrailEngine.pick_decision(blocked)
+            return {
+                "route_key": "blocked",
+                "final_response": decision.get("user_message"),
+            }
+        return {"route_key": "allowed"}
+    except Exception:
+        return {
+            "route_key": "blocked",
+            "final_response": "실행 직전 검사 중 문제가 발생했습니다.",
+        }
+
+
+def execute_internal_transfer(state: dict) -> dict:
+    """본인 계좌 간 이체를 실행한다. 원장 반영은 BankClient가 담당한다."""
+    user_id = state.get("user_id")
+    data = _data(state)
+    from_account = data.get("itx.from_account") or {}
+    to_account = data.get("itx.to_account") or {}
+    amount = data.get("itx.amount")
+
+    if not to_account.get("account_id") or not isinstance(amount, int):
+        return {
+            "route_key": "failed",
+            "final_response": "이체 처리 중 문제가 발생했습니다.",
+        }
+
+    try:
+        live = _live_account(user_id, from_account.get("account_id"))
+        if not live:
+            return {
+                "route_key": "failed",
+                "final_response": "이체 처리 중 문제가 발생했습니다.",
+            }
+        if live["balance"] < amount:
+            return {
+                "route_key": "failed",
+                "final_response": "잔액이 부족해 이체하지 못했습니다.",
+            }
+        result = get_bank_client().transfer_internal(
+            user_id=user_id,
+            from_account_id=live["account_id"],
+            to_account_id=to_account["account_id"],
+            amount=amount,
+        )
+    except BankClientError:
+        return {
+            "route_key": "failed",
+            "final_response": "이체 처리 중 문제가 발생했습니다.",
+        }
+
+    return {
+        "itx.result": {
+            "transaction_id": result.get("transaction_id"),
+            "from_account_id": live["account_id"],
+            "to_account_id": to_account["account_id"],
+            "to_account_name": to_account.get("account_name"),
+            "amount": amount,
+            "status": result.get("status", "completed"),
+        },
+        "route_key": "success",
+    }
+
+
+def generate_internal_transfer_response(state: dict) -> dict:
+    """본인이체 결과를 사용자 응답 문장으로 만든다 (결정적)."""
+    result = _data(state).get("itx.result") or {}
+    if not result.get("transaction_id"):
+        return {"route_key": "failed"}
+    text = (
+        f"{result.get('to_account_name', '?')}(으)로 {result.get('amount', 0):,}원을 "
+        f"이체했습니다. 거래번호: {result['transaction_id']}"
+    )
+    return {"final_response": text, "route_key": "success"}
+
+
 # ── 감사 로그 ──────────────────────────────────────────────────────────────────
 
 _FAIL_KEYS = {"failed", "not_found", "error", "log_failed", "insufficient"}

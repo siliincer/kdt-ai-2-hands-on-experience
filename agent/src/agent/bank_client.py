@@ -48,6 +48,10 @@ class BankClient(Protocol):
         memo: str | None = None,
     ) -> dict: ...
 
+    def transfer_internal(
+        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
+    ) -> dict: ...
+
     def post_audit_log(
         self,
         event_type: str,
@@ -106,6 +110,29 @@ class LocalBankClient:
             raise BankClientError("잔액이 부족합니다.")
 
         account["balance"] -= amount  # mock 원장의 유일한 승인된 변형
+
+        return {
+            "transaction_id": f"txn_{uuid.uuid4().hex[:8]}",
+            "status": "completed",
+        }
+
+    def transfer_internal(
+        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
+    ) -> dict:
+        accounts = MOCK_ACCOUNTS.get(user_id, [])
+        from_account = next(
+            (a for a in accounts if a.get("account_id") == from_account_id), None
+        )
+        to_account = next(
+            (a for a in accounts if a.get("account_id") == to_account_id), None
+        )
+        if from_account is None or to_account is None:
+            raise BankClientError("계좌를 찾을 수 없습니다.")
+        if from_account["balance"] < amount:
+            raise BankClientError("잔액이 부족합니다.")
+
+        from_account["balance"] -= amount
+        to_account["balance"] += amount
 
         return {
             "transaction_id": f"txn_{uuid.uuid4().hex[:8]}",
@@ -211,6 +238,22 @@ class HttpBankClient:
         )
         if response.status_code >= 400:
             raise BankClientError(f"송금 실행 실패: HTTP {response.status_code}")
+        return response.json()
+
+    def transfer_internal(
+        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
+    ) -> dict:
+        body = {
+            "user_id": user_id,
+            "from_account_id": from_account_id,
+            "to_account_id": to_account_id,
+            "amount": amount,
+        }
+        response = self._request(
+            "POST", "/api/transactions/transfer-internal", json=body
+        )
+        if response.status_code >= 400:
+            raise BankClientError(f"본인이체 실행 실패: HTTP {response.status_code}")
         return response.json()
 
     def post_audit_log(

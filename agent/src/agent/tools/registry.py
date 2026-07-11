@@ -17,19 +17,24 @@ from agent.tools.bank_tools import (
     check_balance,
     check_recipient_input,
     confirm_transfer_warning,
+    execute_internal_transfer,
     execute_transfer,
     extract_balance_slots,
+    extract_internal_transfer_slots,
     extract_setting_slots,
     extract_transfer_slots,
     fetch_account_list,
     fetch_balance,
     generate_account_list_response,
     generate_balance_response,
+    generate_internal_transfer_response,
     generate_setting_response,
     generate_transfer_response,
+    request_itx_approval,
     request_setting_approval,
     request_transfer_approval,
     resolve_recipient_input,
+    run_itx_pre_execution_guardrail,
     run_pre_execution_guardrail,
     run_transfer_guardrail,
     verify_account,
@@ -37,6 +42,7 @@ from agent.tools.bank_tools import (
     verify_from_account,
     verify_recipient_account,
     verify_target_account,
+    verify_to_account,
     write_audit_log,
 )
 
@@ -79,6 +85,13 @@ TOOL_REGISTRY = {
     # 타인 송금 — 실행 / 응답
     "execute_transfer": execute_transfer,
     "generate_transfer_response": generate_transfer_response,
+    # 본인 계좌 간 이체
+    "extract_internal_transfer_slots": extract_internal_transfer_slots,
+    "verify_to_account": verify_to_account,
+    "request_itx_approval": request_itx_approval,
+    "run_itx_pre_execution_guardrail": run_itx_pre_execution_guardrail,
+    "execute_internal_transfer": execute_internal_transfer,
+    "generate_internal_transfer_response": generate_internal_transfer_response,
 }
 
 

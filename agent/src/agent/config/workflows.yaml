@@ -2596,7 +2596,7 @@ wf_internal_transfer:
     step_name: 실행 직전 검사
     step_type: guardrail
     task_id: ''
-    tool_id: run_pre_execution_guardrail
+    tool_id: run_itx_pre_execution_guardrail
     output_data_key: guardrail_result
     step_risk_level: R5
     ui_type: ''
@@ -2614,7 +2614,7 @@ wf_internal_transfer:
     step_name: 이체 내용 확인
     step_type: approval
     task_id: ''
-    tool_id: request_transfer_approval
+    tool_id: request_itx_approval
     output_data_key: itx.approval
     step_risk_level: R2
     ui_type: confirm_modal
