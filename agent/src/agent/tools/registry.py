@@ -10,6 +10,7 @@ step_message/final_response 표시를 담당한다.
 
 from agent.tools.bank_tools import (
     apply_account_selection,
+    apply_default_account,
     authenticate_user,
     check_amount_input,
     check_balance,
@@ -17,12 +18,15 @@ from agent.tools.bank_tools import (
     confirm_transfer_warning,
     execute_transfer,
     extract_balance_slots,
+    extract_setting_slots,
     extract_transfer_slots,
     fetch_account_list,
     fetch_balance,
     generate_account_list_response,
     generate_balance_response,
+    generate_setting_response,
     generate_transfer_response,
+    request_setting_approval,
     request_transfer_approval,
     resolve_recipient_input,
     run_pre_execution_guardrail,
@@ -31,6 +35,7 @@ from agent.tools.bank_tools import (
     verify_amount,
     verify_from_account,
     verify_recipient_account,
+    verify_target_account,
     write_audit_log,
 )
 
@@ -46,6 +51,12 @@ TOOL_REGISTRY = {
     # 계좌 목록 조회
     "fetch_account_list": fetch_account_list,
     "generate_account_list_response": generate_account_list_response,
+    # 설정 (기본계좌 / 별칭)
+    "extract_setting_slots": extract_setting_slots,
+    "verify_target_account": verify_target_account,
+    "request_setting_approval": request_setting_approval,
+    "apply_default_account": apply_default_account,
+    "generate_setting_response": generate_setting_response,
     # 타인 송금 — 슬롯 추출 / 입력 확인
     "extract_transfer_slots": extract_transfer_slots,
     "check_recipient_input": check_recipient_input,

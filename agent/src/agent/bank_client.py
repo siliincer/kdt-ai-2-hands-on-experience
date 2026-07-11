@@ -56,6 +56,8 @@ class BankClient(Protocol):
         result: dict,
     ) -> dict: ...
 
+    def set_default_account(self, user_id: str, account_id: str) -> dict: ...
+
 
 class LocalBankClient:
     """인메모리 mock 원장 구현 (외부 의존 없음)."""
@@ -123,6 +125,16 @@ class LocalBankClient:
         }
         AUDIT_LOG.append(entry)
         return {"log_id": f"local_log_{len(AUDIT_LOG):04d}"}
+
+    def set_default_account(self, user_id: str, account_id: str) -> dict:
+        """대상 계좌를 기본 출금계좌로 지정하고 나머지는 해제한다 (in-place)."""
+        accounts = MOCK_ACCOUNTS.get(user_id, [])
+        target = next((a for a in accounts if a.get("account_id") == account_id), None)
+        if target is None:
+            raise BankClientError(f"계좌를 찾을 수 없습니다: {account_id}")
+        for a in accounts:
+            a["is_default"] = a.get("account_id") == account_id
+        return {"account_id": account_id, "is_default": True}
 
 
 class HttpBankClient:
@@ -206,6 +218,13 @@ class HttpBankClient:
         response = self._request("POST", "/api/audit-logs", json=body)
         if response.status_code >= 400:
             raise BankClientError(f"감사 로그 전송 실패: HTTP {response.status_code}")
+        return response.json()
+
+    def set_default_account(self, user_id: str, account_id: str) -> dict:
+        body = {"user_id": user_id, "account_id": account_id}
+        response = self._request("POST", "/api/accounts/default", json=body)
+        if response.status_code >= 400:
+            raise BankClientError(f"기본계좌 설정 실패: HTTP {response.status_code}")
         return response.json()
 
 

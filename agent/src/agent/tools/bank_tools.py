@@ -39,6 +39,31 @@ def _data(state: dict) -> dict:
     return state.get("data") or {}
 
 
+# 워크플로우별 데이터키 네임스페이스 (naming-convention.md의 data 키 규칙).
+# 여러 워크플로우가 공유하는 tool(verify_amount 등)은 현재 workflow_id로
+# 네임스페이스를 알아내 f"{ns}.slot" 키를 읽고/쓴다.
+_WF_NS = {
+    "wf_balance_inquiry": "balance",
+    "wf_account_list": "account",
+    "wf_transaction_history": "txn",
+    "wf_period_amount_summary": "sum",
+    "wf_external_transfer": "transfer",
+    "wf_internal_transfer": "itx",
+    "wf_set_default_account": "default",
+    "wf_set_account_alias": "alias",
+}
+
+
+def _ns(state: dict) -> str:
+    """현재 워크플로우의 데이터키 네임스페이스 (예: 'transfer', 'itx')."""
+    return _WF_NS.get(state.get("workflow_id"), "")
+
+
+def _dget(state: dict, slot: str, default=None):
+    """현재 워크플로우 네임스페이스로 data 버킷에서 읽는다 (f'{ns}.{slot}')."""
+    return _data(state).get(f"{_ns(state)}.{slot}", default)
+
+
 def _accounts(user_id: str) -> list[dict]:
     """BankClient 경유 계좌 목록 조회 (원장 직접 접근 금지)."""
     return get_bank_client().get_accounts(user_id)
@@ -704,9 +729,9 @@ _TRANSFER_LIMIT = 50_000_000  # 1회 송금 한도 (입력 형식 검증 — 가
 
 
 def verify_amount(state: dict) -> dict:
-    """송금 금액을 정수로 정규화하고 한도를 확인한다."""
-    raw = _data(state).get("transfer.amount")
-    amount = _parse_amount(raw)
+    """송금 금액을 정수로 정규화하고 한도를 확인한다 (transfer/itx 공유)."""
+    amount = _parse_amount(_dget(state, "amount"))
+    amt_key = f"{_ns(state)}.amount"
     if amount is None or amount <= 0:
         return {
             "route_key": "invalid",
@@ -717,24 +742,25 @@ def verify_amount(state: dict) -> dict:
         }
     if amount > _TRANSFER_LIMIT:
         return {
-            "transfer.amount": amount,
+            amt_key: amount,
             "route_key": "limit_exceeded",
             "final_response": (
                 f"1회 송금 한도({_TRANSFER_LIMIT:,}원)를 초과해 진행할 수 "
                 f"없습니다. 요청 금액: {amount:,}원"
             ),
         }
-    return {"transfer.amount": amount, "route_key": "valid"}
+    return {amt_key: amount, "route_key": "valid"}
 
 
 def verify_from_account(state: dict) -> dict:
-    """출금 계좌를 확정한다 (dict 검증 / 힌트·선택 답변 해석 / 기본 계좌)."""
+    """출금 계좌를 확정한다 (transfer/itx 공유; dict 검증/힌트/기본 계좌)."""
     try:
         user_id = state.get("user_id")
-        raw = _data(state).get("transfer.from_account")
+        raw = _dget(state, "from_account")
+        fa_key = f"{_ns(state)}.from_account"
         resolved, candidates = _resolve_from_account(user_id, raw)
         if resolved:
-            return {"transfer.from_account": resolved, "route_key": "verified"}
+            return {fa_key: resolved, "route_key": "verified"}
         if not candidates:
             return {
                 "route_key": "failed",
@@ -755,12 +781,12 @@ def verify_from_account(state: dict) -> dict:
 
 
 def check_balance(state: dict) -> dict:
-    """출금 계좌의 사용 가능 잔액이 충분한지 실시간으로 확인한다."""
+    """출금 계좌의 사용 가능 잔액이 충분한지 실시간으로 확인한다 (transfer/itx 공유)."""
     try:
         user_id = state.get("user_id")
-        data = _data(state)
-        amount = data.get("transfer.amount")
-        account = data.get("transfer.from_account") or {}
+        amount = _dget(state, "amount")
+        account = _dget(state, "from_account") or {}
+        fa_key = f"{_ns(state)}.from_account"
         live = _live_account(user_id, account.get("account_id"))
         if not live or not isinstance(amount, int):
             return {
@@ -768,7 +794,7 @@ def check_balance(state: dict) -> dict:
                 "final_response": "잔액 확인 중 문제가 발생했습니다.",
             }
         if live["balance"] >= amount:
-            return {"transfer.from_account": live, "route_key": "sufficient"}
+            return {fa_key: live, "route_key": "sufficient"}
         candidates = _accounts(user_id)
         return {
             "route_key": "insufficient",
@@ -1121,6 +1147,137 @@ def generate_transfer_response(state: dict) -> dict:
             f"송금했습니다. 거래번호: {result['transaction_id']}"
         ),
     }
+
+
+# ── 설정 (wf_set_default_account / wf_set_account_alias) ──────────────────────
+#
+# 기본계좌 설정·별칭 설정 공유 tool은 _ns/_dget로 default.*/alias.* 를 다룬다.
+# verify_target_account는 balance의 verify_account(복수)와 달리 단수 확정이라 별도다.
+
+
+def extract_setting_slots(state: dict) -> dict:
+    """설정 발화에서 대상 계좌 힌트를 추출한다 (기본계좌/별칭 공유)."""
+    text = (state.get("user_input") or "").replace(" ", "")
+    hint = None
+    try:
+        for a in _accounts(state.get("user_id")):
+            name = a.get("account_name", "").replace(" ", "")
+            if name and name in text:
+                hint = a["account_name"]
+                break
+    except BankClientError:
+        pass
+    if not hint:
+        m = re.search(r"(\S+?)(?:통장|계좌|뱅크|은행)", text)
+        if m:
+            hint = m.group(1)
+    return {f"{_ns(state)}.account_hint": hint, "route_key": "extracted"}
+
+
+def verify_target_account(state: dict) -> dict:
+    """설정 대상 계좌를 단수로 확정한다 (기본계좌/별칭 공유).
+
+    힌트로 하나면 confirmed. 여러 개면 select_needed(단수 선택). 없으면 not_found.
+    balance의 verify_account(복수 선택)와 동작이 달라 분리된 tool이다.
+    """
+    try:
+        accounts = _accounts(state.get("user_id"))
+        acc_key = f"{_ns(state)}.account"
+        hint = (_dget(state, "account_hint") or "").replace(" ", "")
+        candidates = (
+            [a for a in accounts if hint in a.get("account_name", "").replace(" ", "")]
+            if hint
+            else accounts
+        )
+        if not candidates:
+            return {
+                "route_key": "not_found",
+                "final_response": "대상 계좌를 찾지 못했어요.",
+            }
+        if len(candidates) == 1:
+            return {acc_key: candidates[0], "route_key": "confirmed"}
+        return {
+            "route_key": "select_needed",
+            "prompt_message": (
+                f"어느 계좌로 설정할까요?\n{_account_options(candidates)}"
+            ),
+            "prompt_ui": _account_card_ui(candidates),
+        }
+    except Exception:
+        return {
+            "route_key": "error",
+            "final_response": "계좌 확인 중 문제가 발생했습니다.",
+        }
+
+
+def request_setting_approval(state: dict) -> dict:
+    """설정 확인을 받는다 (interrupt; 기본계좌/별칭 공유).
+
+    재개 시 노드가 재실행되므로 interrupt 이전은 프롬프트 조립(멱등)만 둔다.
+    해석 불가 답변은 보수적으로 취소한다.
+    """
+    account = _dget(state, "account") or {}
+    name = account.get("account_name", "?")
+    if _ns(state) == "default":
+        prompt = f"'{name}'을(를) 기본 출금계좌로 설정할까요? ('확인' / '취소')"
+    else:
+        value = _dget(state, "value") or "?"
+        prompt = f"'{name}'의 별칭을 '{value}'(으)로 설정할까요? ('확인' / '취소')"
+    reply = interrupt(
+        {
+            "prompt": prompt,
+            "prompt_for": f"{_ns(state)}.decision",
+            "ui": ConfirmModalUi(
+                type="confirm_modal",
+                display={"account_name": name},
+                actions=["확인", "취소"],
+            ).model_dump(exclude_none=True),
+        }
+    )
+    dec_key = f"{_ns(state)}.decision"
+    text = str(reply).strip()
+    if ("확인" in text or "승인" in text or "네" == text) and not _is_cancel(text):
+        return {dec_key: "approved", "route_key": "approved"}
+    return {
+        dec_key: "cancelled",
+        "route_key": "cancelled",
+        "final_response": "설정을 취소했습니다.",
+    }
+
+
+def apply_default_account(state: dict) -> dict:
+    """확정 계좌를 기본 출금계좌로 적용한다."""
+    account = _dget(state, "account") or {}
+    acc_id = account.get("account_id")
+    if not acc_id:
+        return {"route_key": "error", "final_response": "설정할 계좌 정보가 없습니다."}
+    try:
+        get_bank_client().set_default_account(state.get("user_id"), acc_id)
+    except BankClientError:
+        return {
+            "route_key": "error",
+            "final_response": "기본계좌 설정 중 문제가 발생했습니다.",
+        }
+    return {
+        f"{_ns(state)}.result": {
+            "account_id": acc_id,
+            "account_name": account.get("account_name"),
+        },
+        "route_key": "success",
+    }
+
+
+def generate_setting_response(state: dict) -> dict:
+    """설정 결과 응답 문장을 만든다 (기본계좌/별칭 공유)."""
+    result = _dget(state, "result") or {}
+    name = result.get("account_name")
+    if not name:
+        return {"route_key": "failed"}
+    if _ns(state) == "default":
+        text = f"기본 출금계좌를 '{name}'(으)로 설정했습니다."
+    else:
+        text = f"'{name}'의 별칭을 설정했습니다."
+    return {"final_response": text, "route_key": "success"}
 
 
 # ── 감사 로그 ──────────────────────────────────────────────────────────────────

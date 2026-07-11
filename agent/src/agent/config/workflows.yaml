@@ -1954,11 +1954,11 @@ wf_set_default_account:
     _5: ''
     _6: ''
   - step_order: 2
-    step_id: verify_account
+    step_id: verify_target_account
     step_name: 조회 계좌 확인
     step_type: tool
     task_id: ''
-    tool_id: verify_account
+    tool_id: verify_target_account
     output_data_key: default.account
     step_risk_level: R1
     ui_type: ''
@@ -2102,23 +2102,23 @@ wf_set_default_account:
     route_key: extracted
     route_name: 추출 완료
     condition_description: 슬롯 추출 완료
-    to_step_id: verify_account
-  - from_step_id: verify_account
+    to_step_id: verify_target_account
+  - from_step_id: verify_target_account
     route_key: confirmed
     route_name: 계좌 확정
     condition_description: 단일 계좌 확정
     to_step_id: review_default_account
-  - from_step_id: verify_account
+  - from_step_id: verify_target_account
     route_key: select_needed
     route_name: 선택 필요
     condition_description: 복수/미매칭으로 선택 필요
     to_step_id: ask_target_account
-  - from_step_id: verify_account
+  - from_step_id: verify_target_account
     route_key: not_found
     route_name: 계좌 없음
     condition_description: 등록 계좌 없음
     to_step_id: show_setting_failed
-  - from_step_id: verify_account
+  - from_step_id: verify_target_account
     route_key: error
     route_name: 조회 실패
     condition_description: 계좌 조회 오류
