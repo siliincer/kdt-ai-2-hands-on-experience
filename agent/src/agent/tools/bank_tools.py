@@ -1155,8 +1155,12 @@ def generate_transfer_response(state: dict) -> dict:
 # verify_target_account는 balance의 verify_account(복수)와 달리 단수 확정이라 별도다.
 
 
+# "A를/을 B(이)라(고) 해/불러줘" 패턴에서 새 별칭 값(B)만 뽑는다 (별칭 워크플로우 전용).
+_ALIAS_VALUE_PATTERN = re.compile(r"(?:을|를)(.+?)(?:이라고|라고|이라|라)(?:불러|해)")
+
+
 def extract_setting_slots(state: dict) -> dict:
-    """설정 발화에서 대상 계좌 힌트를 추출한다 (기본계좌/별칭 공유)."""
+    """설정 발화에서 대상 계좌 힌트(+별칭이면 새 값)를 추출한다 (기본계좌/별칭 공유)."""
     text = (state.get("user_input") or "").replace(" ", "")
     hint = None
     try:
@@ -1171,7 +1175,12 @@ def extract_setting_slots(state: dict) -> dict:
         m = re.search(r"(\S+?)(?:통장|계좌|뱅크|은행)", text)
         if m:
             hint = m.group(1)
-    return {f"{_ns(state)}.account_hint": hint, "route_key": "extracted"}
+    updates = {f"{_ns(state)}.account_hint": hint, "route_key": "extracted"}
+    if _ns(state) == "alias":
+        vm = _ALIAS_VALUE_PATTERN.search(text)
+        if vm:
+            updates[f"{_ns(state)}.value"] = vm.group(1)
+    return updates
 
 
 def verify_target_account(state: dict) -> dict:
@@ -1267,6 +1276,30 @@ def apply_default_account(state: dict) -> dict:
     }
 
 
+def apply_account_alias(state: dict) -> dict:
+    """확정 계좌에 새 별칭을 적용한다."""
+    account = _dget(state, "account") or {}
+    value = _dget(state, "value")
+    acc_id = account.get("account_id")
+    if not acc_id or not value:
+        return {"route_key": "error", "final_response": "별칭 정보가 없습니다."}
+    try:
+        get_bank_client().set_account_alias(state.get("user_id"), acc_id, value)
+    except BankClientError:
+        return {
+            "route_key": "error",
+            "final_response": "별칭 설정 중 문제가 발생했습니다.",
+        }
+    return {
+        f"{_ns(state)}.result": {
+            "account_id": acc_id,
+            "account_name": account.get("account_name"),
+            "alias": value,
+        },
+        "route_key": "success",
+    }
+
+
 def generate_setting_response(state: dict) -> dict:
     """설정 결과 응답 문장을 만든다 (기본계좌/별칭 공유)."""
     result = _dget(state, "result") or {}
@@ -1276,7 +1309,8 @@ def generate_setting_response(state: dict) -> dict:
     if _ns(state) == "default":
         text = f"기본 출금계좌를 '{name}'(으)로 설정했습니다."
     else:
-        text = f"'{name}'의 별칭을 설정했습니다."
+        alias = result.get("alias", "?")
+        text = f"'{name}'의 별칭을 '{alias}'(으)로 설정했습니다."
     return {"final_response": text, "route_key": "success"}
 
 

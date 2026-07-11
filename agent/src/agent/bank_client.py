@@ -58,6 +58,8 @@ class BankClient(Protocol):
 
     def set_default_account(self, user_id: str, account_id: str) -> dict: ...
 
+    def set_account_alias(self, user_id: str, account_id: str, alias: str) -> dict: ...
+
 
 class LocalBankClient:
     """인메모리 mock 원장 구현 (외부 의존 없음)."""
@@ -135,6 +137,15 @@ class LocalBankClient:
         for a in accounts:
             a["is_default"] = a.get("account_id") == account_id
         return {"account_id": account_id, "is_default": True}
+
+    def set_account_alias(self, user_id: str, account_id: str, alias: str) -> dict:
+        """대상 계좌의 별칭을 설정한다 (in-place)."""
+        accounts = MOCK_ACCOUNTS.get(user_id, [])
+        target = next((a for a in accounts if a.get("account_id") == account_id), None)
+        if target is None:
+            raise BankClientError(f"계좌를 찾을 수 없습니다: {account_id}")
+        target["alias"] = alias
+        return {"account_id": account_id, "alias": alias}
 
 
 class HttpBankClient:
@@ -225,6 +236,13 @@ class HttpBankClient:
         response = self._request("POST", "/api/accounts/default", json=body)
         if response.status_code >= 400:
             raise BankClientError(f"기본계좌 설정 실패: HTTP {response.status_code}")
+        return response.json()
+
+    def set_account_alias(self, user_id: str, account_id: str, alias: str) -> dict:
+        body = {"user_id": user_id, "account_id": account_id, "alias": alias}
+        response = self._request("POST", "/api/accounts/alias", json=body)
+        if response.status_code >= 400:
+            raise BankClientError(f"별칭 설정 실패: HTTP {response.status_code}")
         return response.json()
 
 

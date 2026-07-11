@@ -9,6 +9,7 @@ step_message/final_response 표시를 담당한다.
 """
 
 from agent.tools.bank_tools import (
+    apply_account_alias,
     apply_account_selection,
     apply_default_account,
     authenticate_user,
@@ -56,6 +57,7 @@ TOOL_REGISTRY = {
     "verify_target_account": verify_target_account,
     "request_setting_approval": request_setting_approval,
     "apply_default_account": apply_default_account,
+    "apply_account_alias": apply_account_alias,
     "generate_setting_response": generate_setting_response,
     # 타인 송금 — 슬롯 추출 / 입력 확인
     "extract_transfer_slots": extract_transfer_slots,

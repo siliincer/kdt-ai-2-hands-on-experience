@@ -14,6 +14,7 @@ MOCK_ACCOUNTS = {
             "balance": 1250000,
             "currency": "KRW",
             "is_default": True,
+            "alias": None,
         },
         {
             "account_id": "acc_002",
@@ -21,6 +22,7 @@ MOCK_ACCOUNTS = {
             "balance": 430000,
             "currency": "KRW",
             "is_default": False,
+            "alias": None,
         },
     ]
 }
