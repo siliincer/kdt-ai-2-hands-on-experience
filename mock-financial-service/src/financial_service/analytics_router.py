@@ -17,8 +17,7 @@ from .crud import (
     get_card,
     get_card_ledger_entries,
     get_ledger_entries,
-    get_snapshot,
-    reconcile_snapshot,
+    reconcile_balance,
 )
 from .database import get_db
 from .schemas import (
@@ -29,7 +28,6 @@ from .schemas import (
     ErrorResponse,
     LedgerEntryResponse,
     ReconciliationResponse,
-    SnapshotResponse,
 )
 from .utils import throw_err
 
@@ -59,35 +57,6 @@ def _require_analytics_key(
 AnalyticsAuth = Annotated[None, Depends(_require_analytics_key)]
 
 
-# ── GET /analytics/accounts/{account_id}/snapshot ────────────────────────────
-
-
-@analytics_router.get(
-    "/accounts/{account_id}/snapshot",
-    response_model=SnapshotResponse,
-    responses={404: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
-    summary="Read cached balance snapshot (정보계)",
-)
-def get_snapshot_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
-    """Return the latest balance snapshot for an account.
-
-    Returns 404 if no snapshot has been generated yet
-    (call POST /accounts/{id}/snapshot first).
-    """
-    acct = get_account(db, account_id)
-    if acct is None:
-        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
-    snap = get_snapshot(db, account_id)
-    if snap is None:
-        throw_err(
-            404,
-            "SNAPSHOT_NOT_FOUND",
-            f"No snapshot for {account_id}. "
-            f"Call POST /accounts/{account_id}/snapshot first.",
-        )
-    return snap
-
-
 # ── GET /analytics/accounts/{account_id}/reconcile ───────────────────────────
 
 
@@ -95,18 +64,19 @@ def get_snapshot_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     "/accounts/{account_id}/reconcile",
     response_model=ReconciliationResponse,
     responses={404: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
-    summary="Reconcile cached snapshot vs live ledger (정보계)",
+    summary="Verify stored Account.balance against a full ledger recompute (정보계)",
 )
 def reconcile_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
-    """Compare watermark-scoped stored sums vs live recompute.
+    """Compare stored Account.balance (canonical) vs a fresh ledger recompute.
 
-    drift_detected=true means cached_balance diverges from recomputed
-    sum at watermark. Pure read — does not acquire locks or block ledger writes.
+    drift_detected=true means the stored balance diverges from the
+    recomputed sum — Account.balance is written atomically with every
+    ledger entry, so drift indicates a bug, not staleness.
     """
     acct = get_account(db, account_id)
     if acct is None:
         throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
-    result = reconcile_snapshot(db, account_id)
+    result = reconcile_balance(db, account_id)
     return result
 
 
@@ -120,7 +90,7 @@ def reconcile_endpoint(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     summary="Read canonical account balance (정보계)",
 )
 def get_analytics_balance(account_id: str, db: DbDep, _auth: AnalyticsAuth):
-    """Return canonical balance (SUM CREDIT - SUM DEBIT) for the account.
+    """Return canonical stored balance (Account.balance) for the account.
 
     Identical to /api/v1/accounts/{id}/balance but protected by X-Analytics-Key.
     """

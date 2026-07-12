@@ -49,55 +49,6 @@ def _apply_sqlite_triggers(engine: Engine) -> None:
         conn.commit()
 
 
-def apply_snapshot_schema(engine: Engine) -> None:
-    """Create read-only view joining accounts with balance_snapshots for 정보계 access.
-
-    View: v_account_snapshots
-    Shows cached balance, watermark, and refresh timestamp per account.
-    LEFT JOIN — accounts without a snapshot appear with NULL cached fields.
-    Idempotent: CREATE VIEW IF NOT EXISTS / CREATE OR REPLACE VIEW.
-    """
-    dialect = engine.dialect.name
-    if dialect == "sqlite":
-        ddl = """
-        CREATE VIEW IF NOT EXISTS v_account_snapshots AS
-        SELECT
-            a.account_id,
-            a.owner,
-            a.currency,
-            a.created_at,
-            COALESCE(bs.cached_balance, 0)  AS cached_balance,
-            COALESCE(bs.sum_credit, 0)       AS sum_credit,
-            COALESCE(bs.sum_debit, 0)        AS sum_debit,
-            bs.last_entry_rowid,
-            bs.refreshed_at
-        FROM accounts a
-        LEFT JOIN balance_snapshots bs ON a.account_id = bs.account_id
-        """
-    elif dialect == "postgresql":
-        ddl = """
-        CREATE OR REPLACE VIEW v_account_snapshots AS
-        SELECT
-            a.account_id,
-            a.owner,
-            a.currency,
-            a.created_at,
-            COALESCE(bs.cached_balance, 0)  AS cached_balance,
-            COALESCE(bs.sum_credit, 0)       AS sum_credit,
-            COALESCE(bs.sum_debit, 0)        AS sum_debit,
-            bs.last_entry_rowid,
-            bs.refreshed_at
-        FROM accounts a
-        LEFT JOIN balance_snapshots bs ON a.account_id = bs.account_id
-        """
-    else:
-        return  # no-op for other dialects
-
-    with engine.connect() as conn:
-        conn.execute(text(ddl))
-        conn.commit()
-
-
 def apply_analytics_views(engine: Engine) -> None:
     """Create read-only views for 정보계 (downstream analytics) access.
 
