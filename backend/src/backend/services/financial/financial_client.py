@@ -98,22 +98,24 @@ class FinancialServiceClient:
 
     async def transfer(
         self,
-        sender_account_id: str,
-        receiver_account_id: str,
+        sender_account_number: str,
+        receiver_bank_name: str,
+        receiver_account_number: str,
         amount: int,
         idempotency_key: str,
     ) -> dict:
-        """계정계 송금(POST /transfers). Idempotency-Key 필수(멱등 재시도 안전).
+        """계정계 송금(POST /transfers). 계좌번호+은행명 기반(계정계 신 계약).
 
-        실패(4xx/5xx/커넥션)는 FinancialServiceError. 동일 키+동일 payload 재호출은
-        계정계가 기존 트랜잭션을 그대로 반환한다(safe replay).
+        Idempotency-Key 필수. 실패(4xx/5xx/커넥션)는 FinancialServiceError. 동일 키+
+        동일 payload 재호출은 계정계가 기존 트랜잭션을 그대로 반환한다(safe replay).
         """
         response = await self._request(
             "POST",
             _TRANSFERS_PATH,
             json={
-                "sender_account_id": sender_account_id,
-                "receiver_account_id": receiver_account_id,
+                "sender_account_number": sender_account_number,
+                "receiver_bank_name": receiver_bank_name,
+                "receiver_account_number": receiver_account_number,
                 "amount": amount,
             },
             headers={"Idempotency-Key": idempotency_key},

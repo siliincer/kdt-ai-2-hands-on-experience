@@ -60,7 +60,13 @@ async def test_mock_mode_skips_provisioning(monkeypatch, created):
 async def test_http_mode_provisions_and_maps(monkeypatch, created):
     monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "http")
     fake = _FakeClient(
-        result={"account_id": "acc-x", "balance": 1000000, "currency": "KRW"}
+        result={
+            "account_id": "acc-x",
+            "account_number": "271-069-693651",
+            "bank_name": "KDT은행",
+            "balance": 1000000,
+            "currency": "KRW",
+        }
     )
     monkeypatch.setattr(provisioning, "get_financial_client", lambda: fake)
 
@@ -68,7 +74,22 @@ async def test_http_mode_provisions_and_maps(monkeypatch, created):
     assert result == "acc-x"
     assert created["external_account_id"] == "acc-x"
     assert created["balance"] == 1000000
+    # 계정계가 부여한 실제 계좌번호/은행명을 그대로 저장한다.
+    assert created["account_number"] == "271-069-693651"
+    assert created["bank_name"] == "KDT은행"
+
+
+@pytest.mark.asyncio
+async def test_http_mode_falls_back_to_local_number_when_absent(monkeypatch, created):
+    """구버전 계정계(account_number 미반환) 호환: 로컬 임시번호로 대체."""
+    monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "http")
+    fake = _FakeClient(result={"account_id": "acc-y", "balance": 0, "currency": "KRW"})
+    monkeypatch.setattr(provisioning, "get_financial_client", lambda: fake)
+
+    result = await provisioning.provision_account_for_user(None, _user())
+    assert result == "acc-y"
     assert created["account_number"].startswith("MFS")
+    assert created["bank_name"] is None
 
 
 @pytest.mark.asyncio

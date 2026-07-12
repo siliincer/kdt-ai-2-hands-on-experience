@@ -49,12 +49,15 @@ async def provision_account_for_user(session: AsyncSession, user: User) -> str |
         return None
 
     external_id = created["account_id"]
-    account_number = f"MFS{uuid4().hex[:12].upper()}"
+    # 계정계가 부여한 실제 계좌번호/은행명 저장(송금·balance 뷰에서 재사용).
+    # 응답에 없으면(구버전 계정계) 로컬 임시번호로 대체.
+    account_number = created.get("account_number") or f"MFS{uuid4().hex[:12].upper()}"
     await create_mapped_account(
         session,
         user_id=user.id,
         external_account_id=external_id,
         account_number=account_number,
+        bank_name=created.get("bank_name"),
         balance=created.get("balance", 0),
         currency=created.get("currency", "KRW"),
     )

@@ -3,9 +3,9 @@
 FE 가 component 시그널을 받은 뒤 카드 데이터를 조회하는 계층.
 
 FINANCIAL_CLIENT=mock(기본): 목 픽스처 반환(개발/테스트/CI).
-FINANCIAL_CLIENT=http: balance/transactions 는 mock-financial-service(계정계)를
-정보계(analytics) 경로로 실조회하고, 원장 데이터를 UI 뷰로 enrich 한다.
-spending/budget/cards 는 Phase 1 범위 밖이라 픽스처 유지(결정 B).
+FINANCIAL_CLIENT=http: mock-financial-service(계정계)를 정보계(analytics) 경로로
+실조회하고 원장 데이터를 UI 뷰로 enrich 한다. 원장에 없는 필드(상호/카테고리/
+은행/카드 메타)는 기본값으로 대체한다(원장은 순수 이중기입 원장이라 표시용 메타 없음).
 """
 
 from datetime import datetime
@@ -14,12 +14,19 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.load_environment_var import settings
-from ..repository.account_repository import get_external_account_ids
+from ..repository.account_repository import (
+    get_external_account_ids,
+    get_mapped_accounts,
+)
 from ..schemas.ui import (
     AccountSummary,
     BalanceData,
     BudgetData,
+    BudgetItem,
     CardsData,
+    CatTxDatum,
+    MonthlySpendDatum,
+    PieDatum,
     SpendingData,
     TransactionItem,
     TransactionsData,
@@ -33,10 +40,16 @@ from .mock.ui_fixtures import (
     TRANSACTIONS_FIXTURE,
 )
 
-# 계정 메타(은행/별칭/색)는 계정계 원장에 없어 backend 가 채운다(Phase 1 기본 enrich).
+# 계정 메타(은행/별칭/색)는 계정계 원장에 없어 backend 가 채운다(기본 enrich).
 _ACCOUNT_COLORS = ["#0052A3", "#FAE100", "#2DD4BF", "#F97316", "#8B5CF6"]
 _DEFAULT_BANK = "mock은행"
 _DEFAULT_ALIAS = "입출금통장"
+
+# 소비/예산 기본값(원장에 카테고리/예산목표/구독 없음 → 단일 '기타' 버킷 + 기본 예산).
+_DEFAULT_CATEGORY = "기타"
+_DEFAULT_PIE_COLOR = "#3B82F6"
+_DEFAULT_BUDGET_TOTAL = 1_000_000
+_CATTX_LIMIT = 20
 
 
 def _use_http() -> bool:
@@ -46,6 +59,17 @@ def _use_http() -> bool:
 def _parse_dt(value: str) -> datetime:
     """계정계 ISO8601(Z 포함) 문자열 파싱."""
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+async def _fetch_user_ledger(session: AsyncSession, user_id: UUID) -> list[dict]:
+    """user 의 매핑 계좌 원장을 병합해 최신순으로 반환(계좌 간 병합 재정렬)."""
+    account_ids = await get_external_account_ids(session, user_id)
+    client = get_financial_client()
+    raw: list[dict] = []
+    for account_id in account_ids:
+        raw.extend(await client.get_ledger(account_id))
+    raw.sort(key=lambda e: e["created_at"], reverse=True)
+    return raw
 
 
 async def get_balance_view(
@@ -58,20 +82,31 @@ async def get_balance_view(
     if not _use_http() or session is None:
         return BALANCE_FIXTURE
 
-    account_ids = await get_external_account_ids(session, user_id)
     client = get_financial_client()
 
+    # 매핑 행이 있으면 계정계가 부여한 은행명/계좌번호를 그대로 쓴다(정보계 balance
+    # 응답엔 없음). 없으면 데모 fallback id 로 기본값 enrich.
+    rows = await get_mapped_accounts(session, user_id)
+    if rows:
+        sources = [(r.external_account_id, r.bank_name, r.account_number) for r in rows]
+    else:
+        sources = [
+            (aid, None, None)
+            for aid in await get_external_account_ids(session, user_id)
+        ]
+
     summaries: list[AccountSummary] = []
-    for idx, account_id in enumerate(account_ids):
+    for idx, (account_id, bank_name, account_number) in enumerate(sources):
         balance = await client.get_balance(account_id)
         if balance is None:  # 404 — 계좌 없음, 건너뜀
             continue
+        tail = (account_number or str(balance["account_id"]))[-4:]
         summaries.append(
             AccountSummary(
                 id=idx + 1,
-                bank=_DEFAULT_BANK,
+                bank=bank_name or _DEFAULT_BANK,
                 alias=_DEFAULT_ALIAS,
-                tail=str(balance["account_id"])[-4:],
+                tail=tail,
                 balance=balance["balance"],
                 color=_ACCOUNT_COLORS[idx % len(_ACCOUNT_COLORS)],
             )
@@ -100,7 +135,7 @@ def _ledger_to_item(entry: dict, item_id: int) -> TransactionItem:
         day=created.day,
         amount=amount,
         type="in" if is_credit else "out",
-        category="수입" if is_credit else "기타",
+        category="수입" if is_credit else _DEFAULT_CATEGORY,
     )
 
 
@@ -118,15 +153,7 @@ async def get_transactions_view(
         items = [tx for tx in TRANSACTIONS_FIXTURE.items if tx.month == month]
         return TransactionsData(months=TRANSACTIONS_FIXTURE.months, items=items)
 
-    account_ids = await get_external_account_ids(session, user_id)
-    client = get_financial_client()
-
-    raw: list[dict] = []
-    for account_id in account_ids:
-        raw.extend(await client.get_ledger(account_id))
-    # 계좌 병합 후 최신순 재정렬.
-    raw.sort(key=lambda e: e["created_at"], reverse=True)
-
+    raw = await _fetch_user_ledger(session, user_id)
     items = [_ledger_to_item(e, i + 1) for i, e in enumerate(raw)]
     months = sorted({it.month for it in items}, reverse=True)
     if month is not None:
@@ -134,19 +161,98 @@ async def get_transactions_view(
     return TransactionsData(months=months, items=items)
 
 
-async def get_spending_view(user_id: UUID) -> SpendingData:
-    """소비 분석 view model. TODO(Phase 2): 정보계 집계로 교체."""
+def _spending_from_ledger(entries: list[dict]) -> SpendingData:
+    """원장 -> 소비 분석(제한 집계).
+
+    카테고리/상호가 없어 출금(DEBIT)을 단일 '기타' 버킷으로 묶고, 월별 실제
+    출금 합계만 진짜 값으로 채운다. 카테고리 증감(bar)은 데이터가 없어 빈 리스트.
+    """
+    out = [e for e in entries if e["entry_type"] == "DEBIT"]
+    total_out = sum(e["amount"] for e in out)
+
+    monthly_map: dict[str, int] = {}
+    for e in out:
+        key = _parse_dt(e["created_at"]).strftime("%Y-%m")
+        monthly_map[key] = monthly_map.get(key, 0) + e["amount"]
+    monthly = [
+        MonthlySpendDatum(month=f"{int(k[5:7])}월", amount=v)
+        for k, v in sorted(monthly_map.items())
+    ]
+
+    pie = (
+        [
+            PieDatum(
+                name=_DEFAULT_CATEGORY,
+                value=100,
+                color=_DEFAULT_PIE_COLOR,
+                amount=total_out,
+            )
+        ]
+        if total_out > 0
+        else []
+    )
+    cat_tx = (
+        {
+            _DEFAULT_CATEGORY: [
+                CatTxDatum(
+                    name="출금",
+                    date=_parse_dt(e["created_at"]).strftime("%m.%d"),
+                    amount=e["amount"],
+                )
+                for e in out[:_CATTX_LIMIT]
+            ]
+        }
+        if out
+        else {}
+    )
+    return SpendingData(pie=pie, bar=[], monthly=monthly, catTx=cat_tx)
+
+
+def _budget_from_ledger(entries: list[dict]) -> BudgetData:
+    """원장 -> 예산 현황.
+
+    예산 목표/구독 정보는 원장에 없어 기본값으로 대체: '기타' 카테고리 하나에
+    실제 출금 합계를 used 로, 기본 예산을 total 로 두고 구독은 빈 리스트.
+    """
+    used = sum(e["amount"] for e in entries if e["entry_type"] == "DEBIT")
+    return BudgetData(
+        budgetItems=[
+            BudgetItem(cat=_DEFAULT_CATEGORY, used=used, total=_DEFAULT_BUDGET_TOTAL)
+        ],
+        subItems=[],
+    )
+
+
+async def get_spending_view(
+    user_id: UUID, session: AsyncSession | None = None
+) -> SpendingData:
+    """소비 분석 view model. http 모드: 원장 집계(기본값 대체). mock 모드: 픽스처."""
+    if not _use_http() or session is None:
+        return SPENDING_FIXTURE
+    entries = await _fetch_user_ledger(session, user_id)
+    return _spending_from_ledger(entries)
+
+
+async def get_budget_view(
+    user_id: UUID, session: AsyncSession | None = None
+) -> BudgetData:
+    """예산 현황 view model. http 모드: 원장 집계(기본값 대체). mock 모드: 픽스처."""
+    if not _use_http() or session is None:
+        return BUDGET_FIXTURE
+    entries = await _fetch_user_ledger(session, user_id)
+    return _budget_from_ledger(entries)
+
+
+async def get_cards_view(
+    user_id: UUID, session: AsyncSession | None = None
+) -> CardsData:
+    """카드 관리 view model. mock 모드: 픽스처.
+
+    http 모드: 계정계에 "계좌별 카드 목록" 엔드포인트가 없어 열거 불가 → 빈 목록
+    (카드 미프로비저닝 상태를 정직하게 반영). TODO: 카드 프로비저닝(계좌처럼 card_id
+    매핑 저장) 도입 시 실제 카드 반환.
+    """
     _ = user_id
-    return SPENDING_FIXTURE
-
-
-async def get_budget_view(user_id: UUID) -> BudgetData:
-    """예산 현황 view model. TODO(Phase 2): 정보계 조회로 교체."""
-    _ = user_id
-    return BUDGET_FIXTURE
-
-
-async def get_cards_view(user_id: UUID) -> CardsData:
-    """카드 관리 view model. TODO(Phase 2): 계정계(카드) 조회로 교체."""
-    _ = user_id
-    return CARDS_FIXTURE
+    if not _use_http() or session is None:
+        return CARDS_FIXTURE
+    return CardsData(cards=[])

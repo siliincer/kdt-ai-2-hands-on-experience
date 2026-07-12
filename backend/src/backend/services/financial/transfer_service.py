@@ -14,7 +14,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.load_environment_var import settings
-from ...repository.account_repository import get_external_account_ids
+from ...repository.account_repository import get_primary_mapped_account
 from .financial_client import FinancialServiceError, get_financial_client
 
 logger = logging.getLogger(__name__)
@@ -30,26 +30,29 @@ async def execute_external_transfer(
     amount: int,
     idempotency_key: str,
 ) -> dict | None:
-    """user 의 매핑 계좌에서 데모 수취계좌로 송금. 성공 시 계정계 응답, 아니면 None.
+    """user 의 매핑 계좌에서 데모 수취처로 송금. 성공 시 계정계 응답, 아니면 None.
 
-    sender = user 의 첫 매핑 external_account_id, receiver = 데모 수취계좌 설정.
-    idempotency_key = approval_id 등 승인당 고정값(멱등 재시도 안전).
+    sender = user 첫 매핑 계좌의 account_number, receiver = 데모 은행명+계좌번호 설정
+    (계정계 신 계약: 계좌번호+은행명 기반). idempotency_key = 승인당 고정값.
     """
     if not _use_http():
         return None
 
-    sender_ids = await get_external_account_ids(session, user_id)
-    receiver = settings.FINANCIAL_DEMO_RECEIVER_ACCOUNT_ID.strip()
-    if not sender_ids or not receiver:
+    sender = await get_primary_mapped_account(session, user_id)
+    receiver_bank = settings.FINANCIAL_DEMO_RECEIVER_BANK_NAME.strip()
+    receiver_number = settings.FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER.strip()
+    if sender is None or not sender.account_number:
         return None
-    sender = sender_ids[0]
-    if sender == receiver:  # 계정계 SELF_TRANSFER 방지(422 회피)
+    if not receiver_bank or not receiver_number:
+        return None
+    if sender.account_number == receiver_number:  # SELF_TRANSFER 방지(422 회피)
         return None
 
     try:
         return await get_financial_client().transfer(
-            sender_account_id=sender,
-            receiver_account_id=receiver,
+            sender_account_number=sender.account_number,
+            receiver_bank_name=receiver_bank,
+            receiver_account_number=receiver_number,
             amount=amount,
             idempotency_key=idempotency_key,
         )

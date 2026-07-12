@@ -35,9 +35,12 @@ async def read_balance(
 
 
 @ui_router.get("/spending", response_model=CommonResponse[SpendingData])
-async def read_spending(current_user: User = Depends(get_current_user)):
+async def read_spending(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
     """소비 분석 카드 데이터 (component:spending 시그널 후 FE 가 조회)."""
-    data = await get_spending_view(current_user.id)
+    data = await get_spending_view(current_user.id, session)
     return success_response(message="소비 분석을 조회했습니다.", data=data)
 
 
@@ -56,14 +59,20 @@ async def read_transactions(
 
 
 @ui_router.get("/budget", response_model=CommonResponse[BudgetData])
-async def read_budget(current_user: User = Depends(get_current_user)):
+async def read_budget(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
     """예산 현황 카드 데이터 (component:budget 시그널 후 FE 가 조회)."""
-    data = await get_budget_view(current_user.id)
+    data = await get_budget_view(current_user.id, session)
     return success_response(message="예산 현황을 조회했습니다.", data=data)
 
 
 @ui_router.get("/cards", response_model=CommonResponse[CardsData])
-async def read_cards(current_user: User = Depends(get_current_user)):
+async def read_cards(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
     """카드 관리 카드 데이터 (component:cards 시그널 후 FE 가 조회)."""
-    data = await get_cards_view(current_user.id)
+    data = await get_cards_view(current_user.id, session)
     return success_response(message="카드 정보를 조회했습니다.", data=data)

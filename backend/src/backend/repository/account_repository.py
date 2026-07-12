@@ -34,6 +34,28 @@ async def get_external_account_ids(session: AsyncSession, user_id: UUID) -> list
     return [demo] if demo else []
 
 
+async def get_mapped_accounts(session: AsyncSession, user_id: UUID) -> list[Account]:
+    """user 의 매핑된 Account 행 목록(bank_name/account_number 포함)."""
+    stmt = (
+        select(Account)
+        .where(
+            Account.user_id == user_id,
+            Account.external_account_id.is_not(None),
+        )
+        .order_by(Account.account_number)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_primary_mapped_account(
+    session: AsyncSession, user_id: UUID
+) -> Account | None:
+    """user 의 첫 매핑 계좌(송금 sender). 없으면 None."""
+    accounts = await get_mapped_accounts(session, user_id)
+    return accounts[0] if accounts else None
+
+
 async def has_mapped_account(session: AsyncSession, user_id: UUID) -> bool:
     """이미 계정계 매핑된 Account 가 있는지(프로비저닝 멱등성)."""
     stmt = select(Account.id).where(
@@ -49,6 +71,7 @@ async def create_mapped_account(
     user_id: UUID,
     external_account_id: str,
     account_number: str,
+    bank_name: str | None = None,
     balance: int = 0,
     currency: str = "KRW",
 ) -> Account:
@@ -56,6 +79,7 @@ async def create_mapped_account(
     account = Account(
         user_id=user_id,
         account_number=account_number,
+        bank_name=bank_name,
         balance=balance,
         currency=currency,
         external_account_id=external_account_id,

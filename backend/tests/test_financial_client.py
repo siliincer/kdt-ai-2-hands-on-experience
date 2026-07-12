@@ -142,14 +142,15 @@ async def test_transfer_sends_idempotency_key_and_body():
 
         body = json.loads(request.content)
         assert body == {
-            "sender_account_id": "s",
-            "receiver_account_id": "r",
+            "sender_account_number": "111-222-333",
+            "receiver_bank_name": "KDT은행",
+            "receiver_account_number": "444-555-666",
             "amount": 7000,
         }
-        return httpx.Response(200, json={"transfer_id": "t1", "status": "COMPLETED"})
+        return httpx.Response(200, json={"transfer_id": "t1", "status": "success"})
 
     client = _client(handler)
-    res = await client.transfer("s", "r", 7000, "idem-1")
+    res = await client.transfer("111-222-333", "KDT은행", "444-555-666", 7000, "idem-1")
     assert res["transfer_id"] == "t1"
     await client.aclose()
 
@@ -161,7 +162,7 @@ async def test_transfer_error_raises():
 
     client = _client(handler)
     with pytest.raises(FinancialServiceError):
-        await client.transfer("s", "r", 999999999, "idem-2")
+        await client.transfer("111-222-333", "KDT은행", "444-555-666", 10**9, "idem-2")
     await client.aclose()
 
 

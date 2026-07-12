@@ -39,9 +39,13 @@ class Settings(BaseSettings):
         default="",
         description="Phase 1 데모 시드: 매핑된 Account 없을 때 fallback account_id",
     )
-    FINANCIAL_DEMO_RECEIVER_ACCOUNT_ID: str = Field(
+    FINANCIAL_DEMO_RECEIVER_BANK_NAME: str = Field(
         default="",
-        description="Phase 2 데모: 송금 수취 계좌 account_id. 비우면 실제 이체 미실행",
+        description="Phase 2 데모 송금 수취 은행명(계정계 단일 은행, 예: KDT은행)",
+    )
+    FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER: str = Field(
+        default="",
+        description="Phase 2 데모 송금 수취 계좌번호. 은행명과 함께 비면 실이체 미실행",
     )
 
     # Auth Configuration
