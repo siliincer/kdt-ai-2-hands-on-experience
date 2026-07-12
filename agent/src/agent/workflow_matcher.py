@@ -24,8 +24,11 @@ from agent.paths import WORKFLOWS_PATH
 # 계좌 관련 발화에 등장하므로 balance_inquiry를 맨 뒤(다른 게 하나도
 # 안 걸렸을 때만 잡히는 catch-all)로 둬야 한다.
 _KEYWORD_RULES = [
-    (("보내", "송금", "이체", "에게", "한테"), "wf_external_transfer"),
-    (("옮겨", "본인 계좌", "내 계좌로"), "wf_internal_transfer"),
+    (("에게", "한테", "송금", "보내"), "wf_external_transfer"),
+    (
+        ("옮겨", "본인 계좌", "내 계좌로", "통장으로", "계좌 간", "이체"),
+        "wf_internal_transfer",
+    ),
     (
         ("기본", "출금 계좌로", "나가게 해"),
         "wf_set_default_account",

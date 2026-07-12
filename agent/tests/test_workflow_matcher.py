@@ -54,5 +54,10 @@ def test_transfer_keywords_match_external_transfer():
     assert match_workflow("김철수한테 5만원 보내줘") == "wf_external_transfer"
 
 
+def test_own_account_transfer_matches_internal_transfer():
+    # 사람 대상(에게/한테) 없이 통장 간 이체는 본인이체로 매칭돼야 한다
+    assert match_workflow("생활비통장으로 10만원 이체해줘") == "wf_internal_transfer"
+
+
 def test_unrelated_input_matches_nothing():
     assert match_workflow("오늘 날씨 어때") is None

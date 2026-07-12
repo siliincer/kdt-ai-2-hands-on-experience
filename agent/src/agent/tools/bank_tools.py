@@ -1266,7 +1266,8 @@ def request_setting_approval(state: dict) -> dict:
     )
     dec_key = f"{_ns(state)}.decision"
     text = str(reply).strip()
-    if ("확인" in text or "승인" in text or "네" == text) and not _is_cancel(text):
+    approve_keywords = ("확인", "승인", "네", "응", "예", "좋아", "해줘", "진행")
+    if any(k in text for k in approve_keywords) and not _is_cancel(text):
         return {dec_key: "approved", "route_key": "approved"}
     return {
         dec_key: "cancelled",
