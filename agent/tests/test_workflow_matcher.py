@@ -59,5 +59,10 @@ def test_own_account_transfer_matches_internal_transfer():
     assert match_workflow("생활비통장으로 10만원 이체해줘") == "wf_internal_transfer"
 
 
+def test_income_phrase_matches_amount_summary():
+    # 지출뿐 아니라 입금 방향("들어왔어")도 기간 합계로 매칭돼야 한다
+    assert match_workflow("이번달 얼마 들어왔어?") == "wf_period_amount_summary"
+
+
 def test_unrelated_input_matches_nothing():
     assert match_workflow("오늘 날씨 어때") is None
