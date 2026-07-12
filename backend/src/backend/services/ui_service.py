@@ -9,6 +9,7 @@ FINANCIAL_CLIENT=http: mock-financial-service(계정계)를 정보계(analytics)
 """
 
 from datetime import datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,8 +80,11 @@ async def get_balance_view(
 
     http 모드: 계정계 잔액을 계좌별로 합산. mock 모드: 픽스처.
     """
-    if not _use_http() or session is None:
+    if not _use_http():
         return BALANCE_FIXTURE
+    session = cast(
+        AsyncSession, session
+    )  # http 경로는 라우터 Depends 로 항상 세션 존재
 
     client = get_financial_client()
 
@@ -97,6 +101,8 @@ async def get_balance_view(
 
     summaries: list[AccountSummary] = []
     for idx, (account_id, bank_name, account_number) in enumerate(sources):
+        if account_id is None:  # 매핑 무결성상 없어야 하나 타입 안전 차원
+            continue
         balance = await client.get_balance(account_id)
         if balance is None:  # 404 — 계좌 없음, 건너뜀
             continue
@@ -147,11 +153,12 @@ async def get_transactions_view(
     http 모드: 계정계 원장을 계좌별로 조회해 최신순 병합. month(예: '2025-06')
     가 주어지면 해당 월만 필터. mock 모드: 픽스처.
     """
-    if not _use_http() or session is None:
+    if not _use_http():
         if month is None:
             return TRANSACTIONS_FIXTURE
         items = [tx for tx in TRANSACTIONS_FIXTURE.items if tx.month == month]
         return TransactionsData(months=TRANSACTIONS_FIXTURE.months, items=items)
+    session = cast(AsyncSession, session)
 
     raw = await _fetch_user_ledger(session, user_id)
     items = [_ledger_to_item(e, i + 1) for i, e in enumerate(raw)]
@@ -227,8 +234,9 @@ async def get_spending_view(
     user_id: UUID, session: AsyncSession | None = None
 ) -> SpendingData:
     """소비 분석 view model. http 모드: 원장 집계(기본값 대체). mock 모드: 픽스처."""
-    if not _use_http() or session is None:
+    if not _use_http():
         return SPENDING_FIXTURE
+    session = cast(AsyncSession, session)
     entries = await _fetch_user_ledger(session, user_id)
     return _spending_from_ledger(entries)
 
@@ -237,8 +245,9 @@ async def get_budget_view(
     user_id: UUID, session: AsyncSession | None = None
 ) -> BudgetData:
     """예산 현황 view model. http 모드: 원장 집계(기본값 대체). mock 모드: 픽스처."""
-    if not _use_http() or session is None:
+    if not _use_http():
         return BUDGET_FIXTURE
+    session = cast(AsyncSession, session)
     entries = await _fetch_user_ledger(session, user_id)
     return _budget_from_ledger(entries)
 
@@ -252,7 +261,7 @@ async def get_cards_view(
     (카드 미프로비저닝 상태를 정직하게 반영). TODO: 카드 프로비저닝(계좌처럼 card_id
     매핑 저장) 도입 시 실제 카드 반환.
     """
-    _ = user_id
-    if not _use_http() or session is None:
+    _ = user_id, session
+    if not _use_http():
         return CARDS_FIXTURE
     return CardsData(cards=[])

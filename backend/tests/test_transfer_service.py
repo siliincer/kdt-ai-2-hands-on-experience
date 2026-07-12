@@ -5,16 +5,21 @@ DB/네트워크 없이 transfer_service 의 분기(모드/수취처/자기송금
 """
 
 from types import SimpleNamespace
+from typing import cast
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.financial import transfer_service
 from backend.services.financial.financial_client import FinancialServiceError
 
+# 세션은 monkeypatch 로 대체되는 조회에만 넘어가고 실제로 쓰이지 않는다.
+_NO_SESSION = cast(AsyncSession, None)
+
 
 class _FakeClient:
-    def __init__(self, result=None, error=False):
+    def __init__(self, result: dict | None = None, error: bool = False):
         self._result = result
         self._error = error
         self.calls = []
@@ -67,7 +72,9 @@ def http(monkeypatch):
 @pytest.mark.asyncio
 async def test_mock_mode_returns_none(monkeypatch):
     monkeypatch.setattr(transfer_service.settings, "FINANCIAL_CLIENT", "mock")
-    result = await transfer_service.execute_external_transfer(None, uuid4(), 1000, "k")
+    result = await transfer_service.execute_external_transfer(
+        _NO_SESSION, uuid4(), 1000, "k"
+    )
     assert result is None
 
 
@@ -76,8 +83,9 @@ async def test_success_moves_and_uses_idempotency_key(monkeypatch, http):
     fake = _FakeClient(result={"transfer_id": "t1", "status": "success"})
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: fake)
     result = await transfer_service.execute_external_transfer(
-        None, uuid4(), 5000, "appr-9"
+        _NO_SESSION, uuid4(), 5000, "appr-9"
     )
+    assert result is not None
     assert result["transfer_id"] == "t1"
     assert fake.calls == [("111-222-333", "KDT은행", "444-555-666", 5000, "appr-9")]
 
@@ -87,7 +95,9 @@ async def test_no_mapped_account_returns_none(monkeypatch, http):
     _set_sender(monkeypatch, None)
     fake = _FakeClient(result={"transfer_id": "nope"})
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: fake)
-    result = await transfer_service.execute_external_transfer(None, uuid4(), 1000, "k")
+    result = await transfer_service.execute_external_transfer(
+        _NO_SESSION, uuid4(), 1000, "k"
+    )
     assert result is None
     assert fake.calls == []
 
@@ -102,7 +112,9 @@ async def test_missing_receiver_returns_none(monkeypatch):
         transfer_service.settings, "FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER", ""
     )
     _set_sender(monkeypatch, "111-222-333")
-    result = await transfer_service.execute_external_transfer(None, uuid4(), 1000, "k")
+    result = await transfer_service.execute_external_transfer(
+        _NO_SESSION, uuid4(), 1000, "k"
+    )
     assert result is None
 
 
@@ -111,7 +123,9 @@ async def test_self_transfer_guarded(monkeypatch, http):
     _set_sender(monkeypatch, "444-555-666")  # sender == receiver number
     fake = _FakeClient(result={"transfer_id": "nope"})
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: fake)
-    result = await transfer_service.execute_external_transfer(None, uuid4(), 1000, "k")
+    result = await transfer_service.execute_external_transfer(
+        _NO_SESSION, uuid4(), 1000, "k"
+    )
     assert result is None
     assert fake.calls == []
 
@@ -121,5 +135,7 @@ async def test_outage_is_isolated(monkeypatch, http):
     monkeypatch.setattr(
         transfer_service, "get_financial_client", lambda: _FakeClient(error=True)
     )
-    result = await transfer_service.execute_external_transfer(None, uuid4(), 1000, "k")
+    result = await transfer_service.execute_external_transfer(
+        _NO_SESSION, uuid4(), 1000, "k"
+    )
     assert result is None

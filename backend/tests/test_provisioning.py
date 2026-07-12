@@ -3,26 +3,30 @@
 DB/네트워크 없이 provisioning 의 분기(모드/멱등/장애격리)를 검증한다.
 """
 
-from types import SimpleNamespace
-from uuid import uuid4
+from typing import cast
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.models.user import User
 from backend.services.financial import provisioning
 from backend.services.financial.financial_client import FinancialServiceError
 
+# 테스트는 provisioning 의 DB 접근을 monkeypatch 로 대체하므로 세션은 쓰이지 않는다.
+_NO_SESSION = cast(AsyncSession, None)
 
-def _user():
-    return SimpleNamespace(id=uuid4(), name="홍길동", email="hong@test.com")
+
+def _user() -> User:
+    return User(email="hong@test.com", name="홍길동", password_hash="x")
 
 
 class _FakeClient:
-    def __init__(self, result=None, error=False):
+    def __init__(self, result: dict | None = None, error: bool = False):
         self._result = result
         self._error = error
         self.calls = 0
 
-    async def create_account(self, owner: str, initial_balance: int = 0) -> dict:
+    async def create_account(self, owner: str, initial_balance: int = 0) -> dict | None:
         self.calls += 1
         if self._error:
             raise FinancialServiceError("down")
@@ -36,7 +40,7 @@ def created(monkeypatch):
 
     async def fake_create_mapped_account(session, **kwargs):
         recorded.update(kwargs)
-        return SimpleNamespace(**kwargs)
+        return None
 
     async def fake_has_mapped_account(session, user_id):
         return False
@@ -51,7 +55,7 @@ def created(monkeypatch):
 @pytest.mark.asyncio
 async def test_mock_mode_skips_provisioning(monkeypatch, created):
     monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "mock")
-    result = await provisioning.provision_account_for_user(None, _user())
+    result = await provisioning.provision_account_for_user(_NO_SESSION, _user())
     assert result is None
     assert created == {}
 
@@ -70,7 +74,7 @@ async def test_http_mode_provisions_and_maps(monkeypatch, created):
     )
     monkeypatch.setattr(provisioning, "get_financial_client", lambda: fake)
 
-    result = await provisioning.provision_account_for_user(None, _user())
+    result = await provisioning.provision_account_for_user(_NO_SESSION, _user())
     assert result == "acc-x"
     assert created["external_account_id"] == "acc-x"
     assert created["balance"] == 1000000
@@ -86,7 +90,7 @@ async def test_http_mode_falls_back_to_local_number_when_absent(monkeypatch, cre
     fake = _FakeClient(result={"account_id": "acc-y", "balance": 0, "currency": "KRW"})
     monkeypatch.setattr(provisioning, "get_financial_client", lambda: fake)
 
-    result = await provisioning.provision_account_for_user(None, _user())
+    result = await provisioning.provision_account_for_user(_NO_SESSION, _user())
     assert result == "acc-y"
     assert created["account_number"].startswith("MFS")
     assert created["bank_name"] is None
@@ -99,7 +103,7 @@ async def test_financial_outage_is_isolated(monkeypatch, created):
         provisioning, "get_financial_client", lambda: _FakeClient(error=True)
     )
     # 장애여도 예외 전파 없이 None (회원가입 계속, 결정 D).
-    result = await provisioning.provision_account_for_user(None, _user())
+    result = await provisioning.provision_account_for_user(_NO_SESSION, _user())
     assert result is None
     assert created == {}
 
@@ -115,6 +119,6 @@ async def test_already_mapped_is_idempotent(monkeypatch):
     monkeypatch.setattr(provisioning, "has_mapped_account", already_mapped)
     monkeypatch.setattr(provisioning, "get_financial_client", lambda: fake)
 
-    result = await provisioning.provision_account_for_user(None, _user())
+    result = await provisioning.provision_account_for_user(_NO_SESSION, _user())
     assert result is None
     assert fake.calls == 0
