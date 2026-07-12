@@ -1,15 +1,30 @@
-"""Shared mock dataset — Accounts, Cards, and CardProduct catalog.
+"""Shared mock dataset — Accounts, Cards, CardProduct catalog, and 4 months of
+persona-driven transaction history.
 
 5 Accounts, 8 Cards (1-2 per Account, each FK-linked to a real Account).
 20 CardProduct rows (4 per each of 5 categories), standalone — no FK to Card.
-Fixed UUIDs for determinism across seed/demo/pytest consumers.
+7 biller Accounts + 1 external-source Account (payroll/peer-transfer origin).
+~100 Transactions / ~200 LedgerEntries / ~400 CardLedgerEntries spanning
+2026-03-10 ~ 2026-07-10, driven by 3 consumption personas (see
+RealFinance_소비페르소나.md) and generated deterministically by
+_build_transaction_dataset() — no OS/wall-clock randomness, so re-running
+this module always yields identical mock data.
 """
 
 from __future__ import annotations
 
 import json
+import random
+from datetime import date, datetime, timezone
 
-from .models import Account, Card, CardProduct
+from .models import (
+    Account,
+    Card,
+    CardLedgerEntry,
+    CardProduct,
+    LedgerEntry,
+    Transaction,
+)
 
 # ── Accounts ──────────────────────────────────────────────────────────────────
 # 5 rows, fixed UUIDs
@@ -17,17 +32,17 @@ from .models import Account, Card, CardProduct
 MOCK_ACCOUNTS: list[dict] = [
     {
         "account_id": "acct-0001-0000-0000-000000000001",
-        "owner": "김민준",
+        "owner": "김지훈",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0002-0000-0000-000000000002",
-        "owner": "이서연",
+        "owner": "박서연",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0003-0000-0000-000000000003",
-        "owner": "박지호",
+        "owner": "이도윤",
         "currency": "KRW",
     },
     {
@@ -419,6 +434,65 @@ def make_card_product_rows() -> list[CardProduct]:
     return [CardProduct(**d) for d in MOCK_CARD_PRODUCTS]
 
 
+# ── Biller Accounts ────────────────────────────────────────────────────────────
+# Receiver accounts for general payments (통신비/헬스장/학원비/관리비).
+# Kept DISTINCT from user-owned MOCK_ACCOUNTS (acct-0001..0005).
+# Fixed UUIDs — prefix acct-b to avoid collision with user accounts.
+
+MOCK_BILLER_ACCOUNTS: list[dict] = [
+    {
+        "account_id": "acct-b001-0000-0000-000000000001",
+        "owner": "통신사",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-b002-0000-0000-000000000002",
+        "owner": "헬스장",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-b003-0000-0000-000000000003",
+        "owner": "학원",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-b004-0000-0000-000000000004",
+        "owner": "관리사무소",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-b005-0000-0000-000000000005",
+        "owner": "저축은행",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-b006-0000-0000-000000000006",
+        "owner": "증권사",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-b007-0000-0000-000000000007",
+        "owner": "대출은행",
+        "currency": "KRW",
+    },
+]
+
+# Convenience lookup: biller name → account_id
+BILLER_ACCOUNT_ID: dict[str, str] = {
+    row["owner"]: row["account_id"] for row in MOCK_BILLER_ACCOUNTS
+}
+
+
+def make_biller_account_rows() -> list[Account]:
+    """Return biller Account ORM instances (not yet committed).
+
+    These are payment-receiver accounts for general payments (통신비, 헬스장,
+    학원비, 관리비).  They are distinct from user-owned MOCK_ACCOUNTS so that
+    existing card-service tests that assert exactly 5 user accounts are unaffected.
+    """
+    return [Account(**d) for d in MOCK_BILLER_ACCOUNTS]
+
+
 # ── Schema validation ──────────────────────────────────────────────────────────
 
 _ACCOUNT_SCHEMA: dict = {
@@ -555,9 +629,7 @@ def validate_dataset() -> list[str]:
     for acct_id in valid_account_ids:
         n = cards_per_acct.get(acct_id, 0)
         if not (1 <= n <= 2):
-            errors.append(
-                f"Account {acct_id} has {n} cards; expected 1-2"
-            )
+            errors.append(f"Account {acct_id} has {n} cards; expected 1-2")
 
     # 4 per category
     cat_counts = _Counter(r["category"] for r in MOCK_CARD_PRODUCTS)
@@ -568,3 +640,500 @@ def validate_dataset() -> list[str]:
             )
 
     return errors
+
+
+# ── 4-month persona-driven transaction history (2026-03-10 ~ 2026-07-10) ──────
+# Source spec: RealFinance_소비페르소나.md (3 personas).
+#
+# Persona → Account mapping:
+#   acct-0001 (김지훈) — 안정형 직장인 (salary day 25)
+#   acct-0002 (박서연) — 재테크 워킹맘 (salary day 21)
+#   acct-0003 (이도윤) — 불안정 프리랜서 (irregular income + risk signals)
+#   acct-0004 / acct-0005 — 페르소나 미지정, 김지훈 패턴의 축소판 기본값
+#
+# Category → transaction-type mapping (per persona doc):
+#   주거비/저축/투자/대출이자 → account transfer (Transaction, no card)
+#   통신비/구독료/헬스장/학원비/관리비 → general payment (Transaction, to biller)
+#   식비/쇼핑/여행/문화/교통/편의점 → card payment (CardLedgerEntry) — no
+#     account-balance effect until settlement (settlement gen. out of scope)
+#
+# All transactions/ledger-entries/card-charges below are produced by
+# _build_transaction_dataset(), a deterministic generator (fixed schedules +
+# seeded `random.Random` per account/month — no wall-clock or OS randomness),
+# so re-running this module always yields byte-identical mock data. This
+# keeps running_balance correct by construction: balances are computed by
+# walking one global chronological event timeline rather than hand-typed.
+
+_TELECOM_BILLER = "acct-b001-0000-0000-000000000001"  # 통신사 (통신비+구독료)
+_GYM_BILLER = "acct-b002-0000-0000-000000000002"  # 헬스장
+_ACADEMY_BILLER = "acct-b003-0000-0000-000000000003"  # 학원
+_MGMT_BILLER = "acct-b004-0000-0000-000000000004"  # 관리사무소 (월세+관리비)
+_SAVINGS_BILLER = "acct-b005-0000-0000-000000000005"  # 저축은행
+_INVEST_BILLER = "acct-b006-0000-0000-000000000006"  # 증권사
+_LOAN_BILLER = "acct-b007-0000-0000-000000000007"  # 대출은행
+
+_ACCT1 = "acct-0001-0000-0000-000000000001"  # 김지훈
+_ACCT2 = "acct-0002-0000-0000-000000000002"  # 박서연
+_ACCT3 = "acct-0003-0000-0000-000000000003"  # 이도윤
+_ACCT4 = "acct-0004-0000-0000-000000000004"
+_ACCT5 = "acct-0005-0000-0000-000000000005"
+
+# (year, month, first_day, last_day) — clipped to 2026-03-10 ~ 2026-07-10
+_MONTH_WINDOWS: list[tuple[int, int, int, int]] = [
+    (2026, 3, 10, 31),
+    (2026, 4, 1, 30),
+    (2026, 5, 1, 31),
+    (2026, 6, 1, 30),
+    (2026, 7, 1, 10),
+]
+
+_STARTING_BALANCE: dict[str, int] = {
+    _ACCT1: 3_000_000,
+    _ACCT2: 8_000_000,
+    _ACCT3: 1_200_000,
+    _ACCT4: 2_500_000,
+    _ACCT5: 2_500_000,
+}
+
+# Cards owned by each account (round-robin target for card charges).
+_ACCOUNT_CARDS: dict[str, list[str]] = {}
+for _row in MOCK_CARDS:
+    _ACCOUNT_CARDS.setdefault(_row["account_id"], []).append(_row["card_id"])
+
+
+def _dt(year: int, month: int, day: int, hour: int = 9, minute: int = 0) -> datetime:
+    return datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+
+
+def _clip_day(day: int, last_day: int) -> int:
+    """Clamp *day* into [1, last_day] so fixed-day events never overflow a
+    short month."""
+    return max(1, min(day, last_day))
+
+
+class _Counter:
+    """Monotonic id-sequence generator for mock rows (module-private)."""
+
+    def __init__(self) -> None:
+        self._n = 0
+
+    def next(self) -> int:
+        self._n += 1
+        return self._n
+
+
+def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict]]:
+    """Deterministically build 4 months of persona-driven transaction history.
+
+    Returns (transactions, ledger_entries, card_ledger_entries) as plain dict
+    rows ready for ``Transaction(**d)`` / ``LedgerEntry(**d)`` /
+    ``CardLedgerEntry(**d)``. Card charges never touch account balances
+    (mirrors the app's card deferred-settlement design — see Card docstring
+    in models.py); only account-transfer / general-payment events do.
+    """
+    seq = _Counter()
+    balance: dict[str, int] = dict(_STARTING_BALANCE)
+    # events: (date, kind, account_id, receiver_or_card, amount, status)
+    events: list[tuple[date, str, str, str, int, str]] = []
+
+    def add_transfer(
+        d: date, sender: str, receiver: str, amount: int, status: str = "success"
+    ) -> None:
+        events.append((d, "transfer", sender, receiver, amount, status))
+
+    def add_card(d: date, account_id: str, amount: int, card_index: int = 0) -> None:
+        cards = _ACCOUNT_CARDS.get(account_id)
+        if not cards:
+            return
+        card_id = cards[card_index % len(cards)]
+        events.append((d, "card", account_id, card_id, amount, "success"))
+
+    # ── 김지훈 (acct-0001) — 안정형 직장인, salary day 25 ─────────────────────
+    for y, m, first, last in _MONTH_WINDOWS:
+        rnd = random.Random(f"{_ACCT1}-{y}{m:02d}")
+        if first <= 25 <= last:
+            events.append(
+                (date(y, m, 25), "transfer", "SALARY", _ACCT1, 2_450_000, "success")
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(26, last)),
+                    "transfer",
+                    _ACCT1,
+                    _SAVINGS_BILLER,
+                    370_000,
+                    "success",
+                )
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(27, last)),
+                    "transfer",
+                    _ACCT1,
+                    _MGMT_BILLER,
+                    540_000,
+                    "success",
+                )
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(27, last)),
+                    "transfer",
+                    _ACCT1,
+                    _TELECOM_BILLER,
+                    120_000,
+                    "success",
+                )
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(28, last)),
+                    "transfer",
+                    _ACCT1,
+                    _GYM_BILLER,
+                    100_000,
+                    "success",
+                )
+            )
+        # 카드결제: 외식 10건 / 마트-편의점 4건 / 쇼핑 2건
+        for _ in range(10):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT1, rnd.randint(8_000, 15_000), card_index=0)
+        for _ in range(4):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT1, rnd.randint(15_000, 60_000), card_index=1)
+        for _ in range(2):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT1, rnd.randint(30_000, 80_000), card_index=0)
+    # 4개월 중 1회 여행 특별 소비 + 1회 경조사비 송금
+    add_card(date(2026, 5, 16), _ACCT1, 260_000, card_index=1)
+    add_transfer(date(2026, 6, 20), _ACCT1, _ACCT2, 100_000)  # 경조사비
+
+    # ── 박서연 (acct-0002) — 재테크 워킹맘, salary day 21 ─────────────────────
+    for y, m, first, last in _MONTH_WINDOWS:
+        rnd = random.Random(f"{_ACCT2}-{y}{m:02d}")
+        if first <= 21 <= last:
+            events.append(
+                (date(y, m, 21), "transfer", "SALARY", _ACCT2, 4_200_000, "success")
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(21, last)),
+                    "transfer",
+                    _ACCT2,
+                    _LOAN_BILLER,
+                    630_000,
+                    "success",
+                )
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(22, last)),
+                    "transfer",
+                    _ACCT2,
+                    _MGMT_BILLER,
+                    170_000,
+                    "success",
+                )
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(22, last)),
+                    "transfer",
+                    _ACCT2,
+                    _ACADEMY_BILLER,
+                    420_000,
+                    "success",
+                )
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(23, last)),
+                    "transfer",
+                    _ACCT2,
+                    _INVEST_BILLER,
+                    840_000,
+                    "success",
+                )
+            )
+            events.append(
+                (
+                    date(y, m, _clip_day(23, last)),
+                    "transfer",
+                    _ACCT2,
+                    _SAVINGS_BILLER,
+                    340_000,
+                    "success",
+                )
+            )
+        # 카드결제: 마트 대량구매 5건(주1회) / 외식(야근 배달 등) 6건 / 쇼핑 2건
+        for _ in range(5):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT2, rnd.randint(100_000, 200_000), card_index=0)
+        for _ in range(6):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT2, rnd.randint(15_000, 60_000), card_index=0)
+        for _ in range(2):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT2, rnd.randint(50_000, 250_000), card_index=0)
+    add_card(
+        date(2026, 4, 12), _ACCT2, 480_000, card_index=0
+    )  # 가족 여행/명절 지출 급증
+
+    # ── 이도윤 (acct-0003) — 불안정 프리랜서, 불규칙 입금 + 리스크 신호 ────────
+    for y, m, first, last in _MONTH_WINDOWS:
+        rnd = random.Random(f"{_ACCT3}-{y}{m:02d}")
+        income_day = rnd.randint(max(first, 5), min(last, 20))
+        events.append(
+            (
+                date(y, m, income_day),
+                "transfer",
+                "SALARY",
+                _ACCT3,
+                rnd.randint(1_500_000, 2_800_000),
+                "success",
+            )
+        )
+        # 배달음식 18건 / 편의점 8건 / 온라인쇼핑·취미 3건 / 교통 4건
+        for _ in range(18):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT3, rnd.randint(15_000, 28_000), card_index=0)
+        for _ in range(8):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT3, rnd.randint(3_000, 7_000), card_index=0)
+        for _ in range(3):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT3, rnd.randint(10_000, 40_000), card_index=0)
+        for _ in range(4):
+            d = rnd.randint(first, last)
+            add_card(date(y, m, d), _ACCT3, rnd.randint(3_000, 12_000), card_index=0)
+    # 보복소비 클러스터: 하루 3건 몰림 (5월)
+    for amt in (90_000, 120_000, 60_000):
+        add_card(date(2026, 5, 23), _ACCT3, amt, card_index=0)
+    # 지인에게 급하게 소액 이체받기 (계좌간송금 입금, 비정기)
+    add_transfer(date(2026, 6, 28), "FRIEND", _ACCT3, 200_000)
+    # 리스크 신호 3건: 결제 실패 → 재시도 성공 (일반결제)
+    events.append(
+        (date(2026, 4, 15), "transfer", _ACCT3, _TELECOM_BILLER, 65_000, "failure")
+    )
+    events.append(
+        (date(2026, 4, 17), "transfer", _ACCT3, _TELECOM_BILLER, 65_000, "success")
+    )
+    events.append(
+        (date(2026, 5, 10), "transfer", _ACCT3, _TELECOM_BILLER, 18_900, "failure")
+    )
+    events.append(
+        (date(2026, 5, 11), "transfer", _ACCT3, _TELECOM_BILLER, 18_900, "success")
+    )
+    events.append(
+        (date(2026, 6, 1), "transfer", _ACCT3, _MGMT_BILLER, 350_000, "failure")
+    )
+    events.append(
+        (date(2026, 6, 3), "transfer", _ACCT3, _MGMT_BILLER, 350_000, "success")
+    )
+    # 월세(고정) — 리스크 신호가 없는 달만 정상 청구
+    for y, m, first, last in _MONTH_WINDOWS:
+        if (y, m) in ((2026, 6),):
+            continue  # already covered by the fail/retry pair above
+        events.append(
+            (
+                date(y, m, _clip_day(3, last)),
+                "transfer",
+                _ACCT3,
+                _MGMT_BILLER,
+                520_000,
+                "success",
+            )
+        )
+        if (y, m) != (2026, 4):  # April covered by the fail/retry pair above
+            events.append(
+                (
+                    date(y, m, _clip_day(14, last)),
+                    "transfer",
+                    _ACCT3,
+                    _TELECOM_BILLER,
+                    130_000,
+                    "success",
+                )
+            )
+
+    # ── acct-0004 / acct-0005 — 페르소나 미지정, 김지훈 축소판 기본값 ─────────
+    for acct, salary_day in ((_ACCT4, 25), (_ACCT5, 10)):
+        for y, m, first, last in _MONTH_WINDOWS:
+            rnd = random.Random(f"{acct}-{y}{m:02d}")
+            if first <= salary_day <= last:
+                events.append(
+                    (
+                        date(y, m, salary_day),
+                        "transfer",
+                        "SALARY",
+                        acct,
+                        2_000_000,
+                        "success",
+                    )
+                )
+                events.append(
+                    (
+                        date(y, m, _clip_day(salary_day + 1, last)),
+                        "transfer",
+                        acct,
+                        _MGMT_BILLER,
+                        400_000,
+                        "success",
+                    )
+                )
+                events.append(
+                    (
+                        date(y, m, _clip_day(salary_day + 1, last)),
+                        "transfer",
+                        acct,
+                        _TELECOM_BILLER,
+                        100_000,
+                        "success",
+                    )
+                )
+                events.append(
+                    (
+                        date(y, m, _clip_day(salary_day + 2, last)),
+                        "transfer",
+                        acct,
+                        _SAVINGS_BILLER,
+                        200_000,
+                        "success",
+                    )
+                )
+            for _ in range(6):
+                d = rnd.randint(first, last)
+                add_card(date(y, m, d), acct, rnd.randint(8_000, 20_000), card_index=0)
+            for _ in range(3):
+                d = rnd.randint(first, last)
+                add_card(date(y, m, d), acct, rnd.randint(15_000, 50_000), card_index=0)
+            for _ in range(1):
+                d = rnd.randint(first, last)
+                add_card(date(y, m, d), acct, rnd.randint(30_000, 70_000), card_index=0)
+
+    # ── Chronological walk: build Transaction / LedgerEntry / CardLedgerEntry rows ──
+    events.sort(key=lambda e: (e[0], 0 if e[1] == "card" else 1))
+
+    transactions: list[dict] = []
+    ledger_entries: list[dict] = []
+    card_ledger_entries: list[dict] = []
+
+    for ev_date, kind, a, b, amount, status in events:
+        n = seq.next()
+        created_at = _dt(ev_date.year, ev_date.month, ev_date.day)
+
+        if kind == "card":
+            card_ledger_entries.append(
+                {
+                    "card_ledger_entry_id": f"cle-mock-{n:06d}",
+                    "card_id": b,
+                    "amount": amount,
+                    "idempotency_key": f"mock-card-{n:06d}",
+                    "created_at": created_at,
+                }
+            )
+            continue
+
+        # "transfer" (account transfer / general payment / income / risk signal)
+        sender_key = (
+            "acct-b099-0000-0000-000000000099" if a in ("SALARY", "FRIEND") else a
+        )
+        # External payroll/friend sources are not modeled as a real Account —
+        # use a shared external-source placeholder so the FK target still
+        # resolves to an existing Account without polluting the 5 user / 7
+        # biller accounts. Registered in MOCK_EXTERNAL_SOURCE_ACCOUNTS below.
+        transactions.append(
+            {
+                "transaction_id": f"txn-mock-{n:06d}",
+                "idempotency_key": f"mock-tx-{n:06d}",
+                "payload_hash": f"{n:064x}"[-64:],
+                "sender_account_id": sender_key,
+                "receiver_account_id": b,
+                "amount": amount,
+                "status": status,
+                "settlement_type": None,
+                "settlement_card_id": None,
+                "settlement_watermark_rowid": None,
+                "created_at": created_at,
+            }
+        )
+
+        if status != "success":
+            continue  # failure rows: no ledger movement
+
+        balance[sender_key] = balance.get(sender_key, 0) - amount
+        balance[b] = balance.get(b, 0) + amount
+
+        ledger_entries.append(
+            {
+                "entry_id": f"le-mock-{n:06d}-d",
+                "transaction_id": f"txn-mock-{n:06d}",
+                "account_id": sender_key,
+                "entry_type": "DEBIT",
+                "amount": amount,
+                "running_balance": balance[sender_key],
+                "created_at": created_at,
+            }
+        )
+        ledger_entries.append(
+            {
+                "entry_id": f"le-mock-{n:06d}-c",
+                "transaction_id": f"txn-mock-{n:06d}",
+                "account_id": b,
+                "entry_type": "CREDIT",
+                "amount": amount,
+                "running_balance": balance[b],
+                "created_at": created_at,
+            }
+        )
+
+    return transactions, ledger_entries, card_ledger_entries
+
+
+# External payroll-deposit / peer-transfer source. Not a "biller" (money flows
+# IN from here, not out to it) — kept separate from MOCK_BILLER_ACCOUNTS so
+# biller-only queries (e.g. "list payment recipients") stay clean.
+MOCK_EXTERNAL_SOURCE_ACCOUNTS: list[dict] = [
+    {
+        "account_id": "acct-b099-0000-0000-000000000099",
+        "owner": "외부입금원(급여/지인송금)",
+        "currency": "KRW",
+    },
+]
+
+
+def make_external_source_account_rows() -> list[Account]:
+    """Return the external-source Account row (payroll deposits, peer transfers)."""
+    return [Account(**d) for d in MOCK_EXTERNAL_SOURCE_ACCOUNTS]
+
+
+MOCK_TRANSACTIONS, MOCK_LEDGER_ENTRIES, MOCK_CARD_LEDGER_ENTRIES = (
+    _build_transaction_dataset()
+)
+
+
+def make_transaction_rows() -> list[Transaction]:
+    """Return Transaction ORM instances for the 4-month mock history.
+
+    Requires MOCK_ACCOUNTS, MOCK_BILLER_ACCOUNTS, and
+    MOCK_EXTERNAL_SOURCE_ACCOUNTS to already exist (sender/receiver FKs).
+    """
+    return [Transaction(**d) for d in MOCK_TRANSACTIONS]
+
+
+def make_ledger_entry_rows() -> list[LedgerEntry]:
+    """Return LedgerEntry ORM instances (paired DEBIT/CREDIT per Transaction).
+
+    Parent Transaction rows must be flushed first (FK).
+    """
+    return [LedgerEntry(**d) for d in MOCK_LEDGER_ENTRIES]
+
+
+def make_card_ledger_entry_rows() -> list[CardLedgerEntry]:
+    """Return CardLedgerEntry ORM instances for the 4-month mock card spend.
+
+    Card charges never touch account balances (deferred settlement) —
+    only account-transfer/general-payment Transactions do.
+    """
+    return [CardLedgerEntry(**d) for d in MOCK_CARD_LEDGER_ENTRIES]

@@ -193,11 +193,41 @@ python scripts/seed_dev_db.py sqlite:///./other.db
 python scripts/seed_dev_db.py --reset        # 기존 테이블 DROP 후 재생성
 ```
 
-**검증**: 실행 worktree에서 `uv run pytest tests/ -q` → 239 passed (기존 137개 + 신규 mock 데이터 테스트 8개 파일 포함).
-
-**스코프 아님**: 거래내역(Transaction/LedgerEntry/CardLedgerEntry) mock 데이터는 이번 작업에 미포함.
+**검증**: `uv run pytest tests/ -q` → 251 passed.
 
 **프론트엔드 병합 영향**: 없음. `app.py`/router 안 건드림 — API 엔드포인트 추가·변경 전혀 없음. 변경분은 기존 `models.py`/`conftest.py`에 추가만 된 것(additive)이거나 신규 파일뿐. API 서피스, 포트, nginx 라우팅, docker-compose 다 무관 — 프론트가 붙는 지점(HTTP 엔드포인트)은 그대로라 병합 충돌 가능성 거의 없음.
+
+## 2026-07-13 추가사항 — 4개월치 페르소나 거래내역 mock 데이터
+
+위 CardProduct 작업 위에 실제 소비자처럼 보이는 거래내역(계좌간송금/일반결제/카드결제)을 4개월치(2026-03-10~2026-07-10) 추가. 3인 소비 페르소나(`RealFinance_소비페르소나.md`) 기반.
+
+**페르소나 → 계좌 매핑**
+
+- Account 1(김지훈) — 안정형 직장인, 급여일 25일
+- Account 2(박서연) — 재테크 워킹맘, 급여일 21일
+- Account 3(이도윤) — 불안정 프리랜서, 불규칙 입금 + 리스크 신호(이체실패→재시도, 보복소비 몰림)
+- Account 4/5 — 페르소나 미지정, 김지훈 패턴의 축소판 기본값
+
+**카테고리 → 거래유형 매핑**
+
+- 주거비/저축/투자/대출이자 → 계좌간송금 (Transaction, 카드 미개입)
+- 통신비/구독료/헬스장/학원비/관리비 → 일반결제 (Transaction, 수신처는 biller 계좌)
+- 식비/쇼핑/여행/문화/교통/편의점 → 카드결제 (CardLedgerEntry, 정산 전까지 계좌잔액 미변경)
+
+**신규/변경 파일**
+
+- `src/financial_service/mock_data.py` — `_build_transaction_dataset()` 결정론적 생성기 추가. 고정 스케줄(급여/월세 등) + 계좌·월별로 시드된 `random.Random`(카드결제 금액·날짜)만 사용 — OS/wall-clock 난수 없음, 재실행해도 항상 동일 결과. 하나의 전역 시간순 이벤트 타임라인을 걸으면서 Transaction/LedgerEntry/CardLedgerEntry를 생성하므로 `running_balance`는 수기 계산이 아니라 시뮬레이션 결과로 자동 산출됨.
+  - `MOCK_BILLER_ACCOUNTS` 3개 추가(저축은행/증권사/대출은행 — 총 7개)
+  - `MOCK_EXTERNAL_SOURCE_ACCOUNTS` 신규 — 급여입금/지인송금처럼 실제 발신 계좌가 없는 입금의 FK 대상(계좌 테이블에 discriminator 컬럼이 없어 "결제 대상" biller와는 별도 목록으로 분리)
+  - `MOCK_TRANSACTIONS` / `MOCK_LEDGER_ENTRIES` / `MOCK_CARD_LEDGER_ENTRIES` + 대응 `make_*_rows()` 팩토리 함수
+- `scripts/seed_dev_db.py` — Transaction/LedgerEntry/CardLedgerEntry insert 추가(FK-safe 순서: Account류 → Card/CardProduct → Transaction → LedgerEntry/CardLedgerEntry), 이중기입(DEBIT=CREDIT=금액) + FK 무결성 post-insert 검증 추가
+- `tests/test_risk_signals.py` — 이도윤의 리스크 신호 3건(통신비/OTT/월세 이체실패→재시도)이 통합 데이터셋 안에서 실제로 존재하고 이중기입 제약을 지키는지 검증
+
+**Account 테이블 구조 참고**: 계좌 종류(유저/biller/외부소스) 구분 컬럼이 없어서, `account_id` prefix로 구분함 — `acct-000*`(유저 5개), `acct-b00*`(biller 7개 + 외부소스 1개). `scripts/seed_dev_db.py`의 "5 Accounts" 카운트 체크는 유저 계좌만 필터링해서 검사.
+
+**거래량**: 김지훈 약 24.5건/월, 박서연 약 21.5건/월 (페르소나 문서 "월 20~30건" 범위 내). 이도윤은 약 45건/월로 범위 초과 — 사용자가 명시적으로 허용.
+
+**검증**: `uv run pytest tests/ -q` → 251 passed. `scripts/seed_dev_db.py`를 스크래치 SQLite 파일에 직접 실행해 end-to-end insert도 확인함(100 Transactions / 194 LedgerEntries / 415 CardLedgerEntries).
 
 ## ⚠️ Postgres 전환 시 필수 사항
 
