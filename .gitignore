@@ -271,3 +271,6 @@ agent/src/agent/config/backup/
 
 # PR description drafts (not repo content)
 PR_DESCRIPTION.md
+
+#개인 작업
+fe-be-sync/

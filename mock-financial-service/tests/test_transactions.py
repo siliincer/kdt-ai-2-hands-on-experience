@@ -18,14 +18,13 @@ def _make_account(
     return r.json()
 
 
-def _do_transfer(
-    client, sender_id: str, receiver_id: str, amount: int, key: str
-) -> dict:
+def _do_transfer(client, sender: dict, receiver: dict, amount: int, key: str) -> dict:
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender_id,
-            "receiver_account_id": receiver_id,
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": amount,
         },
         headers={"Idempotency-Key": key},
@@ -121,8 +120,8 @@ class TestGetTransactionsContent:
         receiver = _make_account(client, "ReceiverTx", 0)
         _do_transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             50_000,
             "tx-schema-001",
         )
@@ -138,8 +137,8 @@ class TestGetTransactionsContent:
         receiver = _make_account(client, "ReceiverTx2", 0)
         _do_transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             50_000,
             "tx-schema-002",
         )
@@ -156,8 +155,8 @@ class TestGetTransactionsContent:
         transfer_amount = 75_000
         _do_transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             transfer_amount,
             "tx-amt-001",
         )
@@ -176,8 +175,8 @@ class TestGetTransactionsContent:
         receiver = _make_account(client, "RunBalReceiver", 0)
         _do_transfer(
             client,
-            sender["account_id"],
-            receiver["account_id"],
+            sender,
+            receiver,
             transfer_amount,
             "tx-runbal-001",
         )
@@ -192,9 +191,7 @@ class TestGetTransactionsContent:
         """Debit + credit entries for same transfer share transaction_id."""
         sender = _make_account(client, "LinkSender", 200_000)
         receiver = _make_account(client, "LinkReceiver", 0)
-        txn = _do_transfer(
-            client, sender["account_id"], receiver["account_id"], 10_000, "tx-link-001"
-        )
+        txn = _do_transfer(client, sender, receiver, 10_000, "tx-link-001")
         txn_id = txn["transfer_id"]
 
         s_entries = client.get(

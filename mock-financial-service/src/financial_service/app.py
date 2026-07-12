@@ -5,12 +5,12 @@ from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .analytics_router import analytics_router
+from .batch_router import batch_router
 from .card_router import card_router
 from .database import Base, engine
 from .migrations import (
     apply_analytics_views,
     apply_audit_triggers,
-    apply_snapshot_schema,
 )
 from .routers import router
 
@@ -24,7 +24,6 @@ def create_app() -> FastAPI:
         Base.metadata.create_all(bind=engine)
         apply_audit_triggers(engine)
         apply_analytics_views(engine)
-        apply_snapshot_schema(engine)
 
     # Pydantic validation errors → fixed {error_code, message} schema
     @app.exception_handler(RequestValidationError)
@@ -49,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(router, prefix="/api/v1")
     app.include_router(card_router, prefix="/api/v1")
     app.include_router(analytics_router, prefix="/api/v1")
+    app.include_router(batch_router, prefix="/api/v1")
     return app
 
 

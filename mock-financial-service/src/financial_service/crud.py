@@ -2,17 +2,18 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .models import (
+    BANK_NAME,
     Account,
     AuditLog,
-    BalanceSnapshot,
     Card,
     CardLedgerEntry,
+    DailyClosingSnapshot,
     LedgerEntry,
     Transaction,
 )
@@ -27,7 +28,12 @@ def _payload_hash(data: dict) -> str:
 
 
 def _get_balance(db: Session, account_id: str) -> int:
-    """Compute balance from ledger entries (double-entry sum)."""
+    """Recompute balance from full ledger_entries scan (double-entry sum).
+
+    Not the read path — Account.balance is canonical and updated atomically
+    with every ledger write. This function exists solely to verify that
+    stored value is legit; see reconcile_balance().
+    """
     credits = (
         db.execute(
             select(func.coalesce(func.sum(LedgerEntry.amount), 0))
@@ -93,6 +99,7 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
         )
         db.add(entry)
         balance = payload.initial_balance
+        acct.balance = balance
 
     _append_audit(
         db,
@@ -132,8 +139,16 @@ def get_account(db: Session, account_id: str) -> Account | None:
     ).scalar_one_or_none()
 
 
+def get_account_by_number(db: Session, account_number: str) -> Account | None:
+    return db.execute(
+        select(Account).where(Account.account_number == account_number)
+    ).scalar_one_or_none()
+
+
 def get_balance(db: Session, account_id: str) -> int:
-    return _get_balance(db, account_id)
+    """Read canonical stored balance (O(1), Account.balance column)."""
+    acct = get_account(db, account_id)
+    return acct.balance if acct is not None else 0
 
 
 def get_ledger_entries(
@@ -202,8 +217,9 @@ def _write_failure_audit(
         transaction_id=None,
         payload_snapshot=json.dumps(
             {
-                "sender": payload.sender_account_id,
-                "receiver": payload.receiver_account_id,
+                "sender": payload.sender_account_number,
+                "receiver_bank": payload.receiver_bank_name,
+                "receiver": payload.receiver_account_number,
                 "amount": payload.amount,
                 "idempotency_key": idempotency_key,
                 "error_code": error_code,
@@ -220,8 +236,9 @@ def transfer(
 ) -> Transaction:
     phash = _payload_hash(
         {
-            "sender_account_id": payload.sender_account_id,
-            "receiver_account_id": payload.receiver_account_id,
+            "sender_account_number": payload.sender_account_number,
+            "receiver_bank_name": payload.receiver_bank_name,
+            "receiver_account_number": payload.receiver_account_number,
             "amount": payload.amount,
         }
     )
@@ -235,7 +252,7 @@ def transfer(
         if existing.payload_hash != phash:
             _write_failure_audit(
                 db,
-                actor=payload.sender_account_id,
+                actor=payload.sender_account_number,
                 reason="Idempotency key reused with different payload",
                 error_code="IDEMPOTENCY_CONFLICT",
                 payload=payload,
@@ -248,31 +265,42 @@ def transfer(
 
     try:
         # Validate accounts
-        if payload.sender_account_id == payload.receiver_account_id:
+        if payload.sender_account_number == payload.receiver_account_number:
             raise ValidationError("SELF_TRANSFER", "Sender and receiver must differ")
 
-        sender = get_account(db, payload.sender_account_id)
-        if sender is None:
-            raise NotFoundError(
-                "ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_id} not found"
+        # 이 mock 서비스는 단일 은행만 표현 — receiver_bank_name이 그 은행이 아니면 거절
+        if payload.receiver_bank_name != BANK_NAME:
+            raise ValidationError(
+                "BANK_NOT_SUPPORTED",
+                f"Unsupported bank: {payload.receiver_bank_name} (only {BANK_NAME})",
             )
 
-        receiver = get_account(db, payload.receiver_account_id)
+        sender = get_account_by_number(db, payload.sender_account_number)
+        if sender is None:
+            raise NotFoundError(
+                "ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_number} not found"
+            )
+
+        receiver = get_account_by_number(db, payload.receiver_account_number)
         if receiver is None:
             raise NotFoundError(
-                "ACCOUNT_NOT_FOUND", f"Receiver {payload.receiver_account_id} not found"
+                "ACCOUNT_NOT_FOUND",
+                f"Receiver {payload.receiver_account_number} not found",
             )
+
+        sender_id = sender.account_id
+        receiver_id = receiver.account_id
 
         if payload.amount <= 0:
             raise ValidationError("INVALID_AMOUNT", "Amount must be positive integer")
 
-        sender_balance = _get_balance(db, payload.sender_account_id)
+        sender_balance = sender.balance
         if sender_balance < payload.amount:
             raise ValidationError(
                 "INSUFFICIENT_BALANCE", f"Balance {sender_balance} < {payload.amount}"
             )
 
-        receiver_balance = _get_balance(db, payload.receiver_account_id)
+        receiver_balance = receiver.balance
 
         # Capture pre-transfer total for post-commit integrity assertion
         pre_transfer_total = sender_balance + receiver_balance
@@ -281,8 +309,8 @@ def transfer(
         txn = Transaction(
             idempotency_key=idempotency_key,
             payload_hash=phash,
-            sender_account_id=payload.sender_account_id,
-            receiver_account_id=payload.receiver_account_id,
+            sender_account_id=sender_id,
+            receiver_account_id=receiver_id,
             amount=payload.amount,
             status="success",
         )
@@ -292,14 +320,14 @@ def transfer(
         # Double-entry: DEBIT sender, CREDIT receiver (atomic pair)
         debit = LedgerEntry(
             transaction_id=txn.transaction_id,
-            account_id=payload.sender_account_id,
+            account_id=sender_id,
             entry_type="DEBIT",
             amount=payload.amount,
             running_balance=sender_balance - payload.amount,
         )
         credit = LedgerEntry(
             transaction_id=txn.transaction_id,
-            account_id=payload.receiver_account_id,
+            account_id=receiver_id,
             entry_type="CREDIT",
             amount=payload.amount,
             running_balance=receiver_balance + payload.amount,
@@ -307,17 +335,25 @@ def transfer(
         db.add(debit)
         db.add(credit)
 
+        # Canonical balance updated atomically in the same transaction as the
+        # ledger entries above — never a separate/deferred step.
+        sender.balance = sender_balance - payload.amount
+        receiver.balance = receiver_balance + payload.amount
+
         _append_audit(
             db,
-            actor=payload.sender_account_id,
+            actor=payload.sender_account_number,
             action="TRANSFER",
-            reason=f"Transfer {payload.amount} KRW to {payload.receiver_account_id}",
+            reason=(
+                f"Transfer {payload.amount} KRW to {payload.receiver_account_number}"
+            ),
             status="success",
             transaction_id=txn.transaction_id,
             payload_snapshot=json.dumps(
                 {
-                    "sender": payload.sender_account_id,
-                    "receiver": payload.receiver_account_id,
+                    "sender": payload.sender_account_number,
+                    "receiver_bank": payload.receiver_bank_name,
+                    "receiver": payload.receiver_account_number,
                     "amount": payload.amount,
                     "idempotency_key": idempotency_key,
                 }
@@ -330,7 +366,7 @@ def transfer(
         db.rollback()
         _write_failure_audit(
             db,
-            actor=payload.sender_account_id,
+            actor=payload.sender_account_number,
             reason=exc.message,
             error_code=exc.error_code,
             payload=payload,
@@ -338,28 +374,41 @@ def transfer(
         )
         raise
 
-    # Runtime integrity assertion: total balance must be preserved after commit
-    post_sender_balance = _get_balance(db, payload.sender_account_id)
-    post_receiver_balance = _get_balance(db, payload.receiver_account_id)
+    # Runtime integrity assertion: recomputed ledger sum must match both the
+    # stored Account.balance we just wrote and the pre-transfer total.
+    post_sender_balance = _get_balance(db, txn.sender_account_id)
+    post_receiver_balance = _get_balance(db, txn.receiver_account_id)
     post_transfer_total = post_sender_balance + post_receiver_balance
     assert post_transfer_total == pre_transfer_total, (
         f"Balance integrity violation: pre={pre_transfer_total}, "
         f"post={post_transfer_total} "
         f"(sender={post_sender_balance}, receiver={post_receiver_balance})"
     )
+    assert post_sender_balance == sender.balance, (
+        f"Stored balance drift: sender.balance={sender.balance}, "
+        f"recomputed={post_sender_balance}"
+    )
+    assert post_receiver_balance == receiver.balance, (
+        f"Stored balance drift: receiver.balance={receiver.balance}, "
+        f"recomputed={post_receiver_balance}"
+    )
 
     return txn
 
 
-# ── Snapshot / 정보계 balance cache ───────────────────────────────────────────
+# ── Balance reconciliation (정보계) ────────────────────────────────────────────
 
 
-def refresh_snapshot(db: Session, account_id: str) -> BalanceSnapshot:
-    """Compute and overwrite single-row snapshot for account.
+def reconcile_balance(db: Session, account_id: str) -> dict:
+    """Verify Account.balance (stored, canonical) against a full ledger recompute.
 
-    Semantics: one row per account, mutable, overwritten in-place.
-    Never append-only — calling twice leaves exactly 1 row.
+    Pure function — no locking, no writes. Account.balance is written
+    atomically with every ledger entry (see transfer(), settle_card(),
+    create_account()), so drift here means a bug, not staleness.
     """
+    acct = get_account(db, account_id)
+    stored_balance = acct.balance if acct is not None else 0
+
     sum_credit = int(
         db.execute(
             select(func.coalesce(func.sum(LedgerEntry.amount), 0))
@@ -376,111 +425,118 @@ def refresh_snapshot(db: Session, account_id: str) -> BalanceSnapshot:
         ).scalar()
         or 0
     )
-    # SQLite rowid as integer high-water-mark
-    last_rowid = db.execute(
-        text("SELECT MAX(rowid) FROM ledger_entries WHERE account_id = :aid"),
-        {"aid": account_id},
-    ).scalar()
-
-    cached_balance = sum_credit - sum_debit
-    now = datetime.now(timezone.utc)
-
-    existing = db.execute(
-        select(BalanceSnapshot).where(BalanceSnapshot.account_id == account_id)
-    ).scalar_one_or_none()
-
-    if existing is not None:
-        # Overwrite in-place — never append
-        existing.cached_balance = cached_balance
-        existing.last_entry_rowid = last_rowid
-        existing.sum_credit = sum_credit
-        existing.sum_debit = sum_debit
-        existing.refreshed_at = now
-        snap = existing
-    else:
-        snap = BalanceSnapshot(
-            account_id=account_id,
-            cached_balance=cached_balance,
-            last_entry_rowid=last_rowid,
-            sum_credit=sum_credit,
-            sum_debit=sum_debit,
-            refreshed_at=now,
-        )
-        db.add(snap)
-
-    db.commit()
-    db.refresh(snap)
-    return snap
-
-
-def get_snapshot(db: Session, account_id: str) -> BalanceSnapshot | None:
-    """Fetch existing snapshot row (None if not yet refreshed)."""
-    return db.execute(
-        select(BalanceSnapshot).where(BalanceSnapshot.account_id == account_id)
-    ).scalar_one_or_none()
-
-
-def reconcile_snapshot(db: Session, account_id: str) -> dict:
-    """Compare watermark-scoped stored sums vs live recompute.
-
-    Pure function — no locking, no writes, does not block ledger writes.
-    Scope: only ledger entries with rowid <= last_entry_rowid are compared.
-    """
-    snap = get_snapshot(db, account_id)
-    if snap is None:
-        live_balance = _get_balance(db, account_id)
-        return {
-            "account_id": account_id,
-            "cached_balance": 0,
-            "expected_balance": live_balance,
-            "sum_credit": 0,
-            "sum_debit": 0,
-            "last_entry_rowid": None,
-            "drift_detected": live_balance != 0,
-            "delta": -live_balance,
-            "reconciled_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-    if snap.last_entry_rowid is not None:
-        recomputed_credit = int(
-            db.execute(
-                text(
-                    "SELECT COALESCE(SUM(amount), 0) FROM ledger_entries "
-                    "WHERE account_id = :aid AND entry_type = 'CREDIT' AND rowid <= :wm"
-                ),
-                {"aid": account_id, "wm": snap.last_entry_rowid},
-            ).scalar()
-            or 0
-        )
-        recomputed_debit = int(
-            db.execute(
-                text(
-                    "SELECT COALESCE(SUM(amount), 0) FROM ledger_entries "
-                    "WHERE account_id = :aid AND entry_type = 'DEBIT' AND rowid <= :wm"
-                ),
-                {"aid": account_id, "wm": snap.last_entry_rowid},
-            ).scalar()
-            or 0
-        )
-    else:
-        recomputed_credit = 0
-        recomputed_debit = 0
-
-    expected_balance = recomputed_credit - recomputed_debit
-    delta = snap.cached_balance - expected_balance
-    drift_detected = delta != 0
+    expected_balance = sum_credit - sum_debit
+    delta = stored_balance - expected_balance
 
     return {
         "account_id": account_id,
-        "cached_balance": snap.cached_balance,
+        "cached_balance": stored_balance,
         "expected_balance": expected_balance,
-        "sum_credit": snap.sum_credit,
-        "sum_debit": snap.sum_debit,
-        "last_entry_rowid": snap.last_entry_rowid,
-        "drift_detected": drift_detected,
+        "sum_credit": sum_credit,
+        "sum_debit": sum_debit,
+        "drift_detected": delta != 0,
         "delta": delta,
         "reconciled_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Daily Closing (EOD batch) ──────────────────────────────────────────────────
+
+
+def run_daily_closing(
+    db: Session, business_date: date | None = None
+) -> tuple[date, list[DailyClosingSnapshot]]:
+    """EOD 마감 배치 — 모든 계좌를 대상으로 영업일당 1행 insert.
+
+    실제 cron/스케줄러 없음 — scripts/run_daily_close.py 를 OS cron(자정)에
+    등록해 호출하거나, 이 함수를 감싼 POST /api/v1/batch/daily-close 로 수동
+    트리거. 같은 business_date에 이미 마감된 계좌는 스킵(idempotent) — 재실행
+    해도 중복 행 없음(모델의 (account_id, business_date) 복합 PK가 최종 방어).
+    """
+    if business_date is None:
+        business_date = datetime.now(timezone.utc).date()
+
+    accounts = db.execute(select(Account)).scalars().all()
+    created: list[DailyClosingSnapshot] = []
+
+    for acct in accounts:
+        existing = db.execute(
+            select(DailyClosingSnapshot).where(
+                DailyClosingSnapshot.account_id == acct.account_id,
+                DailyClosingSnapshot.business_date == business_date,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            continue  # already closed for this business_date — idempotent skip
+
+        sum_credit = int(
+            db.execute(
+                select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                .where(LedgerEntry.account_id == acct.account_id)
+                .where(LedgerEntry.entry_type == "CREDIT")
+            ).scalar()
+            or 0
+        )
+        sum_debit = int(
+            db.execute(
+                select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                .where(LedgerEntry.account_id == acct.account_id)
+                .where(LedgerEntry.entry_type == "DEBIT")
+            ).scalar()
+            or 0
+        )
+        last_rowid = db.execute(
+            text("SELECT MAX(rowid) FROM ledger_entries WHERE account_id = :aid"),
+            {"aid": acct.account_id},
+        ).scalar()
+
+        row = DailyClosingSnapshot(
+            account_id=acct.account_id,
+            business_date=business_date,
+            closing_balance=sum_credit - sum_debit,
+            sum_credit=sum_credit,
+            sum_debit=sum_debit,
+            last_entry_rowid=last_rowid,
+        )
+        db.add(row)
+        created.append(row)
+
+    _append_audit(
+        db,
+        actor="SYSTEM_BATCH",
+        action="DAILY_CLOSE",
+        reason=(
+            f"Daily closing batch for {business_date}: {len(created)} accounts closed"
+        ),
+        status="success",
+        payload_snapshot=json.dumps(
+            {
+                "business_date": business_date.isoformat(),
+                "accounts_closed": len(created),
+            }
+        ),
+    )
+    db.commit()
+    for row in created:
+        db.refresh(row)
+    return business_date, created
+
+
+def list_daily_closings(
+    db: Session, account_id: str, limit: int = 50, offset: int = 0
+) -> list[DailyClosingSnapshot]:
+    result = (
+        db.execute(
+            select(DailyClosingSnapshot)
+            .where(DailyClosingSnapshot.account_id == account_id)
+            .order_by(DailyClosingSnapshot.business_date.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        .scalars()
+        .all()
+    )
+    return list(result)
 
 
 # ── Card ──────────────────────────────────────────────────────────────────────
@@ -642,7 +698,8 @@ def settle_card(db: Session, card_id: str) -> Transaction:
         )
 
     # Check account has sufficient balance
-    account_balance = _get_balance(db, card.account_id)
+    account = get_account(db, card.account_id)
+    account_balance = account.balance
     if account_balance < settled_amount:
         raise ValidationError(
             "INSUFFICIENT_BALANCE",
@@ -670,15 +727,17 @@ def settle_card(db: Session, card_id: str) -> Transaction:
 
     # Single DEBIT entry on the card owner's account
     # (settlement reduces account balance)
-    current_balance = _get_balance(db, card.account_id)
     debit = LedgerEntry(
         transaction_id=txn.transaction_id,
         account_id=card.account_id,
         entry_type="DEBIT",
         amount=settled_amount,
-        running_balance=current_balance - settled_amount,
+        running_balance=account_balance - settled_amount,
     )
     db.add(debit)
+
+    # Canonical balance updated atomically with the ledger entry above.
+    account.balance = account_balance - settled_amount
 
     _append_audit(
         db,
