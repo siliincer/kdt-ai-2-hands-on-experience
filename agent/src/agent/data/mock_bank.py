@@ -5,6 +5,14 @@ tool은 이 모듈을 직접 import하지 않고 BankClient(agent/src/agent/bank
 경유한다. 추후 실제 원장 연동 시 클라이언트 구현만 교체하면 된다.
 """
 
+from datetime import date, timedelta
+
+
+def _rel_date(days_ago: int) -> str:
+    """오늘 기준 N일 전 날짜(ISO). 프로세스 시작 시점 기준으로 고정된다."""
+    return (date.today() - timedelta(days=days_ago)).isoformat()
+
+
 # user_id -> 계좌 목록
 MOCK_ACCOUNTS = {
     "user_001": [
@@ -45,6 +53,61 @@ MOCK_RECIPIENTS = {
             "bank": "신한은행",
             "account_number": "110-123-456789",
             "last_transfer_at": None,
+        },
+    ]
+}
+
+# user_id -> 거래내역 목록. date는 프로세스 시작 시점 기준 상대 계산이라
+# "이번 달"/"지난달" 등 상대 기간 조회가 언제 돌려도 항상 일치한다.
+MOCK_TRANSACTIONS = {
+    "user_001": [
+        {
+            "transaction_id": "txn_h001",
+            "account_id": "acc_001",
+            "date": _rel_date(2),
+            "type": "spending",
+            "amount": 5000,
+            "merchant": "스타벅스",
+        },
+        {
+            "transaction_id": "txn_h002",
+            "account_id": "acc_001",
+            "date": _rel_date(5),
+            "type": "spending",
+            "amount": 32000,
+            "merchant": "이마트",
+        },
+        {
+            "transaction_id": "txn_h003",
+            "account_id": "acc_002",
+            "date": _rel_date(3),
+            "type": "spending",
+            "amount": 12000,
+            "merchant": "스타벅스",
+        },
+        {
+            "transaction_id": "txn_h004",
+            "account_id": "acc_002",
+            "date": _rel_date(10),
+            "type": "income",
+            "amount": 2500000,
+            "merchant": "급여",
+        },
+        {
+            "transaction_id": "txn_h005",
+            "account_id": "acc_001",
+            "date": _rel_date(35),
+            "type": "spending",
+            "amount": 45000,
+            "merchant": "올리브영",
+        },
+        {
+            "transaction_id": "txn_h006",
+            "account_id": "acc_002",
+            "date": _rel_date(40),
+            "type": "spending",
+            "amount": 8000,
+            "merchant": "택시",
         },
     ]
 }

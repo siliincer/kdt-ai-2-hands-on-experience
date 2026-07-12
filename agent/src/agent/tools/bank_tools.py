@@ -16,6 +16,7 @@ state 규약 (시트 v2 / Tool_v2 계약):
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
@@ -257,11 +258,27 @@ class _AccountSelection(BaseModel):
     )
 
 
+_ALL_ACCOUNTS_KEYWORDS = ("둘 다", "둘다", "전부", "모두", "전체", "다 보여")
+
+
+def _parse_account_selection_by_keyword(reply: str, n: int) -> list[int]:
+    """규칙 기반 폴백: LLM 없이 답변에서 선택 번호를 뽑는다 (개발/데모용 최소 폴백).
+
+    '전부/둘 다'는 전체, 그 외에는 답변에 나온 1~n 범위 숫자를 선택으로 본다
+    ('1', '1번', '1번이랑 3번', '1, 3'). 풍부한 자연어 해석은 LLM 주경로가 맡는다.
+    """
+    if any(k in reply for k in _ALL_ACCOUNTS_KEYWORDS):
+        return list(range(1, n + 1))
+    nums = [int(x) for x in re.findall(r"\d+", reply)]
+    return [x for x in nums if 1 <= x <= n]
+
+
 def apply_account_selection(state: dict) -> dict:
     """계좌 선택 답변을 파싱해 balance.selected_accounts를 확정한다(복수 가능).
 
-    LLM으로 '1번이랑 2번', '둘 다' 같은 자연어 답변에서 선택 계좌를 뽑는다.
-    유효한 선택이 없으면 invalid → 다시 묻는다.
+    LLM으로 '1번이랑 2번', '둘 다' 같은 자연어 답변에서 선택 계좌를 뽑고,
+    실패 시(키 없음 등) 키워드 폴백으로 보강한다. 유효한 선택이 없으면
+    invalid → 다시 묻는다.
     """
     reply = _data(state).get("balance.account_selection_input", "")
     candidates = _data(state).get("balance.account_candidates") or []
@@ -281,6 +298,10 @@ def apply_account_selection(state: dict) -> dict:
         nums = [n for n in (result.selected_numbers or []) if 1 <= n <= len(candidates)]
     except Exception:
         nums = []
+
+    # LLM이 못 뽑았으면 키워드 폴백으로 보강 (숫자/'전부' 등)
+    if not nums:
+        nums = _parse_account_selection_by_keyword(reply, len(candidates))
 
     if not nums:
         return {"route_key": "invalid"}
@@ -1478,8 +1499,10 @@ def run_itx_pre_execution_guardrail(state: dict) -> dict:
 
     시트 라우팅상 이 스텝은 승인(review_internal_transfer)보다 앞에 있어
     transfer의 동명 스텝(승인 후 위변조 대조)과 역할이 다르다. 여기서는
-    승인 대조 없이 잔액·정책(고액 등)만 검사한다. 라우트가 allowed/blocked
-    두 갈래뿐이라(시트 계약) 모든 실패 사유를 blocked로 묶는다.
+    승인 대조 없이 잔액·정책만 검사한다. 가드레일은 execute_internal_transfer
+    대상 규칙만 조회하므로(execute_transfer와 분리) 타인송금 전용 규칙(고액
+    블록 등)은 적용되지 않는다. 라우트가 allowed/blocked 두 갈래뿐이라
+    (시트 계약) 모든 실패 사유를 blocked로 묶는다.
     """
     try:
         user_id = state.get("user_id")
@@ -1497,7 +1520,9 @@ def run_itx_pre_execution_guardrail(state: dict) -> dict:
             }
 
         context = {"amount": amount, "balance": live["balance"]}
-        triggered = GuardrailEngine.check("tool", context, target_id="execute_transfer")
+        triggered = GuardrailEngine.check(
+            "tool", context, target_id="execute_internal_transfer"
+        )
         blocked = [r for r in triggered if r.get("action") == "block"]
         if blocked:
             decision = GuardrailEngine.pick_decision(blocked)
@@ -1573,6 +1598,286 @@ def generate_internal_transfer_response(state: dict) -> dict:
         f"{result.get('to_account_name', '?')}(으)로 {result.get('amount', 0):,}원을 "
         f"이체했습니다. 거래번호: {result['transaction_id']}"
     )
+    return {"final_response": text, "route_key": "success"}
+
+
+# ── 거래내역 조회 / 기간 지출·입금 합계 ────────────────────────────────────────
+#
+# normalize_period/resolve_account_scope/fetch_transactions는 _ns/_dget로
+# txn/sum 두 워크플로우가 공유한다. extract_*, sum_transactions,
+# generate_*_response는 워크플로우 전용(출력 형태가 다름 — 목록 vs 합계).
+
+_PERIOD_PHRASES = [
+    "오늘",
+    "어제",
+    "이번주",
+    "지난주",
+    "저번주",
+    "이번달",
+    "지난달",
+    "저번달",
+]
+_MERCHANT_KEYWORDS = ["스타벅스", "이마트", "올리브영", "택시", "급여"]
+
+
+def _extract_period_phrase(text: str) -> str | None:
+    """발화에서 인식 가능한 기간 표현 문구를 찾는다 (계산은 안 함, 문구만)."""
+    compact = text.replace(" ", "")
+    for phrase in _PERIOD_PHRASES:
+        if phrase in compact:
+            return phrase
+    m = re.search(r"최근\d+일", compact)
+    if m:
+        return m.group(0)
+    m = re.search(r"\d{1,2}/\d{1,2}~\d{1,2}/\d{1,2}", compact)
+    if m:
+        return m.group(0)
+    return None
+
+
+def _parse_period_phrase(text: str) -> dict | None:
+    """기간 표현 문구를 {from_date,to_date}(ISO 문자열) 날짜 범위로 변환한다."""
+    if not text:
+        return None
+    t = text.replace(" ", "")
+    today = date.today()
+
+    if "오늘" in t:
+        return {"from_date": today.isoformat(), "to_date": today.isoformat()}
+    if "어제" in t:
+        y = today - timedelta(days=1)
+        return {"from_date": y.isoformat(), "to_date": y.isoformat()}
+    if "이번주" in t:
+        monday = today - timedelta(days=today.weekday())
+        return {"from_date": monday.isoformat(), "to_date": today.isoformat()}
+    if "지난주" in t or "저번주" in t:
+        this_monday = today - timedelta(days=today.weekday())
+        last_monday = this_monday - timedelta(days=7)
+        last_sunday = this_monday - timedelta(days=1)
+        return {
+            "from_date": last_monday.isoformat(),
+            "to_date": last_sunday.isoformat(),
+        }
+    if "이번달" in t:
+        first = today.replace(day=1)
+        return {"from_date": first.isoformat(), "to_date": today.isoformat()}
+    if "지난달" in t or "저번달" in t:
+        first_this = today.replace(day=1)
+        last_of_prev = first_this - timedelta(days=1)
+        first_of_prev = last_of_prev.replace(day=1)
+        return {
+            "from_date": first_of_prev.isoformat(),
+            "to_date": last_of_prev.isoformat(),
+        }
+    m = re.search(r"최근(\d+)일", t)
+    if m:
+        start = today - timedelta(days=int(m.group(1)) - 1)
+        return {"from_date": start.isoformat(), "to_date": today.isoformat()}
+    m = re.search(r"(\d{1,2})/(\d{1,2})~(\d{1,2})/(\d{1,2})", t)
+    if m:
+        mo1, d1, mo2, d2 = (int(x) for x in m.groups())
+        try:
+            start = date(today.year, mo1, d1)
+            end = date(today.year, mo2, d2)
+            return {"from_date": start.isoformat(), "to_date": end.isoformat()}
+        except ValueError:
+            return None
+    return None
+
+
+def extract_transaction_slots(state: dict) -> dict:
+    """거래내역 조회 발화에서 기간·계좌 힌트·가맹점 키워드를 추출한다."""
+    text = state.get("user_input", "")
+    ns = _ns(state)
+    compact = text.replace(" ", "")
+    updates: dict = {"route_key": "extracted"}
+
+    phrase = _extract_period_phrase(text)
+    if phrase:
+        updates[f"{ns}.period_expr"] = phrase
+
+    hint = None
+    try:
+        for a in _accounts(state.get("user_id")):
+            name = a.get("account_name", "").replace(" ", "")
+            if name and name in compact:
+                hint = a["account_name"]
+                break
+    except BankClientError:
+        pass
+    if hint:
+        updates[f"{ns}.account_hint"] = hint
+
+    for kw in _MERCHANT_KEYWORDS:
+        if kw in compact:
+            updates[f"{ns}.keyword"] = kw
+            break
+
+    return updates
+
+
+def extract_amount_summary_slots(state: dict) -> dict:
+    """기간 합계 조회 발화에서 기간·계좌 힌트·거래 방향을 추출한다."""
+    text = state.get("user_input", "")
+    ns = _ns(state)
+    compact = text.replace(" ", "")
+    updates: dict = {"route_key": "extracted"}
+
+    phrase = _extract_period_phrase(text)
+    if phrase:
+        updates[f"{ns}.period_expr"] = phrase
+
+    hint = None
+    try:
+        for a in _accounts(state.get("user_id")):
+            name = a.get("account_name", "").replace(" ", "")
+            if name and name in compact:
+                hint = a["account_name"]
+                break
+    except BankClientError:
+        pass
+    if hint:
+        updates[f"{ns}.account_hint"] = hint
+
+    if any(k in compact for k in ("썼", "지출", "소비", "나간")):
+        updates[f"{ns}.txn_type"] = "spending"
+    elif any(k in compact for k in ("들어", "입금", "수입", "받은")):
+        updates[f"{ns}.txn_type"] = "income"
+
+    return updates
+
+
+def normalize_period(state: dict) -> dict:
+    """기간 표현 문구를 구체 날짜 범위로 정규화한다 (거래내역/기간합계 공유)."""
+    phrase = _dget(state, "period_expr")
+    if not phrase:
+        return {"route_key": "needs_period"}
+    parsed = _parse_period_phrase(phrase)
+    if parsed is None:
+        return {"route_key": "needs_period"}
+    return {f"{_ns(state)}.period": parsed, "route_key": "normalized"}
+
+
+def resolve_account_scope(state: dict) -> dict:
+    """조회 대상 계좌 범위를 정한다 (거래내역/기간합계 공유).
+
+    힌트가 없거나 '전체'류면 all_accounts(전 계좌 대상). 하나로 특정되면
+    resolved. 여러 개 걸리면 select_needed. 매칭 실패는 not_found.
+    balance의 verify_account(항상 특정을 요구)와 달리, 여기선 힌트가
+    없어도 에러가 아니라 "전체 조회"로 해석한다.
+    """
+    try:
+        hint = (_dget(state, "account_hint") or "").replace(" ", "")
+        if not hint or hint in ("전체", "모두", "모든계좌", "전계좌"):
+            return {"route_key": "all_accounts"}
+        accounts = _accounts(state.get("user_id"))
+        candidates = [
+            a for a in accounts if hint in a.get("account_name", "").replace(" ", "")
+        ]
+        if not candidates:
+            return {
+                "route_key": "not_found",
+                "final_response": "해당 계좌를 찾지 못했어요.",
+            }
+        if len(candidates) == 1:
+            return {f"{_ns(state)}.account": candidates[0], "route_key": "resolved"}
+        return {
+            "route_key": "select_needed",
+            "prompt_message": (
+                f"어느 계좌를 조회할까요?\n{_account_options(candidates)}"
+            ),
+            "prompt_ui": _account_card_ui(candidates),
+        }
+    except Exception:
+        return {
+            "route_key": "error",
+            "final_response": "계좌 확인 중 문제가 발생했습니다.",
+        }
+
+
+def fetch_transactions(state: dict) -> dict:
+    """거래내역을 조회한다 (거래내역/기간합계 공유).
+
+    account/period는 ask_account/ask_period(엔진 기본 input 노드)를 거쳐
+    dict가 아니라 원시 답변 문자열로 들어올 수 있어(재검증 스텝으로
+    안 돌아가는 라우팅) 여기서 방어적으로 재해석한다.
+    """
+    ns = _ns(state)
+    user_id = state.get("user_id")
+    account_raw = _dget(state, "account")
+    period_raw = _dget(state, "period")
+    keyword = _dget(state, "keyword")
+
+    account_id = None
+    if isinstance(account_raw, dict):
+        account_id = account_raw.get("account_id")
+    elif isinstance(account_raw, str) and account_raw.strip():
+        try:
+            accounts = _accounts(user_id)
+        except BankClientError:
+            accounts = []
+        compact = account_raw.replace(" ", "")
+        matches = [
+            a for a in accounts if compact in a.get("account_name", "").replace(" ", "")
+        ]
+        if len(matches) == 1:
+            account_id = matches[0]["account_id"]
+
+    period = period_raw
+    if isinstance(period, str):
+        period = _parse_period_phrase(period)
+    if not isinstance(period, dict) or "from_date" not in period:
+        return {
+            "route_key": "error",
+            "final_response": "조회 기간을 확인하지 못했습니다.",
+        }
+
+    try:
+        results = get_bank_client().get_transactions(
+            user_id,
+            account_id=account_id,
+            start_date=period["from_date"],
+            end_date=period["to_date"],
+        )
+    except BankClientError:
+        return {
+            "route_key": "error",
+            "final_response": "거래내역 조회 중 문제가 발생했습니다.",
+        }
+
+    if keyword:
+        results = [t for t in results if keyword in t.get("merchant", "")]
+
+    if not results:
+        return {f"{ns}.results": [], "route_key": "empty"}
+    return {f"{ns}.results": results, "route_key": "success"}
+
+
+def generate_transaction_response(state: dict) -> dict:
+    """조회된 거래내역을 목록 문장으로 만든다 (결정적)."""
+    results = _dget(state, "results") or []
+    if not results:
+        return {"route_key": "failed"}
+    lines = [f"- {t['date']} {t['merchant']} {t['amount']:,}원" for t in results]
+    text = "조회된 거래내역입니다.\n" + "\n".join(lines)
+    return {"final_response": text, "route_key": "success"}
+
+
+def sum_transactions(state: dict) -> dict:
+    """조회된 거래내역을 방향(txn_type)별로 합산한다. 방향 미지정 시 지출 기준."""
+    results = _dget(state, "results") or []
+    direction = _dget(state, "txn_type") or "spending"
+    total = sum(t.get("amount", 0) for t in results if t.get("type") == direction)
+    return {f"{_ns(state)}.total": total, "route_key": "done"}
+
+
+def generate_amount_summary_response(state: dict) -> dict:
+    """기간 합계 결과를 응답 문장으로 만든다 (결정적)."""
+    total = _dget(state, "total")
+    if total is None:
+        return {"route_key": "failed"}
+    label = "입금" if _dget(state, "txn_type") == "income" else "지출"
+    text = f"해당 기간 {label} 합계는 {total:,}원입니다."
     return {"final_response": text, "route_key": "success"}
 
 

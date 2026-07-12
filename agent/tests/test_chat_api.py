@@ -48,7 +48,8 @@ def test_balance_inquiry_interrupt_and_resume(client, monkeypatch):
     assert "선택" in first["reply"]
     thread_id = first["thread_id"]
 
-    # apply_account_selection은 LLM 전용이라 결정적 파서로 대체
+    # LLM 호출을 격리하려 결정적 파서로 대체 (실제 키워드 폴백은
+    # test_balance_tools.py에서 직접 검증)
     def pick_first(state: dict) -> dict:
         data = state.get("data") or {}
         candidates = data.get("balance.account_candidates") or []

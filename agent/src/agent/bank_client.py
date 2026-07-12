@@ -21,7 +21,12 @@ from typing import Protocol
 
 import httpx
 
-from agent.data.mock_bank import AUDIT_LOG, MOCK_ACCOUNTS, MOCK_RECIPIENTS
+from agent.data.mock_bank import (
+    AUDIT_LOG,
+    MOCK_ACCOUNTS,
+    MOCK_RECIPIENTS,
+    MOCK_TRANSACTIONS,
+)
 
 
 class BankClientError(Exception):
@@ -37,6 +42,14 @@ class BankClient(Protocol):
 
     def get_recipients(
         self, user_id: str, recipient_name: str | None = None
+    ) -> list[dict]: ...
+
+    def get_transactions(
+        self,
+        user_id: str,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> list[dict]: ...
 
     def transfer(
@@ -84,6 +97,22 @@ class LocalBankClient:
         if recipient_name:
             return [r for r in recipients if recipient_name in r.get("name", "")]
         return recipients
+
+    def get_transactions(
+        self,
+        user_id: str,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict]:
+        results = MOCK_TRANSACTIONS.get(user_id, [])
+        if account_id:
+            results = [t for t in results if t.get("account_id") == account_id]
+        if start_date:
+            results = [t for t in results if t.get("date", "") >= start_date]
+        if end_date:
+            results = [t for t in results if t.get("date", "") <= end_date]
+        return sorted(results, key=lambda t: t.get("date", ""), reverse=True)
 
     def transfer(
         self,
@@ -217,6 +246,27 @@ class HttpBankClient:
         if response.status_code >= 400:
             raise BankClientError(f"수취인 조회 실패: HTTP {response.status_code}")
         return response.json().get("recipient_candidates", [])
+
+    def get_transactions(
+        self,
+        user_id: str,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict]:
+        params: dict = {"user_id": user_id}
+        if account_id:
+            params["account_id"] = account_id
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        response = self._request("GET", "/api/transactions", params=params)
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            raise BankClientError(f"거래내역 조회 실패: HTTP {response.status_code}")
+        return response.json().get("transactions", [])
 
     def transfer(
         self,
