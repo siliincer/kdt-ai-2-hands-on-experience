@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.load_environment_var import settings
@@ -20,20 +21,25 @@ from ..repository.account_repository import (
     get_mapped_accounts,
 )
 from ..schemas.ui import (
+    AccountDetailData,
+    AccountDetailInfo,
     AccountSummary,
     BalanceData,
     BudgetData,
     BudgetItem,
     CardsData,
     CatTxDatum,
+    CreditCard,
     MonthlySpendDatum,
     PieDatum,
+    RecentTxItem,
     SpendingData,
     TransactionItem,
     TransactionsData,
 )
 from .financial import get_financial_client
 from .mock.ui_fixtures import (
+    ACCOUNT_DETAIL_FIXTURE,
     BALANCE_FIXTURE,
     BUDGET_FIXTURE,
     CARDS_FIXTURE,
@@ -51,6 +57,7 @@ _DEFAULT_CATEGORY = "기타"
 _DEFAULT_PIE_COLOR = "#3B82F6"
 _DEFAULT_BUDGET_TOTAL = 1_000_000
 _CATTX_LIMIT = 20
+_RECENT_LIMIT = 10
 
 
 def _use_http() -> bool:
@@ -121,6 +128,58 @@ async def get_balance_view(
     return BalanceData(
         total=sum(a.balance for a in summaries),
         accounts=summaries,
+    )
+
+
+def _ledger_to_recent(entry: dict) -> RecentTxItem:
+    """계정계 원장 항목 -> 계좌 상세 최근거래 항목(부호 있는 금액).
+
+    B2 는 A2(거래내역)와 달리 amount 에 부호를 준다(출금 음수).
+    """
+    created = _parse_dt(entry["created_at"])
+    is_credit = entry["entry_type"] == "CREDIT"
+    amount = entry["amount"] if is_credit else -entry["amount"]
+    return RecentTxItem(
+        name="입금" if is_credit else "출금",
+        emoji="💰" if is_credit else "💸",
+        date=created.strftime("%m.%d %H:%M"),
+        amount=amount,
+        type="in" if is_credit else "out",
+    )
+
+
+async def get_account_detail_view(
+    user_id: UUID, account_id: str, session: AsyncSession | None = None
+) -> AccountDetailData:
+    """계좌 상세 view model (B2).
+
+    http 모드: account_id 가 user 소유(매핑) 계좌인지 확인 후 잔액+최근거래 조회.
+    소유가 아니거나 계좌 없음이면 404. mock 모드: 픽스처.
+    """
+    if not _use_http():
+        return ACCOUNT_DETAIL_FIXTURE
+    session = cast(AsyncSession, session)
+
+    rows = await get_mapped_accounts(session, user_id)
+    row = next((r for r in rows if r.external_account_id == account_id), None)
+    if row is None:  # user 스코프 밖 계좌 조회 차단
+        raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
+
+    client = get_financial_client()
+    balance = await client.get_balance(account_id)
+    if balance is None:  # 계정계 404
+        raise HTTPException(status_code=404, detail="계좌를 찾을 수 없습니다.")
+
+    ledger = await client.get_ledger(account_id, limit=_RECENT_LIMIT)
+    tail = (row.account_number or str(balance["account_id"]))[-4:]
+    return AccountDetailData(
+        account=AccountDetailInfo(
+            bank=row.bank_name or _DEFAULT_BANK,
+            alias=_DEFAULT_ALIAS,
+            tail=tail,
+            balance=balance["balance"],
+        ),
+        recent=[_ledger_to_recent(e) for e in ledger[:_RECENT_LIMIT]],
     )
 
 
@@ -252,10 +311,23 @@ async def get_budget_view(
     return _budget_from_ledger(entries)
 
 
+def _mask_card_number(num: str) -> str:
+    """카드번호 가운데 그룹 마스킹(PII). '5412 3456 7890 1234' -> '5412 **** **** 1234'.
+
+    앞 4자리(BIN 일부)와 뒤 4자리만 노출하고 중간 그룹은 자릿수만큼 * 로 가린다.
+    공백 구분 그룹이 2개 이하면 마스킹할 중간이 없어 원본을 그대로 둔다.
+    """
+    groups = num.split()
+    if len(groups) <= 2:
+        return num
+    masked_mid = ["*" * len(g) for g in groups[1:-1]]
+    return " ".join([groups[0], *masked_mid, groups[-1]])
+
+
 async def get_cards_view(
     user_id: UUID, session: AsyncSession | None = None
 ) -> CardsData:
-    """카드 관리 view model. mock 모드: 픽스처.
+    """카드 관리 view model. mock 모드: 픽스처(카드번호 마스킹, B6 PII 규칙).
 
     http 모드: 계정계에 "계좌별 카드 목록" 엔드포인트가 없어 열거 불가 → 빈 목록
     (카드 미프로비저닝 상태를 정직하게 반영). TODO: 카드 프로비저닝(계좌처럼 card_id
@@ -263,5 +335,15 @@ async def get_cards_view(
     """
     _ = user_id, session
     if not _use_http():
-        return CARDS_FIXTURE
+        return CardsData(
+            cards=[
+                CreditCard(
+                    name=c.name,
+                    num=_mask_card_number(c.num),
+                    exp=c.exp,
+                    bg=c.bg,
+                )
+                for c in CARDS_FIXTURE.cards
+            ]
+        )
     return CardsData(cards=[])

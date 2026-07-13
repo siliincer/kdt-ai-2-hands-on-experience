@@ -5,6 +5,7 @@ from ..db.postgres import get_db
 from ..models.user import User
 from ..schemas.response import CommonResponse
 from ..schemas.ui import (
+    AccountDetailData,
     BalanceData,
     BudgetData,
     CardsData,
@@ -13,6 +14,7 @@ from ..schemas.ui import (
 )
 from ..security.jwt import get_current_user
 from ..services.ui_service import (
+    get_account_detail_view,
     get_balance_view,
     get_budget_view,
     get_cards_view,
@@ -32,6 +34,23 @@ async def read_balance(
     """자산 현황 카드 데이터 (component:balance 시그널 후 FE 가 조회, ADR-002)."""
     data = await get_balance_view(current_user.id, session)
     return success_response(message="자산 현황을 조회했습니다.", data=data)
+
+
+@ui_router.get(
+    "/account/{account_id}", response_model=CommonResponse[AccountDetailData]
+)
+async def read_account_detail(
+    account_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """계좌 상세 카드 데이터 (component:account_detail, B2).
+
+    잔액 + 최근 거래를 돌려준다. account_id 는 user 소유 계좌여야 하며,
+    아니면 404. recent[].amount 는 부호를 가진다(A2 거래내역과 규칙 다름).
+    """
+    data = await get_account_detail_view(current_user.id, account_id, session)
+    return success_response(message="계좌 상세를 조회했습니다.", data=data)
 
 
 @ui_router.get("/spending", response_model=CommonResponse[SpendingData])
