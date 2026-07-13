@@ -481,33 +481,37 @@ def _resolve_from_account(user_id: str, raw) -> tuple[dict | None, list[dict]]:
 def _parse_approval_reply(reply: str) -> str:
     """승인 카드 답변 → route_key. 해석 불가는 보수적으로 cancelled."""
     text = str(reply).strip()
-    if _is_cancel(text):
-        return "cancelled"
-    if "수취인" in text:
-        return "edit_recipient"
-    if "금액" in text:
-        return "edit_amount"
-    if "계좌" in text:
-        return "edit_from_account"
     approve_keywords = ("승인", "확인", "네", "응", "보내", "진행", "예")
-    if any(keyword in text for keyword in approve_keywords):
-        return "approved"
-    # UI 승인 버튼 라벨("송금하기")이 그대로 회신되는 경우 — 정확 일치만
-    # 허용한다 ("송금 안 할래" 같은 부정 표현의 오판 방지).
-    if text.replace(" ", "") in {"송금하기", "송금"}:
-        return "approved"
-    return "cancelled"
+    match text:
+        case _ if _is_cancel(text):
+            return "cancelled"
+        case _ if "수취인" in text:
+            return "edit_recipient"
+        case _ if "금액" in text:
+            return "edit_amount"
+        case _ if "계좌" in text:
+            return "edit_from_account"
+        case _ if any(keyword in text for keyword in approve_keywords):
+            return "approved"
+        # UI 승인 버튼 라벨("송금하기")이 그대로 회신되는 경우 — 정확 일치만
+        # 허용한다 ("송금 안 할래" 같은 부정 표현의 오판 방지).
+        case _ if text.replace(" ", "") in {"송금하기", "송금"}:
+            return "approved"
+        case _:
+            return "cancelled"
 
 
 def _parse_auth_reply(reply: str) -> str:
     """본인 인증 답변 → route_key. 취소/실패를 먼저 검사한다."""
     text = str(reply).strip()
-    if _is_cancel(text) or "실패" in text:
-        return "not_authenticated"
     auth_keywords = ("인증", "완료", "성공", "했어")
-    if any(keyword in text for keyword in auth_keywords):
-        return "authenticated"
-    return "not_authenticated"
+    match text:
+        case _ if _is_cancel(text) or "실패" in text:
+            return "not_authenticated"
+        case _ if any(keyword in text for keyword in auth_keywords):
+            return "authenticated"
+        case _:
+            return "not_authenticated"
 
 
 def _parse_warning_reply(reply: str) -> str:
@@ -1041,34 +1045,35 @@ def request_transfer_approval(state: dict) -> dict:
 
     route = _parse_approval_reply(str(reply))
     updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
-    if route == "approved":
-        updates["transfer.approval"] = {
-            "recipient_id": recipient.get("recipient_id"),
-            "account_number": recipient.get("account_number"),
-            "from_account_id": account.get("account_id"),
-            "amount": amount,
-        }
-    elif route == "cancelled":
-        updates["final_response"] = (
-            "송금을 취소했습니다."
-            if _is_cancel(str(reply))
-            else "확인할 수 없는 답변이라 송금을 취소했습니다. 다시 시도해주세요."
-        )
-    elif route == "edit_amount":
-        updates["transfer.amount"] = None
-        updates["prompt_message"] = "새 송금 금액을 입력해주세요 (예: 3만원)."
-        updates["prompt_ui"] = _number_input_ui()
-    elif route == "edit_recipient":
-        updates["transfer.recipient"] = None
-        updates["prompt_message"] = "새 수취인을 입력해주세요 (이름 또는 계좌번호)."
-        updates["prompt_ui"] = _recipient_select_ui(state.get("user_id"))
-    elif route == "edit_from_account":
-        updates["transfer.from_account"] = None
-        updates["prompt_message"] = "어느 계좌에서 송금할까요?"
-        try:
-            updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
-        except BankClientError:
-            pass
+    match route:
+        case "approved":
+            updates["transfer.approval"] = {
+                "recipient_id": recipient.get("recipient_id"),
+                "account_number": recipient.get("account_number"),
+                "from_account_id": account.get("account_id"),
+                "amount": amount,
+            }
+        case "cancelled":
+            updates["final_response"] = (
+                "송금을 취소했습니다."
+                if _is_cancel(str(reply))
+                else "확인할 수 없는 답변이라 송금을 취소했습니다. 다시 시도해주세요."
+            )
+        case "edit_amount":
+            updates["transfer.amount"] = None
+            updates["prompt_message"] = "새 송금 금액을 입력해주세요 (예: 3만원)."
+            updates["prompt_ui"] = _number_input_ui()
+        case "edit_recipient":
+            updates["transfer.recipient"] = None
+            updates["prompt_message"] = "새 수취인을 입력해주세요 (이름 또는 계좌번호)."
+            updates["prompt_ui"] = _recipient_select_ui(state.get("user_id"))
+        case "edit_from_account":
+            updates["transfer.from_account"] = None
+            updates["prompt_message"] = "어느 계좌에서 송금할까요?"
+            try:
+                updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+            except BankClientError:
+                pass
     return updates
 
 
@@ -1464,36 +1469,37 @@ def request_itx_approval(state: dict) -> dict:
 
     route = _parse_itx_approval_reply(str(reply))
     updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
-    if route == "approved":
-        updates["itx.approval"] = {
-            "from_account_id": from_account.get("account_id"),
-            "to_account_id": to_account.get("account_id"),
-            "amount": amount,
-        }
-    elif route == "cancelled":
-        updates["final_response"] = (
-            "이체를 취소했습니다."
-            if _is_cancel(str(reply))
-            else "확인할 수 없는 답변이라 이체를 취소했습니다. 다시 시도해주세요."
-        )
-    elif route == "edit_amount":
-        updates["itx.amount"] = None
-        updates["prompt_message"] = "새 이체 금액을 입력해주세요 (예: 3만원)."
-        updates["prompt_ui"] = _number_input_ui()
-    elif route == "edit_from_account":
-        updates["itx.from_account"] = None
-        updates["prompt_message"] = "어느 계좌에서 이체할까요?"
-        try:
-            updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
-        except BankClientError:
-            pass
-    elif route == "edit_to_account":
-        updates["itx.to_account"] = None
-        updates["prompt_message"] = "어느 계좌로 이체할까요?"
-        try:
-            updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
-        except BankClientError:
-            pass
+    match route:
+        case "approved":
+            updates["itx.approval"] = {
+                "from_account_id": from_account.get("account_id"),
+                "to_account_id": to_account.get("account_id"),
+                "amount": amount,
+            }
+        case "cancelled":
+            updates["final_response"] = (
+                "이체를 취소했습니다."
+                if _is_cancel(str(reply))
+                else "확인할 수 없는 답변이라 이체를 취소했습니다. 다시 시도해주세요."
+            )
+        case "edit_amount":
+            updates["itx.amount"] = None
+            updates["prompt_message"] = "새 이체 금액을 입력해주세요 (예: 3만원)."
+            updates["prompt_ui"] = _number_input_ui()
+        case "edit_from_account":
+            updates["itx.from_account"] = None
+            updates["prompt_message"] = "어느 계좌에서 이체할까요?"
+            try:
+                updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+            except BankClientError:
+                pass
+        case "edit_to_account":
+            updates["itx.to_account"] = None
+            updates["prompt_message"] = "어느 계좌로 이체할까요?"
+            try:
+                updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+            except BankClientError:
+                pass
     return updates
 
 
