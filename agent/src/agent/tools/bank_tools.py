@@ -1401,22 +1401,24 @@ def verify_to_account(state: dict) -> dict:
 def _parse_itx_approval_reply(reply: str) -> str:
     """본인이체 승인 카드 답변 → route_key. 해석 불가는 보수적으로 cancelled."""
     text = str(reply).strip()
-    if _is_cancel(text):
-        return "cancelled"
-    if "금액" in text:
-        return "edit_amount"
-    if "출금" in text:
-        return "edit_from_account"
-    if "입금" in text:
-        return "edit_to_account"
-    if "계좌" in text:
-        return "edit_from_account"
     approve_keywords = ("승인", "확인", "네", "응", "보내", "진행", "예")
-    if any(keyword in text for keyword in approve_keywords):
-        return "approved"
-    if text.replace(" ", "") in {"송금하기", "송금", "이체하기", "이체"}:
-        return "approved"
-    return "cancelled"
+    match text:
+        case _ if _is_cancel(text):
+            return "cancelled"
+        case _ if "금액" in text:
+            return "edit_amount"
+        case _ if "출금" in text:
+            return "edit_from_account"
+        case _ if "입금" in text:
+            return "edit_to_account"
+        case _ if "계좌" in text:
+            return "edit_from_account"
+        case _ if any(keyword in text for keyword in approve_keywords):
+            return "approved"
+        case _ if text.replace(" ", "") in {"송금하기", "송금", "이체하기", "이체"}:
+            return "approved"
+        case _:
+            return "cancelled"
 
 
 def request_itx_approval(state: dict) -> dict:
