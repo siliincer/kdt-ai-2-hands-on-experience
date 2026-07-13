@@ -53,7 +53,7 @@ services:
       FINANCIAL_CLIENT: http
       MOCK_FINANCIAL_SERVICE_URL: http://mock-financial-service:8002
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     networks:
       default:
         aliases:
@@ -77,7 +77,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     networks:
       default:
         aliases:
@@ -107,7 +107,7 @@ services:
     image: nginx:1.27-alpine
     container_name: kdt-nginx
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
