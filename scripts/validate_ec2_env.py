@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from enum import StrEnum
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -18,6 +19,42 @@ KNOWN_PLACEHOLDERS = {
     "changeme",
     "mypassword",
     "password",
+}
+
+
+class ValidationError(StrEnum):
+    POSTGRES_PASSWORD_MISSING = "POSTGRES_PASSWORD is missing or empty"
+    POSTGRES_PASSWORD_PLACEHOLDER = "POSTGRES_PASSWORD uses a known placeholder"
+    POSTGRES_PASSWORD_SHORT = "POSTGRES_PASSWORD must be at least 16 characters"
+    JWT_SECRET_KEY_MISSING = "JWT_SECRET_KEY is missing or empty"
+    JWT_SECRET_KEY_PLACEHOLDER = "JWT_SECRET_KEY uses a known placeholder"
+    JWT_SECRET_KEY_SHORT = "JWT_SECRET_KEY must be at least 32 characters"
+    AGENT_WEBHOOK_SECRET_MISSING = "AGENT_WEBHOOK_SECRET is missing or empty"
+    AGENT_WEBHOOK_SECRET_PLACEHOLDER = "AGENT_WEBHOOK_SECRET uses a known placeholder"
+    AGENT_WEBHOOK_SECRET_SHORT = "AGENT_WEBHOOK_SECRET must be at least 32 characters"
+    DATABASE_URL_MISSING = "COMPOSE_DATABASE_URL is missing or empty"
+    DATABASE_URL_SCHEME = "COMPOSE_DATABASE_URL must use a PostgreSQL scheme"
+    DATABASE_URL_PARTS = "COMPOSE_DATABASE_URL must include host, user, and password"
+    DATABASE_URL_PASSWORD = "COMPOSE_DATABASE_URL password must match POSTGRES_PASSWORD"
+    DATABASE_URL_HOST = "COMPOSE_DATABASE_URL host must be postgres for EC2 Compose"
+
+
+SECRET_ERRORS = {
+    "POSTGRES_PASSWORD": (
+        ValidationError.POSTGRES_PASSWORD_MISSING,
+        ValidationError.POSTGRES_PASSWORD_PLACEHOLDER,
+        ValidationError.POSTGRES_PASSWORD_SHORT,
+    ),
+    "JWT_SECRET_KEY": (
+        ValidationError.JWT_SECRET_KEY_MISSING,
+        ValidationError.JWT_SECRET_KEY_PLACEHOLDER,
+        ValidationError.JWT_SECRET_KEY_SHORT,
+    ),
+    "AGENT_WEBHOOK_SECRET": (
+        ValidationError.AGENT_WEBHOOK_SECRET_MISSING,
+        ValidationError.AGENT_WEBHOOK_SECRET_PLACEHOLDER,
+        ValidationError.AGENT_WEBHOOK_SECRET_SHORT,
+    ),
 }
 
 
@@ -39,31 +76,32 @@ def load_env(path: Path) -> dict[str, str]:
     return values
 
 
-def validate_environment(values: dict[str, str]) -> list[str]:
-    errors = []
+def validate_environment(values: dict[str, str]) -> list[ValidationError]:
+    errors: list[ValidationError] = []
     for key, minimum_length in REQUIRED_SECRET_LENGTHS.items():
+        missing_error, placeholder_error, short_error = SECRET_ERRORS[key]
         value = values.get(key, "").strip()
         if not value:
-            errors.append(f"{key} is missing or empty")
+            errors.append(missing_error)
         elif value.lower() in KNOWN_PLACEHOLDERS:
-            errors.append(f"{key} uses a known placeholder")
+            errors.append(placeholder_error)
         elif len(value) < minimum_length:
-            errors.append(f"{key} must be at least {minimum_length} characters")
+            errors.append(short_error)
 
     database_url = values.get("COMPOSE_DATABASE_URL", "").strip()
     if not database_url:
-        errors.append("COMPOSE_DATABASE_URL is missing or empty")
+        errors.append(ValidationError.DATABASE_URL_MISSING)
         return errors
 
     parsed = urlsplit(database_url)
     if parsed.scheme not in {"postgresql", "postgresql+asyncpg"}:
-        errors.append("COMPOSE_DATABASE_URL must use a PostgreSQL scheme")
+        errors.append(ValidationError.DATABASE_URL_SCHEME)
     if not parsed.hostname or not parsed.username or parsed.password is None:
-        errors.append("COMPOSE_DATABASE_URL must include host, user, and password")
+        errors.append(ValidationError.DATABASE_URL_PARTS)
     elif unquote(parsed.password) != values.get("POSTGRES_PASSWORD", ""):
-        errors.append("COMPOSE_DATABASE_URL password must match POSTGRES_PASSWORD")
+        errors.append(ValidationError.DATABASE_URL_PASSWORD)
     if parsed.hostname != "postgres":
-        errors.append("COMPOSE_DATABASE_URL host must be postgres for EC2 Compose")
+        errors.append(ValidationError.DATABASE_URL_HOST)
     return errors
 
 
@@ -79,7 +117,7 @@ def main() -> int:
     errors = validate_environment(load_env(args.env_file))
     if errors:
         for error in errors:
-            print(f"ERROR: {error}")
+            print(f"ERROR: {error.value}")
         return 1
     print("EC2 environment validation passed")
     return 0
