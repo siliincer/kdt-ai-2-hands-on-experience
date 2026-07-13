@@ -1,11 +1,17 @@
 services:
   postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for EC2}
     restart: unless-stopped
 
   redis:
     restart: unless-stopped
 
   backend:
+    environment:
+      DATABASE_URL: ${COMPOSE_DATABASE_URL:?COMPOSE_DATABASE_URL is required for EC2}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required for EC2}
+      AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:?AGENT_WEBHOOK_SECRET is required for EC2}
     restart: unless-stopped
 
   agent:
@@ -13,8 +19,8 @@ services:
 
   nginx:
     depends_on:
-      - backend
-      - agent
+      backend:
+        condition: service_healthy
     ports:
       - "80:80"
     volumes:

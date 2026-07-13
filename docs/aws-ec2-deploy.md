@@ -26,8 +26,7 @@ User
 ## Planned Components
 
 - `backend`: FastAPI backend gateway
-- `agent`: AI Agent service, 진입점 확정 후 별도 서비스 또는 backend 연동
-- `mock-financial-service`: PM 담당 계정계 별도 서버 예정
+- `agent`: `agent.main:app`으로 독립 실행 가능하며 backend 제품 경로 연동은 후속
 - `nginx`: frontend 정적 파일 서빙과 backend reverse proxy
 - `postgres`: 로컬/개발은 컨테이너, EC2 배포에서는 RDS 또는 외부 PostgreSQL 검토
 - `redis`: 필요 시 EC2 compose 서비스로 포함

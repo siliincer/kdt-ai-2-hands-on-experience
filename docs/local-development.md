@@ -74,9 +74,10 @@ uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 7. Agent
 
-Agent 앱 진입점은 AI 담당자가 코드 구조를 확정한 뒤 업데이트합니다. 현재 Docker Compose 기본 실행에서는 `agent` 서비스를 profile로 분리합니다.
+Agent 앱 진입점은 `agent.main:app`입니다. 현재 Docker Compose 기본 실행에서는
+`agent` 서비스를 profile로 분리합니다.
 
-예상 실행 형식:
+호스트에서 직접 실행:
 
 ```bash
 cd agent
@@ -110,11 +111,15 @@ uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 docker compose down
 ```
 
-Agent는 `agent.main:app`이 추가된 뒤 profile을 지정해 실행합니다.
+Agent를 포함하려면 profile을 지정해 실행합니다.
 
 ```bash
 docker compose --profile agent up -d --build agent
 ```
+
+현재 Backend 채팅 경로는 `mock_agent_driver`를 사용하며 Agent HTTP API를 직접
+호출하지 않습니다. Agent 컨테이너는 독립 개발·검증용이고, 제품 흐름 연결은
+Backend/AI 담당자가 내부 API와 SSE/webhook 계약을 확정한 뒤 진행합니다.
 
 ## 9. Daily Workflow
 
@@ -130,8 +135,15 @@ uv sync
 ```bash
 uv run ruff check --fix .
 uv run ruff format .
-uv run pytest
+uv run pytest backend
+uv run pytest agent
+uv run pytest mock-financial-service
+uv run pytest security/redteam/tests
+uv run pytest scripts/test_validate_ec2_env.py
 ```
+
+저장소 루트에서 모든 테스트를 한 번에 수집하면 패키지별 동일한 테스트 파일명 때문에
+충돌하므로 패키지별 명령을 사용합니다.
 
 패키지를 추가할 때:
 

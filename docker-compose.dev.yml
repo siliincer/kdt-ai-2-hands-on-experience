@@ -1,6 +1,5 @@
-#  개발 환경에서 필요한 db를 띄우는 역할
+# 개발 환경에서 필요한 db를 띄우는 역할
 # 실행 방법: docker compose -f docker-compose.dev.yml up --build -d
-version: "3.8"
 
 services:
   postgres:
@@ -8,15 +7,15 @@ services:
     container_name: kdt-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-financial_agent}
-      POSTGRES_USER: ${POSTGRES_USER:-myuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mypassword}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-myuser} -d $${POSTGRES_DB:-financial_agent}" ]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-app} -d $${POSTGRES_DB:-financial_agent}" ]
       interval: 10s
       timeout: 5s
       retries: 5

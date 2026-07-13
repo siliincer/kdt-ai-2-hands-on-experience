@@ -2,8 +2,8 @@
 
 CI/CD workflow 파일을 관리하는 디렉터리입니다.
 
-## 예정 workflow
+## Workflows
 
-- `ci.yml`: lint, test, build
-- `docker-build.yml`: Docker 이미지 빌드 검증
-- `security-scan.yml`: secret/SAST/container scan
+- `ci.yaml`: Python lint/test, frontend lint/build, local/dev/prod/EC2 Compose와 Nginx 검증
+- `security.yaml`: Gitleaks secret scan, Trivy filesystem scan
+- `codeql.yaml`: Python, JavaScript/TypeScript SAST

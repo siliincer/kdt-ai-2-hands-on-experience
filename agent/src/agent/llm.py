@@ -104,6 +104,8 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
             model=resolved_model,
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
             temperature=temperature,
+            client_kwargs={"trust_env": False},
+            async_client_kwargs={"trust_env": False},
         )
 
     # 기본: openai (LLM_PROVIDER 미지정 포함 — 기존 동작 유지)
