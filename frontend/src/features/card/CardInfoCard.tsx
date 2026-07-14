@@ -1,31 +1,34 @@
 import { useState } from 'react';
 
 import { F } from '@/shared/constants/font';
-import { cards } from '@/features/mockData/mockData';
+
+import type { CardsData } from '@/shared/types/ui';
 
 export function CardInfoCard({
-  onNavigate,
+  data,
+  onPrompt,
 }: {
-  onNavigate: (path: string) => void;
+  data: CardsData;
+  onPrompt?: (text: string) => void;
 }) {
+  const { cards } = data;
   const [activeCard, setActiveCard] = useState(0);
 
   const actions = [
     {
-      emoji: '🚨',
-      label: '분실신고',
-      fn: undefined as (() => void) | undefined,
-    },
-    {
       emoji: '💳',
       label: '한도설정',
-      fn: undefined as (() => void) | undefined,
+      fn: () => onPrompt?.('한도 설정 해줘'),
     },
-    { emoji: '📄', label: '청구서', fn: () => onNavigate('/bill') },
+    {
+      emoji: '📄',
+      label: '청구서',
+      fn: () => onPrompt?.('카드 청구서 보여줘'),
+    },
     {
       emoji: '🔒',
       label: '카드 정지',
-      fn: undefined as (() => void) | undefined,
+      fn: () => onPrompt?.('카드 정지시켜줘'),
     },
   ];
 

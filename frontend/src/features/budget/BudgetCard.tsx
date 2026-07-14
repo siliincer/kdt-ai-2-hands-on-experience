@@ -4,9 +4,10 @@ import { ToggleLeft, ToggleRight } from 'lucide-react';
 
 import { F, M } from '@/shared/constants/font';
 
-import { subItems, budgetItems } from '@/features/mockData/mockData';
+import type { BudgetData } from '@/shared/types/ui';
 
-export function BudgetCard() {
+export function BudgetCard({ data }: { data: BudgetData }) {
+  const { budgetItems, subItems } = data;
   const [subs, setSubs] = useState(subItems.map((item) => item.active));
 
   return (

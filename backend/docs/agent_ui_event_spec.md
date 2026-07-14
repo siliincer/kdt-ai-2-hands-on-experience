@@ -4,9 +4,10 @@
 
 > **목적**: 웹훅 호출만으로 프론트(assistant-ui chat) 화면에 카드/폼/진행표시를 렌더링한다.
 
-> **상태**: `status/token/tool_call/need_approval/done/error` 는 **구현됨**.
+> **상태**: `status/token/tool_call/need_approval/done/error` **구현됨**.
 
-> `component` 및 각 컴포넌트 `data` 스키마는 **Phase 5-D 목표 계약**(구현 예정).
+> `component` 시그널 + `balance/spending/transactions/budget/cards` 카드 및 UI Data API **구현됨**(Phase 5-D).
+> `account_detail` 카드는 미구현(계약만 존재).
 
 ---
 
@@ -273,12 +274,17 @@ FE 레지스트리 키 → 컴포넌트/조회 엔드포인트:
 }
 ```
 
-지원 `component`: `transfer`(송금), `autotransfer`(자동이체). 빈 정보 채우기는 `args` 의 해당 필드를
-비워서 보내면 된다(예: `"account": ""`).
+지원 `component`(둘 다 **구현됨**): `transfer`(송금), `autotransfer`(자동이체). 빈 정보 채우기는
+`args` 의 해당 필드를 비워서 보내면 된다(예: `"account": ""`).
+
+- `transfer` args: `{ name, bank, account, amount, time }` (`metadata.tool = "transfer"`)
+- `autotransfer` args: `{ account, amount, day }` (`metadata.tool = "autotransfer"`)
+  - 예: `{ "account": "우리은행 1002-345-678901", "amount": "200000", "day": "매월 25일" }`
 
 ### 5.1 사용자 응답 (FE → Backend)
 
 FE 가 사용자의 편집·결정을 아래로 보낸다. Agent 는 이 결과로 워크플로우를 재개한다.
+`component` 는 어떤 confirm(transfer/autotransfer)인지 알려 후속 턴을 분기하는 데 쓴다.
 
 ```
 POST /api/v1/agent/approve
@@ -286,7 +292,8 @@ POST /api/v1/agent/approve
   "chat_session_id": "…",
   "approval_id": "appv_abc123",
   "decision": "approve" | "reject",
-  "args": { …사용자가 수정한 값… }          // approve 시
+  "args": { …사용자가 수정한 값… },         // approve 시
+  "component": "transfer" | "autotransfer"  // 후속 턴 분기용
 }
 ```
 
@@ -361,3 +368,7 @@ curl -s -X POST http://localhost:8000/api/v1/webhooks/agent \
 ## 10. 버전
 
 - v0.1 (2026-07-08) — 최초 명세. `component` 이벤트/스키마는 Phase 5-D 에서 FE 구현.
+- v0.2 (2026-07-09) — `balance/spending/transactions/budget/cards` 카드 + UI Data API
+  (`GET /ui/{spending,transactions,budget,cards}`) 구현. mock 드라이버 키워드 매칭 확장.
+- v0.3 (2026-07-09) — `need_approval` `autotransfer` confirm 폼 구현(args `{account, amount, day}`).
+  `/agent/approve` 에 `component` 필드 추가(후속 턴 transfer/autotransfer 분기).

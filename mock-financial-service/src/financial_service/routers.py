@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from .crud import (
@@ -26,15 +26,11 @@ from .schemas import (
     TransferRequest,
     TransferResponse,
 )
+from .utils import throw_err
 
 router = APIRouter()
 
 DbDep = Annotated[Session, Depends(get_db)]
-
-
-def _err(status: int, code: str, msg: str):
-    raise HTTPException(status_code=status, detail={"error_code": code, "message": msg})
-
 
 # ── 1. POST /accounts — create account ───────────────────────────────────────
 
@@ -69,7 +65,7 @@ def create_account_endpoint(payload: AccountCreate, db: DbDep):
 def get_account_endpoint(account_id: str, db: DbDep):
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
     return AccountResponse(
         account_id=acct.account_id,
@@ -93,7 +89,7 @@ def get_account_endpoint(account_id: str, db: DbDep):
 def get_balance_endpoint(account_id: str, db: DbDep):
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
     return BalanceResponse(
         account_id=account_id, balance=balance, currency=acct.currency
@@ -116,7 +112,7 @@ def get_transactions_endpoint(
 ):
     acct = get_account(db, account_id)
     if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     entries = get_ledger_entries(db, account_id, limit=limit, offset=offset)
     return [
         LedgerEntryResponse(
@@ -150,16 +146,16 @@ def transfer_endpoint(
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ):
     if not idempotency_key:
-        _err(422, "MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required")
+        throw_err(422, "MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required")
 
     try:
         txn = transfer(db, payload, idempotency_key)
     except ValidationError as e:
-        _err(422, e.error_code, e.message)
+        throw_err(422, e.error_code, e.message)
     except NotFoundError as e:
-        _err(404, e.error_code, e.message)
+        throw_err(404, e.error_code, e.message)
     except ConflictError as e:
-        _err(409, e.error_code, e.message)
+        throw_err(409, e.error_code, e.message)
 
     return TransferResponse(
         transfer_id=txn.transaction_id,

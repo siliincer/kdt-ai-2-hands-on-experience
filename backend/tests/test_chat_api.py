@@ -8,7 +8,9 @@ from fastapi.testclient import TestClient
 
 from backend.services import chat_session_service
 from backend.services.mock_agent_driver import (
+    _extract_autotransfer_args,
     _extract_transfer_args,
+    _is_autotransfer_intent,
     _is_transfer_intent,
 )
 
@@ -28,6 +30,20 @@ def test_extract_transfer_args_parses_amount_and_account():
     # 파싱 안 된 필드는 샘플로 채워진다
     assert args["name"]
     assert args["bank"]
+
+
+def test_is_autotransfer_intent_wins_over_transfer():
+    # "자동이체" 는 "이체"(송금 키워드)를 포함하지만 자동이체로 먼저 잡혀야 한다
+    assert _is_autotransfer_intent("자동이체 등록해줘")
+    assert _is_autotransfer_intent("정기결제 걸어줘")
+    assert not _is_autotransfer_intent("김철수에게 송금")
+
+
+def test_extract_autotransfer_args_parses_amount_and_day():
+    args = _extract_autotransfer_args("매월 25일 200,000원 자동이체")
+    assert args["amount"] == "200000"
+    assert args["day"] == "매월 25일"
+    assert args["account"]  # 파싱 안 되면 샘플
 
 
 # --- chat_session_service (repository 를 모킹) --------------------------------

@@ -2,22 +2,20 @@ import { useState } from 'react';
 import { Bell, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 import { F, M } from '@/shared/constants/font';
-import { ALL_TX_ITEM as ALL_TX } from '@/features/mockData/mockData';
 import { detectRecurring } from '@/shared/lib/utils';
+
+import type { TransactionsData } from '@/shared/types/ui';
 
 import { CatBadge } from '@/shared/ui/CatBadge';
 
-export function TransactionsCard() {
-  const months = ['2025-06', '2025-05', '2025-04', '2025-03', '2025-02'];
-  const labels: Record<string, string> = {
-    '2025-06': '6월',
-    '2025-05': '5월',
-    '2025-04': '4월',
-    '2025-03': '3월',
-    '2025-02': '2월',
-  };
+/** 'YYYY-MM' → 'M월' 라벨 */
+const monthLabel = (month: string) => `${Number(month.slice(5, 7))}월`;
 
-  const [selectedMonth, setSelectedMonth] = useState('2025-06');
+export function TransactionsCard({ data }: { data: TransactionsData }) {
+  const ALL_TX = data.items;
+  const months = data.months;
+
+  const [selectedMonth, setSelectedMonth] = useState(months[0] ?? '');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [txCategories, setTxCategories] = useState<Record<number, string>>({});
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -96,7 +94,7 @@ export function TransactionsCard() {
               fontFamily: F,
             }}
           >
-            {labels[month]}
+            {monthLabel(month)}
           </button>
         ))}
       </div>
@@ -194,10 +192,19 @@ export function TransactionsCard() {
               className="border-b"
               style={{ borderColor: 'var(--border)' }}
             >
-              <button
-                type="button"
+              {/* 행 토글은 div(role=button): 내부에 CatBadge 버튼이 들어가므로
+                  button 중첩(잘못된 HTML)을 피한다. */}
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setExpandedId(isExpanded ? null : tx.id)}
-                className="w-full flex items-center gap-2 py-2.5 text-left transition-colors hover:bg-muted/20"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setExpandedId(isExpanded ? null : tx.id);
+                  }
+                }}
+                className="flex w-full cursor-pointer items-center gap-2 py-2.5 text-left transition-colors hover:bg-muted/20"
               >
                 <span className="text-sm shrink-0">{tx.emoji}</span>
                 <div className="min-w-0 flex-1">
@@ -215,15 +222,22 @@ export function TransactionsCard() {
                       {tx.date}
                     </p>
                     {tx.type === 'out' ? (
-                      <CatBadge
-                        cat={category}
-                        onEdit={(value) =>
-                          setTxCategories((prev) => ({
-                            ...prev,
-                            [tx.id]: value,
-                          }))
-                        }
-                      />
+                      // 카테고리 편집 클릭이 행 토글로 전파되지 않도록 격리
+                      <span
+                        role="presentation"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <CatBadge
+                          cat={category}
+                          onEdit={(value) =>
+                            setTxCategories((prev) => ({
+                              ...prev,
+                              [tx.id]: value,
+                            }))
+                          }
+                        />
+                      </span>
                     ) : null}
                   </div>
                 </div>
@@ -244,7 +258,7 @@ export function TransactionsCard() {
                 ) : (
                   <ChevronDown size={13} className="text-muted-foreground" />
                 )}
-              </button>
+              </div>
               {isExpanded ? (
                 <div
                   className="mx-2 mb-2 rounded-2xl bg-secondary px-4 py-2 text-[10px]"

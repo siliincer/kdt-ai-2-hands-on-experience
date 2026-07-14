@@ -1,3 +1,5 @@
+# prod 배포 전 로컬 최종 테스트용 컨테이너 설정 모음 (연습용?)
+# 실행 방법: docker compose -f docker-compose.yml up --build -d
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,11 +19,22 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
+  redis_cache:
     image: redis:7-alpine
-    container_name: kdt-redis
+    container_name: kdt-redis-cache
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis_stream:
+    image: redis:7-alpine
+    container_name: kdt-redis-stream
+    ports:
+      - "6380:6379" # 호스트의 6380 포트 매핑
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -35,6 +48,10 @@ services:
     container_name: kdt-backend
     env_file:
       - .env
+    environment:
+      # compose 네트워크에서는 실제 계정계 서비스로 붙는다(.env 기본값 mock 오버라이드).
+      FINANCIAL_CLIENT: http
+      MOCK_FINANCIAL_SERVICE_URL: http://mock-financial-service:8002
     ports:
       - "127.0.0.1:8000:8000"
     networks:
@@ -44,11 +61,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      redis_cache:
         condition: service_healthy
+      redis_stream:
+        condition: service_healthy
+      mock-financial-service:
+        condition: service_started
 
   agent:
-    profiles: ["agent"]
+    profiles: [ "agent" ]
     build:
       context: .
       dockerfile: agent/Dockerfile
@@ -64,8 +85,23 @@ services:
     depends_on:
       backend:
         condition: service_started
-      redis:
+      redis_cache:
         condition: service_healthy
+      redis_stream:
+        condition: service_healthy
+
+  mock-financial-service:
+    build:
+      context: .
+      dockerfile: mock-financial-service/Dockerfile
+    container_name: kdt-mock-financial-service
+    ports:
+      - "8002:8002"
+    networks:
+      default:
+        aliases:
+          # backend가 참조하는 MOCK_FINANCIAL_SERVICE_URL 호스트와 일치해야 한다.
+          - mock-financial-service
 
   nginx:
     image: nginx:1.27-alpine

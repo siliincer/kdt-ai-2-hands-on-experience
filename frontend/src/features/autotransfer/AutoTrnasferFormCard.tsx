@@ -3,12 +3,30 @@ import { kor, fmtAmt, parseAmtInput } from '@/shared/lib/utils';
 import { Check } from 'lucide-react';
 import { F, M } from '@/shared/constants/font';
 
-export function AutoTransferFormCard({ onDone }: { onDone: () => void }) {
-  const [account, setAccount] = useState('');
-  const [amtRaw, setAmtRaw] = useState('');
-  const [day, setDay] = useState('');
+import type { AutoTransferFormCardProps } from './types/interface';
+
+export function AutoTransferFormCard({
+  prefill,
+  onConfirm,
+  onCancel,
+  submitLabel = '등록하기',
+  disabled = false,
+  onDone,
+}: AutoTransferFormCardProps) {
+  const [account, setAccount] = useState(prefill?.account ?? '');
+  const [amtRaw, setAmtRaw] = useState(prefill?.amount ?? '');
+  const [day, setDay] = useState(prefill?.day ?? '');
   const [submitted, setSubmitted] = useState(false);
   const amtNum = Number(amtRaw) || 0;
+
+  const handleSubmit = () => {
+    if (onConfirm) {
+      onConfirm({ account, amount: amtRaw, day });
+    } else {
+      // 레거시(라우트) 경로: 자체 완료 UI 표시. agent 연동 후 제거 예정.
+      setSubmitted(true);
+    }
+  };
 
   if (submitted) {
     return (
@@ -38,8 +56,9 @@ export function AutoTransferFormCard({ onDone }: { onDone: () => void }) {
         </p>
         <button
           type="button"
-          onClick={onDone}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          disabled={disabled}
+          onClick={onCancel ?? onDone}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           style={{ fontFamily: F }}
         >
           취소
@@ -102,11 +121,12 @@ export function AutoTransferFormCard({ onDone }: { onDone: () => void }) {
       ) : null}
       <button
         type="button"
-        onClick={() => setSubmitted(true)}
-        className="mt-4 w-full rounded-xl bg-chart-2 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+        disabled={disabled}
+        onClick={handleSubmit}
+        className="mt-4 w-full rounded-xl bg-chart-2 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
         style={{ fontFamily: F }}
       >
-        등록하기
+        {submitLabel}
       </button>
     </div>
   );

@@ -1,7 +1,7 @@
 import { Check, Clock } from 'lucide-react';
 
 import { M, F } from '@/shared/constants/font';
-import { BANKS } from '@/features/mockData/mockData';
+import { BANKS } from '@/shared/constants/banks';
 
 import {
   fmtAmt,
