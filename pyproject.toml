@@ -41,6 +41,9 @@ dev = [
 src = [".", "backend", "agent"]
 line-length = 88
 target-version = "py311"
+# Alembic auto-generates these — don't hand-format/lint machine-generated
+# migration scripts (autogenerate's own formatting conventions apply there).
+extend-exclude = ["mock-financial-service/alembic_migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

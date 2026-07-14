@@ -19,7 +19,8 @@ from collections import Counter
 
 sys.path.insert(0, "src")
 
-from financial_service.database import Base
+from financial_service.database import DATABASE_URL, Base
+from financial_service.migration_runtime import run_migrations
 from financial_service.mock_data import (
     MOCK_CARD_LEDGER_ENTRIES,
     MOCK_LEDGER_ENTRIES,
@@ -45,14 +46,16 @@ from financial_service.models import (
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-_DEFAULT_URL = "sqlite:///./financial.db"
+# Same fixed path the FastAPI app uses by default — running this script with
+# no args seeds the exact file the server will read on startup.
+_DEFAULT_URL = DATABASE_URL
 
 
 def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
     """Seed dev DB. Returns summary dict with row counts.
 
     Args:
-        db_url: SQLAlchemy DB URL. Defaults to SQLite financial.db.
+        db_url: SQLAlchemy DB URL. Defaults to the app's DATABASE_URL.
         reset:  If True, drop all tables before recreating (idempotent).
 
     Returns:
@@ -73,7 +76,20 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
     if reset:
         Base.metadata.drop_all(bind=engine)
 
-    Base.metadata.create_all(bind=engine)
+    if ":memory:" in db_url:
+        # Alembic opens its own separate connection; SQLite's `:memory:` DB
+        # is per-connection, so a migration run there wouldn't be visible to
+        # this function's own `engine` at all. Throwaway in-memory DBs have
+        # no prior schema to migrate anyway — create_all() is equivalent and
+        # correct here.
+        Base.metadata.create_all(bind=engine)
+    else:
+        # Run the real migration chain (not create_all()) so this DB also
+        # gets the `alembic_version` table stamped — a later real server
+        # startup (which runs alembic upgrade head against the same file)
+        # won't collide with "table already exists" for tables this script
+        # already created.
+        run_migrations(database_url=db_url)
 
     # Pre-flight: validate dataset structure
     errors = validate_dataset()

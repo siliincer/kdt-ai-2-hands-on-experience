@@ -7,7 +7,8 @@ from fastapi.responses import JSONResponse
 from .analytics_router import analytics_router
 from .batch_router import batch_router
 from .card_router import card_router
-from .database import Base, engine
+from .database import engine
+from .migration_runtime import run_migrations
 from .migrations import (
     apply_analytics_views,
     apply_audit_triggers,
@@ -18,10 +19,13 @@ from .routers import router
 def create_app() -> FastAPI:
     app = FastAPI(title="Mock Financial Service", version="0.1.0")
 
-    # Create tables + triggers + analytics views on startup
+    # Sync schema (alembic upgrade head) + triggers + analytics views on startup.
+    # `alembic upgrade head` replaces the old Base.metadata.create_all(): it
+    # applies any pending schema change (new column, new table) automatically
+    # on every restart, without dropping existing data.
     @app.on_event("startup")
     def startup():
-        Base.metadata.create_all(bind=engine)
+        run_migrations()
         apply_audit_triggers(engine)
         apply_analytics_views(engine)
 
