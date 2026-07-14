@@ -66,3 +66,8 @@ addopts = "-v --durations=10"
 
 [tool.deptry]
 extend_exclude = ["tests"]
+
+[tool.pyright]
+typeCheckingMode = "standard" # strict가 아닌 standard로 타협
+reportMissingTypeStubs = "none" # 서드파티 라이브러리에 타입 서적 없어도 통과
+reportUnknownMemberType = "none" # 추론 안 되는 타입(Any)은 일단 눈감아주기

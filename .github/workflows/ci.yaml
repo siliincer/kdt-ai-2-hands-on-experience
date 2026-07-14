@@ -27,6 +27,9 @@ jobs:
         run: uv run ruff check .
       - name: Ruff format check
         run: uv run ruff format --check .
+      - name: pyright type check
+        run: uv run pyright
+      # 저희 Type 에러가 많아서 넣어봤으니 가능하면 수정 부탁드립니다.
       - name: Backend tests or import check
         run: |
           if find backend -path "*/tests/test_*.py" -print -quit | grep -q .; then
