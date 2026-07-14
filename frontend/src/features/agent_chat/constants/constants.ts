@@ -5,6 +5,10 @@ export const APPROVE_URL = '/backendApi/api/v1/agent/approve';
 
 // UI Data API (BFF) — component 시그널 이후 카드 데이터 조회(ADR-002)
 export const UI_BALANCE_URL = '/backendApi/api/v1/ui/balance';
+export const UI_SPENDING_URL = '/backendApi/api/v1/ui/spending';
+export const UI_TRANSACTIONS_URL = '/backendApi/api/v1/ui/transactions';
+export const UI_BUDGET_URL = '/backendApi/api/v1/ui/budget';
+export const UI_CARDS_URL = '/backendApi/api/v1/ui/cards';
 
 // 빠른 프롬프트 pill(기존 네비게이션 링크 대체) — 클릭 시 자연어 메시지 전송
 export const QUICK_PROMPTS: { label: string; prompt: string }[] = [

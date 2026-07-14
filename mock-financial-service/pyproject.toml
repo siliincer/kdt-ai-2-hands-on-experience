@@ -27,4 +27,8 @@ addopts = "-v --durations=10"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-asyncio>=0.24.0",
 ]
+
+[tool.deptry]
+extend_exclude = ["tests"]

@@ -47,7 +47,7 @@ def run_daily_close_endpoint(
     return DailyClosingBatchResponse(
         business_date=resolved_date,
         accounts_closed=len(snapshots),
-        snapshots=snapshots,
+        snapshots=[DailyClosingSnapshotResponse.model_validate(s) for s in snapshots],
     )
 
 

@@ -41,11 +41,15 @@ async def resume_after_approval(
     approval_id: str,
     decision: str,
     args: dict | None,
+    component: str | None = None,
 ) -> None:
     """confirm 카드(HITL) 승인/거절 → 에이전트 후속 턴을 재개한다."""
     await verify_chat_session_owner(session, user_id, chat_session_id)
 
     # TODO: 실제 Agent 연동 시 Agent 승인 API 호출로 교체
+    # user_id 를 넘겨 승인 시 계정계 실이체(transfer_service)를 태운다(Phase 2).
     asyncio.create_task(
-        run_after_approval(chat_session_id, approval_id, decision, args)
+        run_after_approval(
+            chat_session_id, approval_id, decision, args, component, user_id
+        )
     )

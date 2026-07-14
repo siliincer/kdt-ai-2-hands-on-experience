@@ -1,8 +1,8 @@
-import { barData } from '@/features/mockData/mockData';
 import { M, F } from '@/shared/constants/font';
 import { NAVY } from '@/shared/constants/color';
 
 import type { TooltipProps } from 'recharts';
+import type { BarCatDatum } from '@/shared/types/ui';
 
 export function BarTip({
   active,
@@ -11,8 +11,8 @@ export function BarTip({
 }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
 
-  // barData에서 현재 label과 일치하는 요소를 탐색
-  const data = barData.find((item) => item.name === label);
+  // 차트에 바인딩된 현재 막대의 원본 datum(BarCatDatum)을 그대로 사용.
+  const data = payload[0]?.payload as BarCatDatum | undefined;
   if (!data) return null;
 
   return (

@@ -1,4 +1,4 @@
-import { BANKS, BANK_KOR } from '@/features/mockData/mockData';
+import { BANKS, BANK_KOR } from '@/shared/constants/banks';
 import type { TxItem } from '@/shared/types/interface';
 
 function kor(n: number): string {

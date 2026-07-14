@@ -42,6 +42,7 @@ async def approve_agent_action(
         payload.approval_id,
         payload.decision.value,
         payload.args,
+        payload.component,
     )
     return success_response(
         message="승인 결과가 접수되었습니다.",

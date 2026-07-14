@@ -4,6 +4,11 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse
 
+from ..services.financial import (
+    FinancialServiceError,
+    financial_service_error_handler,
+)
+
 
 def error_response(status_code: int, code: str, message: str, **extra):
     return JSONResponse(
@@ -72,4 +77,5 @@ exception_handlers = {
     ResponseValidationError: response_validation_error_handler,
     ValueError: value_error_handler,
     RuntimeError: custom_runtime_error_handler,
+    FinancialServiceError: financial_service_error_handler,
 }

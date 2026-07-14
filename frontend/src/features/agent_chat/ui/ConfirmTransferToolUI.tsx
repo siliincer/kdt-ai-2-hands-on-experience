@@ -42,6 +42,7 @@ export const ConfirmTransferToolUI: ToolCallMessagePartComponent = ({
       confirmArgs.approvalId,
       decision,
       values as unknown as Record<string, unknown>,
+      'transfer',
     );
   };
 

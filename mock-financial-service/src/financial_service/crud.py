@@ -699,6 +699,8 @@ def settle_card(db: Session, card_id: str) -> Transaction:
 
     # Check account has sufficient balance
     account = get_account(db, card.account_id)
+    if account is None:
+        raise NotFoundError("ACCOUNT_NOT_FOUND", f"Account {card.account_id} not found")
     account_balance = account.balance
     if account_balance < settled_amount:
         raise ValidationError(
