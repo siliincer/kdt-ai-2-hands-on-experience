@@ -41,6 +41,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  # mock-financial-service 구동을 위한 임시 sqlite
+  # TODO: (pg로 이전하면 지워도 됨)
 
 volumes:
   postgres-data:

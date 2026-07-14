@@ -17,23 +17,20 @@ import {
 
 import { M, F } from '@/shared/constants/font';
 
-import {
-  barData,
-  pieData,
-  monthlySpend,
-  catTx,
-} from '@/features/mockData/mockData';
-
 import type { PieClickEntry } from '@/shared/types/interface';
+import type { SpendingData } from '@/shared/types/ui';
 
 import { CatBadge } from '@/shared/ui/CatBadge';
 import { BarTip } from './BarTip';
 
 export function SpendingCard({
-  onNavigate,
+  data,
+  onPrompt,
 }: {
-  onNavigate: (path: string) => void;
+  data: SpendingData;
+  onPrompt?: (text: string) => void;
 }) {
+  const { pie: pieData, bar: barData, monthly: monthlySpend, catTx } = data;
   const [tab, setTab] = useState<'donut' | 'bar' | 'monthly'>('donut');
   const [selCat, setSelCat] = useState<string | null>(null);
   const [catEdit, setCatEdit] = useState<Record<string, string>>({});
@@ -353,23 +350,23 @@ export function SpendingCard({
         </div>
       )}
 
-      {/* 하단 보조 액션 버튼 영역의 하드코딩된 border-slate-200, text-slate-600 교체 */}
+      {/* 하단 보조 액션 → 자연어 프롬프트 전송(라우팅 대신 chat 흐름) */}
       <div className="mt-4 flex flex-wrap gap-2">
-        {['지난달 비교', '예산 설정', '거래 내역 전체'].map((label, idx) => {
-          const paths = [undefined, '/budget', '/transactions'];
-          const targetPath = paths[idx];
-          return (
-            <button
-              key={label}
-              type="button"
-              onClick={targetPath ? () => onNavigate(targetPath) : undefined}
-              className="rounded-full border border-border px-3 py-2 text-[10px] font-medium text-muted-foreground bg-transparent transition hover:bg-muted/20"
-              style={{ fontFamily: F }}
-            >
-              {label}
-            </button>
-          );
-        })}
+        {[
+          { label: '지난달 비교', prompt: '지난달과 소비 현황 비교해줘' },
+          { label: '예산 설정', prompt: '예산 현황 보여줘' },
+          { label: '거래 내역 전체', prompt: '거래 내역 보여줘' },
+        ].map(({ label, prompt }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={prompt ? () => onPrompt?.(prompt) : undefined}
+            className="rounded-full border border-border px-3 py-2 text-[10px] font-medium text-muted-foreground bg-transparent transition hover:bg-muted/20"
+            style={{ fontFamily: F }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

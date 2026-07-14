@@ -22,3 +22,105 @@ class BalanceData(BaseModel):
 
     total: int = Field(description="총 자산(원)")
     accounts: list[AccountSummary]
+
+
+# --- spending (소비 분석, GET /api/v1/ui/spending) ---
+
+
+class PieDatum(BaseModel):
+    name: str
+    value: int = Field(description="비중(%)")
+    color: str
+    amount: int
+
+
+class ChangeItem(BaseModel):
+    name: str
+    amount: int
+
+
+class BarCatDatum(BaseModel):
+    name: str
+    change: int = Field(description="전월 대비 증감률(%)")
+    prev: int
+    curr: int
+    added: list[ChangeItem]
+    removed: list[ChangeItem]
+
+
+class MonthlySpendDatum(BaseModel):
+    month: str
+    amount: int
+
+
+class CatTxDatum(BaseModel):
+    name: str
+    date: str
+    amount: int
+
+
+class SpendingData(BaseModel):
+    """GET /api/v1/ui/spending"""
+
+    pie: list[PieDatum]
+    bar: list[BarCatDatum]
+    monthly: list[MonthlySpendDatum]
+    catTx: dict[str, list[CatTxDatum]]  # noqa: N815
+
+
+# --- transactions (거래 내역, GET /api/v1/ui/transactions) ---
+class TransactionItem(BaseModel):
+    id: int
+    name: str
+    emoji: str
+    date: str
+    month: str
+    day: int
+    amount: int
+    type: str = Field(description="'in' | 'out'")
+    category: str
+
+
+class TransactionsData(BaseModel):
+    """GET /api/v1/ui/transactions"""
+
+    months: list[str]
+    items: list[TransactionItem]
+
+
+# --- budget (예산 현황, GET /api/v1/ui/budget) ---
+
+
+class BudgetItem(BaseModel):
+    cat: str
+    used: int
+    total: int
+
+
+class SubscriptionItem(BaseModel):
+    name: str
+    amount: int
+    active: bool
+
+
+class BudgetData(BaseModel):
+    """GET /api/v1/ui/budget"""
+
+    budgetItems: list[BudgetItem]  # noqa: N815
+    subItems: list[SubscriptionItem]  # noqa: N815
+
+
+# --- cards (카드 관리, GET /api/v1/ui/cards) ---
+
+
+class CreditCard(BaseModel):
+    name: str
+    num: str
+    exp: str
+    bg: str
+
+
+class CardsData(BaseModel):
+    """GET /api/v1/ui/cards"""
+
+    cards: list[CreditCard]

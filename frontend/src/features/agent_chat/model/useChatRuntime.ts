@@ -45,12 +45,14 @@ export function useChatRuntime(): ChatRuntime {
       approvalId: string;
       decision: ApprovalDecision;
       args?: Record<string, unknown>;
+      component?: string;
     }) =>
       approveAgentAction(
         vars.chatSessionId,
         vars.approvalId,
         vars.decision,
         vars.args,
+        vars.component,
       ),
   });
 
@@ -89,6 +91,7 @@ export function useChatRuntime(): ChatRuntime {
       approvalId: string,
       decision: ApprovalDecision,
       args?: Record<string, unknown>,
+      component?: string,
     ) => {
       const chatSessionId = chatSessionIdRef.current;
       if (!chatSessionId) return;
@@ -97,6 +100,7 @@ export function useChatRuntime(): ChatRuntime {
         approvalId,
         decision,
         args,
+        component,
       });
       // 후속 이벤트는 열려 있는 스트림으로 흘러와 현재 메시지에 이어 fold 된다.
     },

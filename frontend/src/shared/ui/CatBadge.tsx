@@ -5,7 +5,7 @@ import { Tag } from 'lucide-react';
 
 import { NAVY, MINT, GRAY_BG } from '@/shared/constants/color';
 import { F } from '@/shared/constants/font';
-import { CATS } from '@/features/mockData/mockData';
+import { CATS } from '@/shared/constants/categories';
 
 interface CatBadgeProps {
   cat: string;

@@ -29,6 +29,7 @@ dev = [
     "deptry>=0.25.1",
     "ipykernel>=7.3.0",
     "pre-commit>=4.0.0",
+    "pyright>=1.1.411",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
@@ -62,3 +63,6 @@ indent-style = "space"
 [tool.pytest.ini_options]
 python_files = "test_*.py"
 addopts = "-v --durations=10"
+
+[tool.deptry]
+extend_exclude = ["tests"]
