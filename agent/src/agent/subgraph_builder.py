@@ -194,7 +194,16 @@ def _make_input_node(step: dict, step_routes: dict[str, str]) -> Callable:
     out_key = step.get("output_data_key")
 
     proceed_routes = [k for k in step_routes if k != "cancelled"]
-    proceed_key = proceed_routes[0] if len(proceed_routes) == 1 else "submitted"
+    # 자기 자신으로 돌아가는(재질문) 라우트는 미루고 전진 라우트를 우선한다.
+    # (예: ask_period는 resolved(전진)·invalid(자기복귀)가 둘 다 있어, 진행 키를
+    #  "submitted"로 폴백하면 매칭 라우트가 없어 그래프가 응답 없이 종료된다.)
+    forward_routes = [k for k in proceed_routes if step_routes.get(k) != step_id]
+    if len(proceed_routes) == 1:
+        proceed_key = proceed_routes[0]
+    elif len(forward_routes) == 1:
+        proceed_key = forward_routes[0]
+    else:
+        proceed_key = "submitted"
     has_cancel = "cancelled" in step_routes
 
     def node_fn(state: dict) -> dict:

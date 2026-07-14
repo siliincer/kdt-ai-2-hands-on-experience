@@ -42,7 +42,7 @@ insufficient_balance:
   applies_to_ids:
   - withdraw_money
   - execute_transfer
-  - transfer_between_own_accounts
+  - execute_internal_transfer
   - create_auto_savings_rule
   condition:
     expression: balance < amount
@@ -78,7 +78,7 @@ approval_required_for_execution:
   applies_to_ids:
   - deposit_money
   - withdraw_money
-  - transfer_between_own_accounts
+  - execute_internal_transfer
   - execute_transfer
   - create_auto_savings_rule
   condition:
@@ -93,7 +93,7 @@ post_result_validation:
   applies_to_ids:
   - deposit_money
   - withdraw_money
-  - transfer_between_own_accounts
+  - execute_internal_transfer
   - execute_transfer
   - create_auto_savings_rule
   condition:

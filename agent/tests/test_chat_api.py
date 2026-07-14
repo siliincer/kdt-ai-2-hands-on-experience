@@ -48,7 +48,8 @@ def test_balance_inquiry_interrupt_and_resume(client, monkeypatch):
     assert "선택" in first["reply"]
     thread_id = first["thread_id"]
 
-    # apply_account_selection은 LLM 전용이라 결정적 파서로 대체
+    # LLM 호출을 격리하려 결정적 파서로 대체 (실제 키워드 폴백은
+    # test_balance_tools.py에서 직접 검증)
     def pick_first(state: dict) -> dict:
         data = state.get("data") or {}
         candidates = data.get("balance.account_candidates") or []
@@ -105,3 +106,20 @@ def test_stale_thread_id_starts_fresh_turn(client):
     body = response.json()
     assert body["status"] == "completed"
     assert body["thread_id"] != "없는스레드"
+
+
+def test_period_reask_resumes_and_completes(client):
+    """기간 미지정 → 되물음 → 답변으로 재개해 조회를 끝낸다.
+
+    ask_period는 resolved(전진)·invalid(자기복귀) 라우트가 둘 다 있어, input
+    노드가 진행 키를 잘못 고르면 응답 없이 종료되던 회귀를 막는다.
+    """
+    first = client.post("/chat", json={"message": "거래내역 보여줘"}).json()
+    assert first["status"] == "waiting_input"
+    assert first["prompt_for"] == "txn.period"
+
+    second = client.post(
+        "/chat", json={"message": "이번 달", "thread_id": first["thread_id"]}
+    ).json()
+    assert second["status"] == "completed"
+    assert "거래내역" in second["reply"]
