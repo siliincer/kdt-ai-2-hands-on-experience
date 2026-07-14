@@ -22,15 +22,28 @@ def test_choices_include_example_utterance():
 
 def test_build_catalog_format_and_size():
     """카탈로그는 워크플로우당 한 줄 + 예시 발화 — steps는 절대 안 들어간다."""
-    catalog = _build_catalog(_load_workflow_choices())
+    choices = _load_workflow_choices()
+    catalog = _build_catalog(choices)
 
     assert '(예: "' in catalog  # 예시 발화 포함
     assert "step_id" not in catalog and "routes" not in catalog
-    assert len(catalog.splitlines()) == 2  # 워크플로우 수만큼만
-    assert len(catalog) < 500  # 수백 자 수준 유지 (토큰 낭비 방지 가드)
+    assert len(catalog.splitlines()) == len(choices)  # 워크플로우 수만큼만
+    assert len(catalog) < 2000  # 워크플로우당 한 줄 수준 유지 (토큰 낭비 방지 가드)
 
     # 예시가 없으면 괄호 생략
     assert _build_catalog((("wf_x", "이름", "설명", ""),)) == "- wf_x: 이름 — 설명"
+
+
+def test_account_list_keywords_match():
+    assert match_workflow("내 계좌 목록 보여줘") == "wf_account_list"
+
+
+def test_transaction_history_keywords_match():
+    assert match_workflow("지난주 거래 내역 보여줘") == "wf_transaction_history"
+
+
+def test_period_summary_keywords_match():
+    assert match_workflow("이번 달 얼마 썼어?") == "wf_period_amount_summary"
 
 
 def test_balance_keywords_match_balance_inquiry():
@@ -39,6 +52,16 @@ def test_balance_keywords_match_balance_inquiry():
 
 def test_transfer_keywords_match_external_transfer():
     assert match_workflow("김철수한테 5만원 보내줘") == "wf_external_transfer"
+
+
+def test_own_account_transfer_matches_internal_transfer():
+    # 사람 대상(에게/한테) 없이 통장 간 이체는 본인이체로 매칭돼야 한다
+    assert match_workflow("생활비통장으로 10만원 이체해줘") == "wf_internal_transfer"
+
+
+def test_income_phrase_matches_amount_summary():
+    # 지출뿐 아니라 입금 방향("들어왔어")도 기간 합계로 매칭돼야 한다
+    assert match_workflow("이번달 얼마 들어왔어?") == "wf_period_amount_summary"
 
 
 def test_unrelated_input_matches_nothing():

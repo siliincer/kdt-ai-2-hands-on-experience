@@ -16,6 +16,7 @@ state 규약 (시트 v2 / Tool_v2 계약):
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
@@ -37,6 +38,31 @@ from agent.schemas import (
 def _data(state: dict) -> dict:
     """AgentState의 업무 데이터 버킷(data)을 반환한다."""
     return state.get("data") or {}
+
+
+# 워크플로우별 데이터키 네임스페이스 (naming-convention.md의 data 키 규칙).
+# 여러 워크플로우가 공유하는 tool(verify_amount 등)은 현재 workflow_id로
+# 네임스페이스를 알아내 f"{ns}.slot" 키를 읽고/쓴다.
+_WF_NS = {
+    "wf_balance_inquiry": "balance",
+    "wf_account_list": "account",
+    "wf_transaction_history": "txn",
+    "wf_period_amount_summary": "sum",
+    "wf_external_transfer": "transfer",
+    "wf_internal_transfer": "itx",
+    "wf_set_default_account": "default",
+    "wf_set_account_alias": "alias",
+}
+
+
+def _ns(state: dict) -> str:
+    """현재 워크플로우의 데이터키 네임스페이스 (예: 'transfer', 'itx')."""
+    return _WF_NS.get(state.get("workflow_id"), "")
+
+
+def _dget(state: dict, slot: str, default=None):
+    """현재 워크플로우 네임스페이스로 data 버킷에서 읽는다 (f'{ns}.{slot}')."""
+    return _data(state).get(f"{_ns(state)}.{slot}", default)
 
 
 def _accounts(user_id: str) -> list[dict]:
@@ -232,11 +258,27 @@ class _AccountSelection(BaseModel):
     )
 
 
+_ALL_ACCOUNTS_KEYWORDS = ("둘 다", "둘다", "전부", "모두", "전체", "다 보여")
+
+
+def _parse_account_selection_by_keyword(reply: str, n: int) -> list[int]:
+    """규칙 기반 폴백: LLM 없이 답변에서 선택 번호를 뽑는다 (개발/데모용 최소 폴백).
+
+    '전부/둘 다'는 전체, 그 외에는 답변에 나온 1~n 범위 숫자를 선택으로 본다
+    ('1', '1번', '1번이랑 3번', '1, 3'). 풍부한 자연어 해석은 LLM 주경로가 맡는다.
+    """
+    if any(k in reply for k in _ALL_ACCOUNTS_KEYWORDS):
+        return list(range(1, n + 1))
+    nums = [int(x) for x in re.findall(r"\d+", reply)]
+    return [x for x in nums if 1 <= x <= n]
+
+
 def apply_account_selection(state: dict) -> dict:
     """계좌 선택 답변을 파싱해 balance.selected_accounts를 확정한다(복수 가능).
 
-    LLM으로 '1번이랑 2번', '둘 다' 같은 자연어 답변에서 선택 계좌를 뽑는다.
-    유효한 선택이 없으면 invalid → 다시 묻는다.
+    LLM으로 '1번이랑 2번', '둘 다' 같은 자연어 답변에서 선택 계좌를 뽑고,
+    실패 시(키 없음 등) 키워드 폴백으로 보강한다. 유효한 선택이 없으면
+    invalid → 다시 묻는다.
     """
     reply = _data(state).get("balance.account_selection_input", "")
     candidates = _data(state).get("balance.account_candidates") or []
@@ -257,11 +299,56 @@ def apply_account_selection(state: dict) -> dict:
     except Exception:
         nums = []
 
+    # LLM이 못 뽑았으면 키워드 폴백으로 보강 (숫자/'전부' 등)
+    if not nums:
+        nums = _parse_account_selection_by_keyword(reply, len(candidates))
+
     if not nums:
         return {"route_key": "invalid"}
 
     selected = [candidates[n - 1] for n in nums]
     return {"balance.selected_accounts": selected, "route_key": "selected"}
+
+
+# ── 계좌 목록 조회 (wf_account_list) ────────────────────────────────────────────
+
+
+def fetch_account_list(state: dict) -> dict:
+    """사용자의 전체 계좌 목록을 account.list로 반환한다.
+
+    Tool_v2 계약: in=user_id, out=account.list. 원장은 bank_client 경유(직접 접근 금지).
+    route_key: 계좌 있으면 success / 없으면 empty / 조회 실패 error.
+    """
+    user_id = state.get("user_id")
+    try:
+        accounts = _accounts(user_id)
+    except BankClientError:
+        return {"route_key": "error"}
+    if not accounts:
+        return {"account.list": [], "route_key": "empty"}
+    items = [
+        {
+            "account_id": a["account_id"],
+            "account_name": a["account_name"],
+            "balance": a["balance"],
+            "currency": a.get("currency", "KRW"),
+        }
+        for a in accounts
+    ]
+    return {"account.list": items, "route_key": "success"}
+
+
+def generate_account_list_response(state: dict) -> dict:
+    """account.list를 사람이 읽을 응답 문장으로 만든다 (규칙 기반, 결정적).
+
+    목록 표시라 LLM 없이 계좌명·잔액을 그대로 나열한다 (수치 왜곡 방지).
+    """
+    items = _data(state).get("account.list") or []
+    if not items:
+        return {"route_key": "failed"}
+    lines = [f"- {a['account_name']}: {a['balance']:,}원" for a in items]
+    text = "보유하신 계좌 목록입니다.\n" + "\n".join(lines)
+    return {"final_response": text, "route_key": "success"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -394,33 +481,37 @@ def _resolve_from_account(user_id: str, raw) -> tuple[dict | None, list[dict]]:
 def _parse_approval_reply(reply: str) -> str:
     """승인 카드 답변 → route_key. 해석 불가는 보수적으로 cancelled."""
     text = str(reply).strip()
-    if _is_cancel(text):
-        return "cancelled"
-    if "수취인" in text:
-        return "edit_recipient"
-    if "금액" in text:
-        return "edit_amount"
-    if "계좌" in text:
-        return "edit_from_account"
     approve_keywords = ("승인", "확인", "네", "응", "보내", "진행", "예")
-    if any(keyword in text for keyword in approve_keywords):
-        return "approved"
-    # UI 승인 버튼 라벨("송금하기")이 그대로 회신되는 경우 — 정확 일치만
-    # 허용한다 ("송금 안 할래" 같은 부정 표현의 오판 방지).
-    if text.replace(" ", "") in {"송금하기", "송금"}:
-        return "approved"
-    return "cancelled"
+    match text:
+        case _ if _is_cancel(text):
+            return "cancelled"
+        case _ if "수취인" in text:
+            return "edit_recipient"
+        case _ if "금액" in text:
+            return "edit_amount"
+        case _ if "계좌" in text:
+            return "edit_from_account"
+        case _ if any(keyword in text for keyword in approve_keywords):
+            return "approved"
+        # UI 승인 버튼 라벨("송금하기")이 그대로 회신되는 경우 — 정확 일치만
+        # 허용한다 ("송금 안 할래" 같은 부정 표현의 오판 방지).
+        case _ if text.replace(" ", "") in {"송금하기", "송금"}:
+            return "approved"
+        case _:
+            return "cancelled"
 
 
 def _parse_auth_reply(reply: str) -> str:
     """본인 인증 답변 → route_key. 취소/실패를 먼저 검사한다."""
     text = str(reply).strip()
-    if _is_cancel(text) or "실패" in text:
-        return "not_authenticated"
     auth_keywords = ("인증", "완료", "성공", "했어")
-    if any(keyword in text for keyword in auth_keywords):
-        return "authenticated"
-    return "not_authenticated"
+    match text:
+        case _ if _is_cancel(text) or "실패" in text:
+            return "not_authenticated"
+        case _ if any(keyword in text for keyword in auth_keywords):
+            return "authenticated"
+        case _:
+            return "not_authenticated"
 
 
 def _parse_warning_reply(reply: str) -> str:
@@ -663,9 +754,9 @@ _TRANSFER_LIMIT = 50_000_000  # 1회 송금 한도 (입력 형식 검증 — 가
 
 
 def verify_amount(state: dict) -> dict:
-    """송금 금액을 정수로 정규화하고 한도를 확인한다."""
-    raw = _data(state).get("transfer.amount")
-    amount = _parse_amount(raw)
+    """송금 금액을 정수로 정규화하고 한도를 확인한다 (transfer/itx 공유)."""
+    amount = _parse_amount(_dget(state, "amount"))
+    amt_key = f"{_ns(state)}.amount"
     if amount is None or amount <= 0:
         return {
             "route_key": "invalid",
@@ -676,24 +767,25 @@ def verify_amount(state: dict) -> dict:
         }
     if amount > _TRANSFER_LIMIT:
         return {
-            "transfer.amount": amount,
+            amt_key: amount,
             "route_key": "limit_exceeded",
             "final_response": (
                 f"1회 송금 한도({_TRANSFER_LIMIT:,}원)를 초과해 진행할 수 "
                 f"없습니다. 요청 금액: {amount:,}원"
             ),
         }
-    return {"transfer.amount": amount, "route_key": "valid"}
+    return {amt_key: amount, "route_key": "valid"}
 
 
 def verify_from_account(state: dict) -> dict:
-    """출금 계좌를 확정한다 (dict 검증 / 힌트·선택 답변 해석 / 기본 계좌)."""
+    """출금 계좌를 확정한다 (transfer/itx 공유; dict 검증/힌트/기본 계좌)."""
     try:
         user_id = state.get("user_id")
-        raw = _data(state).get("transfer.from_account")
+        raw = _dget(state, "from_account")
+        fa_key = f"{_ns(state)}.from_account"
         resolved, candidates = _resolve_from_account(user_id, raw)
         if resolved:
-            return {"transfer.from_account": resolved, "route_key": "verified"}
+            return {fa_key: resolved, "route_key": "verified"}
         if not candidates:
             return {
                 "route_key": "failed",
@@ -714,12 +806,12 @@ def verify_from_account(state: dict) -> dict:
 
 
 def check_balance(state: dict) -> dict:
-    """출금 계좌의 사용 가능 잔액이 충분한지 실시간으로 확인한다."""
+    """출금 계좌의 사용 가능 잔액이 충분한지 실시간으로 확인한다 (transfer/itx 공유)."""
     try:
         user_id = state.get("user_id")
-        data = _data(state)
-        amount = data.get("transfer.amount")
-        account = data.get("transfer.from_account") or {}
+        amount = _dget(state, "amount")
+        account = _dget(state, "from_account") or {}
+        fa_key = f"{_ns(state)}.from_account"
         live = _live_account(user_id, account.get("account_id"))
         if not live or not isinstance(amount, int):
             return {
@@ -727,7 +819,7 @@ def check_balance(state: dict) -> dict:
                 "final_response": "잔액 확인 중 문제가 발생했습니다.",
             }
         if live["balance"] >= amount:
-            return {"transfer.from_account": live, "route_key": "sufficient"}
+            return {fa_key: live, "route_key": "sufficient"}
         candidates = _accounts(user_id)
         return {
             "route_key": "insufficient",
@@ -953,34 +1045,35 @@ def request_transfer_approval(state: dict) -> dict:
 
     route = _parse_approval_reply(str(reply))
     updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
-    if route == "approved":
-        updates["transfer.approval"] = {
-            "recipient_id": recipient.get("recipient_id"),
-            "account_number": recipient.get("account_number"),
-            "from_account_id": account.get("account_id"),
-            "amount": amount,
-        }
-    elif route == "cancelled":
-        updates["final_response"] = (
-            "송금을 취소했습니다."
-            if _is_cancel(str(reply))
-            else "확인할 수 없는 답변이라 송금을 취소했습니다. 다시 시도해주세요."
-        )
-    elif route == "edit_amount":
-        updates["transfer.amount"] = None
-        updates["prompt_message"] = "새 송금 금액을 입력해주세요 (예: 3만원)."
-        updates["prompt_ui"] = _number_input_ui()
-    elif route == "edit_recipient":
-        updates["transfer.recipient"] = None
-        updates["prompt_message"] = "새 수취인을 입력해주세요 (이름 또는 계좌번호)."
-        updates["prompt_ui"] = _recipient_select_ui(state.get("user_id"))
-    elif route == "edit_from_account":
-        updates["transfer.from_account"] = None
-        updates["prompt_message"] = "어느 계좌에서 송금할까요?"
-        try:
-            updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
-        except BankClientError:
-            pass
+    match route:
+        case "approved":
+            updates["transfer.approval"] = {
+                "recipient_id": recipient.get("recipient_id"),
+                "account_number": recipient.get("account_number"),
+                "from_account_id": account.get("account_id"),
+                "amount": amount,
+            }
+        case "cancelled":
+            updates["final_response"] = (
+                "송금을 취소했습니다."
+                if _is_cancel(str(reply))
+                else "확인할 수 없는 답변이라 송금을 취소했습니다. 다시 시도해주세요."
+            )
+        case "edit_amount":
+            updates["transfer.amount"] = None
+            updates["prompt_message"] = "새 송금 금액을 입력해주세요 (예: 3만원)."
+            updates["prompt_ui"] = _number_input_ui()
+        case "edit_recipient":
+            updates["transfer.recipient"] = None
+            updates["prompt_message"] = "새 수취인을 입력해주세요 (이름 또는 계좌번호)."
+            updates["prompt_ui"] = _recipient_select_ui(state.get("user_id"))
+        case "edit_from_account":
+            updates["transfer.from_account"] = None
+            updates["prompt_message"] = "어느 계좌에서 송금할까요?"
+            try:
+                updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+            except BankClientError:
+                pass
     return updates
 
 
@@ -1080,6 +1173,721 @@ def generate_transfer_response(state: dict) -> dict:
             f"송금했습니다. 거래번호: {result['transaction_id']}"
         ),
     }
+
+
+# ── 설정 (wf_set_default_account / wf_set_account_alias) ──────────────────────
+#
+# 기본계좌 설정·별칭 설정 공유 tool은 _ns/_dget로 default.*/alias.* 를 다룬다.
+# verify_target_account는 balance의 verify_account(복수)와 달리 단수 확정이라 별도다.
+
+
+# "A를/을 B(이)라(고) 해/불러줘" 패턴에서 새 별칭 값(B)만 뽑는다 (별칭 워크플로우 전용).
+_ALIAS_VALUE_PATTERN = re.compile(r"(?:을|를)(.+?)(?:이라고|라고|이라|라)(?:불러|해)")
+
+
+def extract_setting_slots(state: dict) -> dict:
+    """설정 발화에서 대상 계좌 힌트(+별칭이면 새 값)를 추출한다 (기본계좌/별칭 공유)."""
+    text = (state.get("user_input") or "").replace(" ", "")
+    hint = None
+    try:
+        for a in _accounts(state.get("user_id")):
+            name = a.get("account_name", "").replace(" ", "")
+            if name and name in text:
+                hint = a["account_name"]
+                break
+    except BankClientError:
+        pass
+    if not hint:
+        m = re.search(r"(\S+?)(?:통장|계좌|뱅크|은행)", text)
+        if m:
+            hint = m.group(1)
+    updates = {f"{_ns(state)}.account_hint": hint, "route_key": "extracted"}
+    if _ns(state) == "alias":
+        vm = _ALIAS_VALUE_PATTERN.search(text)
+        if vm:
+            updates[f"{_ns(state)}.value"] = vm.group(1)
+    return updates
+
+
+def verify_target_account(state: dict) -> dict:
+    """설정 대상 계좌를 단수로 확정한다 (기본계좌/별칭 공유).
+
+    힌트로 하나면 confirmed. 여러 개면 select_needed(단수 선택). 없으면 not_found.
+    balance의 verify_account(복수 선택)와 동작이 달라 분리된 tool이다.
+    """
+    try:
+        accounts = _accounts(state.get("user_id"))
+        acc_key = f"{_ns(state)}.account"
+        hint = (_dget(state, "account_hint") or "").replace(" ", "")
+        candidates = (
+            [a for a in accounts if hint in a.get("account_name", "").replace(" ", "")]
+            if hint
+            else accounts
+        )
+        if not candidates:
+            return {
+                "route_key": "not_found",
+                "final_response": "대상 계좌를 찾지 못했어요.",
+            }
+        if len(candidates) == 1:
+            return {acc_key: candidates[0], "route_key": "confirmed"}
+        return {
+            "route_key": "select_needed",
+            "prompt_message": (
+                f"어느 계좌로 설정할까요?\n{_account_options(candidates)}"
+            ),
+            "prompt_ui": _account_card_ui(candidates),
+        }
+    except Exception:
+        return {
+            "route_key": "error",
+            "final_response": "계좌 확인 중 문제가 발생했습니다.",
+        }
+
+
+def request_setting_approval(state: dict) -> dict:
+    """설정 확인을 받는다 (interrupt; 기본계좌/별칭 공유).
+
+    재개 시 노드가 재실행되므로 interrupt 이전은 프롬프트 조립(멱등)만 둔다.
+    해석 불가 답변은 보수적으로 취소한다.
+    """
+    account = _dget(state, "account") or {}
+    name = account.get("account_name", "?")
+    if _ns(state) == "default":
+        prompt = f"'{name}'을(를) 기본 출금계좌로 설정할까요? ('확인' / '취소')"
+    else:
+        value = _dget(state, "value") or "?"
+        prompt = f"'{name}'의 별칭을 '{value}'(으)로 설정할까요? ('확인' / '취소')"
+    reply = interrupt(
+        {
+            "prompt": prompt,
+            "prompt_for": f"{_ns(state)}.decision",
+            "ui": ConfirmModalUi(
+                type="confirm_modal",
+                display={"account_name": name},
+                actions=["확인", "취소"],
+            ).model_dump(exclude_none=True),
+        }
+    )
+    dec_key = f"{_ns(state)}.decision"
+    text = str(reply).strip()
+    approve_keywords = ("확인", "승인", "네", "응", "예", "좋아", "해줘", "진행")
+    if any(k in text for k in approve_keywords) and not _is_cancel(text):
+        return {dec_key: "approved", "route_key": "approved"}
+    return {
+        dec_key: "cancelled",
+        "route_key": "cancelled",
+        "final_response": "설정을 취소했습니다.",
+    }
+
+
+def apply_default_account(state: dict) -> dict:
+    """확정 계좌를 기본 출금계좌로 적용한다."""
+    account = _dget(state, "account") or {}
+    acc_id = account.get("account_id")
+    if not acc_id:
+        return {"route_key": "error", "final_response": "설정할 계좌 정보가 없습니다."}
+    try:
+        get_bank_client().set_default_account(state.get("user_id"), acc_id)
+    except BankClientError:
+        return {
+            "route_key": "error",
+            "final_response": "기본계좌 설정 중 문제가 발생했습니다.",
+        }
+    return {
+        f"{_ns(state)}.result": {
+            "account_id": acc_id,
+            "account_name": account.get("account_name"),
+        },
+        "route_key": "success",
+    }
+
+
+def apply_account_alias(state: dict) -> dict:
+    """확정 계좌에 새 별칭을 적용한다."""
+    account = _dget(state, "account") or {}
+    value = _dget(state, "value")
+    acc_id = account.get("account_id")
+    if not acc_id or not value:
+        return {"route_key": "error", "final_response": "별칭 정보가 없습니다."}
+    try:
+        get_bank_client().set_account_alias(state.get("user_id"), acc_id, value)
+    except BankClientError:
+        return {
+            "route_key": "error",
+            "final_response": "별칭 설정 중 문제가 발생했습니다.",
+        }
+    return {
+        f"{_ns(state)}.result": {
+            "account_id": acc_id,
+            "account_name": account.get("account_name"),
+            "alias": value,
+        },
+        "route_key": "success",
+    }
+
+
+def generate_setting_response(state: dict) -> dict:
+    """설정 결과 응답 문장을 만든다 (기본계좌/별칭 공유)."""
+    result = _dget(state, "result") or {}
+    name = result.get("account_name")
+    if not name:
+        return {"route_key": "failed"}
+    if _ns(state) == "default":
+        text = f"기본 출금계좌를 '{name}'(으)로 설정했습니다."
+    else:
+        alias = result.get("alias", "?")
+        text = f"'{name}'의 별칭을 '{alias}'(으)로 설정했습니다."
+    return {"final_response": text, "route_key": "success"}
+
+
+# ── 본인 계좌 간 이체 (wf_internal_transfer) ────────────────────────────────────
+#
+# verify_amount/verify_from_account/check_balance는 _ns/_dget로 transfer와
+# 공유한다(itx.* 네임스페이스). 승인/실행 직전검사/실행은 라우트 계약이
+# transfer와 달라(수취인 없음, allowed/blocked 2갈래뿐 등) 전용 tool로 둔다.
+
+# "A에서 B(으)로 5만원 옮겨/이체" 패턴에서 출금힌트/입금힌트/금액을 뽑는다.
+_ITX_PATTERN = re.compile(r"(.+?)에서(.+?)(?:으로|로)(.+?)(?:옮겨|이체)")
+
+
+def extract_internal_transfer_slots(state: dict) -> dict:
+    """본인이체 발화에서 출금/입금 계좌 힌트와 금액을 추출한다."""
+    text = (state.get("user_input") or "").replace(" ", "")
+    updates: dict = {"route_key": "extracted"}
+    m = _ITX_PATTERN.search(text)
+    if m:
+        updates["itx.from_account"] = m.group(1)
+        updates["itx.to_hint"] = m.group(2)
+        amount = _parse_amount(m.group(3))
+        if amount is not None:
+            updates["itx.amount"] = amount
+    return updates
+
+
+def verify_to_account(state: dict) -> dict:
+    """입금 계좌를 확정한다 (출금 계좌 제외, 본인이체 전용).
+
+    후보가 정확히 하나면 자동 확정. 여러 개면 select_needed. 없으면 invalid.
+    """
+    try:
+        user_id = state.get("user_id")
+        accounts = _accounts(user_id)
+        from_account = _dget(state, "from_account") or {}
+        pool = [
+            a for a in accounts if a.get("account_id") != from_account.get("account_id")
+        ]
+        if not pool:
+            return {
+                "route_key": "invalid",
+                "final_response": "입금할 다른 계좌가 없습니다.",
+            }
+        hint = (_dget(state, "to_hint") or "").replace(" ", "")
+        candidates = (
+            [a for a in pool if hint in a.get("account_name", "").replace(" ", "")]
+            if hint
+            else pool
+        )
+        if len(candidates) == 1:
+            return {"itx.to_account": candidates[0], "route_key": "verified"}
+        options = candidates or pool
+        return {
+            "route_key": "select_needed",
+            "prompt_message": f"어느 계좌로 입금할까요?\n{_account_options(options)}",
+            "prompt_ui": _account_card_ui(options),
+        }
+    except Exception:
+        return {
+            "route_key": "invalid",
+            "final_response": "입금 계좌 확인 중 문제가 발생했습니다.",
+        }
+
+
+def _parse_itx_approval_reply(reply: str) -> str:
+    """본인이체 승인 카드 답변 → route_key. 해석 불가는 보수적으로 cancelled."""
+    text = str(reply).strip()
+    approve_keywords = ("승인", "확인", "네", "응", "보내", "진행", "예")
+    match text:
+        case _ if _is_cancel(text):
+            return "cancelled"
+        case _ if "금액" in text:
+            return "edit_amount"
+        case _ if "출금" in text:
+            return "edit_from_account"
+        case _ if "입금" in text:
+            return "edit_to_account"
+        case _ if "계좌" in text:
+            return "edit_from_account"
+        case _ if any(keyword in text for keyword in approve_keywords):
+            return "approved"
+        case _ if text.replace(" ", "") in {"송금하기", "송금", "이체하기", "이체"}:
+            return "approved"
+        case _:
+            return "cancelled"
+
+
+def request_itx_approval(state: dict) -> dict:
+    """본인이체 승인 카드를 보여주고 승인/취소/수정 답변을 받는다 (interrupt).
+
+    approved 시 승인 요약(itx.approval)을 기록해 실행 직전 검사가
+    승인 내용과 실제 실행 내용의 일치를 대조할 수 있게 한다.
+    """
+    data = _data(state)
+    from_account = data.get("itx.from_account") or {}
+    to_account = data.get("itx.to_account") or {}
+    amount = data.get("itx.amount") or 0
+
+    card = (
+        "[본인이체 확인]\n"
+        f"  보내는 계좌: {from_account.get('account_name', '?')}\n"
+        f"  받는 계좌  : {to_account.get('account_name', '?')}\n"
+        f"  금액       : {amount:,}원\n"
+        "진행하려면 '승인', 중단하려면 '취소',\n"
+        "수정하려면 '금액 수정' / '출금 계좌 수정' / '입금 계좌 수정'을 입력해주세요."
+    )
+    reply = interrupt(
+        {
+            "prompt": card,
+            "prompt_for": "itx.approval_decision",
+            "ui": ConfirmModalUi(
+                type="confirm_modal",
+                display={
+                    "from_account_name": from_account.get("account_name"),
+                    "to_account_name": to_account.get("account_name"),
+                    "amount": amount,
+                },
+                actions=[
+                    "송금하기",
+                    "취소",
+                    "금액 수정",
+                    "출금 계좌 수정",
+                    "입금 계좌 수정",
+                ],
+            ).model_dump(exclude_none=True),
+        }
+    )
+
+    route = _parse_itx_approval_reply(str(reply))
+    updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
+    match route:
+        case "approved":
+            updates["itx.approval"] = {
+                "from_account_id": from_account.get("account_id"),
+                "to_account_id": to_account.get("account_id"),
+                "amount": amount,
+            }
+        case "cancelled":
+            updates["final_response"] = (
+                "이체를 취소했습니다."
+                if _is_cancel(str(reply))
+                else "확인할 수 없는 답변이라 이체를 취소했습니다. 다시 시도해주세요."
+            )
+        case "edit_amount":
+            updates["itx.amount"] = None
+            updates["prompt_message"] = "새 이체 금액을 입력해주세요 (예: 3만원)."
+            updates["prompt_ui"] = _number_input_ui()
+        case "edit_from_account":
+            updates["itx.from_account"] = None
+            updates["prompt_message"] = "어느 계좌에서 이체할까요?"
+            try:
+                updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+            except BankClientError:
+                pass
+        case "edit_to_account":
+            updates["itx.to_account"] = None
+            updates["prompt_message"] = "어느 계좌로 이체할까요?"
+            try:
+                updates["prompt_ui"] = _account_card_ui(_accounts(state.get("user_id")))
+            except BankClientError:
+                pass
+    return updates
+
+
+def run_itx_pre_execution_guardrail(state: dict) -> dict:
+    """본인이체 정책 검사 (전용) — check_balance 이후·승인 이전에 실행된다.
+
+    시트 라우팅상 이 스텝은 승인(review_internal_transfer)보다 앞에 있어
+    transfer의 동명 스텝(승인 후 위변조 대조)과 역할이 다르다. 여기서는
+    승인 대조 없이 잔액·정책만 검사한다. 가드레일은 execute_internal_transfer
+    대상 규칙만 조회하므로(execute_transfer와 분리) 타인송금 전용 규칙(고액
+    블록 등)은 적용되지 않는다. 라우트가 allowed/blocked 두 갈래뿐이라
+    (시트 계약) 모든 실패 사유를 blocked로 묶는다.
+    """
+    try:
+        user_id = state.get("user_id")
+        data = _data(state)
+        account = data.get("itx.from_account") or {}
+        amount = data.get("itx.amount")
+
+        live = _live_account(user_id, account.get("account_id"))
+        if not live or not isinstance(amount, int) or live["balance"] < amount:
+            return {
+                "route_key": "blocked",
+                "final_response": (
+                    "잔액이 부족하거나 계좌 확인에 실패해 이체를 차단했습니다."
+                ),
+            }
+
+        context = {"amount": amount, "balance": live["balance"]}
+        triggered = GuardrailEngine.check(
+            "tool", context, target_id="execute_internal_transfer"
+        )
+        blocked = [r for r in triggered if r.get("action") == "block"]
+        if blocked:
+            decision = GuardrailEngine.pick_decision(blocked)
+            return {
+                "route_key": "blocked",
+                "final_response": decision.get("user_message"),
+            }
+        return {"route_key": "allowed"}
+    except Exception:
+        return {
+            "route_key": "blocked",
+            "final_response": "실행 직전 검사 중 문제가 발생했습니다.",
+        }
+
+
+def execute_internal_transfer(state: dict) -> dict:
+    """본인 계좌 간 이체를 실행한다. 원장 반영은 BankClient가 담당한다."""
+    user_id = state.get("user_id")
+    data = _data(state)
+    from_account = data.get("itx.from_account") or {}
+    to_account = data.get("itx.to_account") or {}
+    amount = data.get("itx.amount")
+
+    if not to_account.get("account_id") or not isinstance(amount, int):
+        return {
+            "route_key": "failed",
+            "final_response": "이체 처리 중 문제가 발생했습니다.",
+        }
+
+    try:
+        live = _live_account(user_id, from_account.get("account_id"))
+        if not live:
+            return {
+                "route_key": "failed",
+                "final_response": "이체 처리 중 문제가 발생했습니다.",
+            }
+        if live["balance"] < amount:
+            return {
+                "route_key": "failed",
+                "final_response": "잔액이 부족해 이체하지 못했습니다.",
+            }
+        result = get_bank_client().transfer_internal(
+            user_id=user_id,
+            from_account_id=live["account_id"],
+            to_account_id=to_account["account_id"],
+            amount=amount,
+        )
+    except BankClientError:
+        return {
+            "route_key": "failed",
+            "final_response": "이체 처리 중 문제가 발생했습니다.",
+        }
+
+    return {
+        "itx.result": {
+            "transaction_id": result.get("transaction_id"),
+            "from_account_id": live["account_id"],
+            "to_account_id": to_account["account_id"],
+            "to_account_name": to_account.get("account_name"),
+            "amount": amount,
+            "status": result.get("status", "completed"),
+        },
+        "route_key": "success",
+    }
+
+
+def generate_internal_transfer_response(state: dict) -> dict:
+    """본인이체 결과를 사용자 응답 문장으로 만든다 (결정적)."""
+    result = _data(state).get("itx.result") or {}
+    if not result.get("transaction_id"):
+        return {"route_key": "failed"}
+    text = (
+        f"{result.get('to_account_name', '?')}(으)로 {result.get('amount', 0):,}원을 "
+        f"이체했습니다. 거래번호: {result['transaction_id']}"
+    )
+    return {"final_response": text, "route_key": "success"}
+
+
+# ── 거래내역 조회 / 기간 지출·입금 합계 ────────────────────────────────────────
+#
+# normalize_period/resolve_account_scope/fetch_transactions는 _ns/_dget로
+# txn/sum 두 워크플로우가 공유한다. extract_*, sum_transactions,
+# generate_*_response는 워크플로우 전용(출력 형태가 다름 — 목록 vs 합계).
+
+_PERIOD_PHRASES = [
+    "오늘",
+    "어제",
+    "이번주",
+    "지난주",
+    "저번주",
+    "이번달",
+    "지난달",
+    "저번달",
+]
+_MERCHANT_KEYWORDS = ["스타벅스", "이마트", "올리브영", "택시", "급여"]
+
+
+def _extract_period_phrase(text: str) -> str | None:
+    """발화에서 인식 가능한 기간 표현 문구를 찾는다 (계산은 안 함, 문구만)."""
+    compact = text.replace(" ", "")
+    for phrase in _PERIOD_PHRASES:
+        if phrase in compact:
+            return phrase
+    m = re.search(r"최근\d+일", compact)
+    if m:
+        return m.group(0)
+    m = re.search(r"\d{1,2}/\d{1,2}~\d{1,2}/\d{1,2}", compact)
+    if m:
+        return m.group(0)
+    return None
+
+
+def _parse_period_phrase(text: str) -> dict | None:
+    """기간 표현 문구를 {from_date,to_date}(ISO 문자열) 날짜 범위로 변환한다."""
+    if not text:
+        return None
+    t = text.replace(" ", "")
+    today = date.today()
+
+    if "오늘" in t:
+        return {"from_date": today.isoformat(), "to_date": today.isoformat()}
+    if "어제" in t:
+        y = today - timedelta(days=1)
+        return {"from_date": y.isoformat(), "to_date": y.isoformat()}
+    if "이번주" in t:
+        monday = today - timedelta(days=today.weekday())
+        return {"from_date": monday.isoformat(), "to_date": today.isoformat()}
+    if "지난주" in t or "저번주" in t:
+        this_monday = today - timedelta(days=today.weekday())
+        last_monday = this_monday - timedelta(days=7)
+        last_sunday = this_monday - timedelta(days=1)
+        return {
+            "from_date": last_monday.isoformat(),
+            "to_date": last_sunday.isoformat(),
+        }
+    if "이번달" in t:
+        first = today.replace(day=1)
+        return {"from_date": first.isoformat(), "to_date": today.isoformat()}
+    if "지난달" in t or "저번달" in t:
+        first_this = today.replace(day=1)
+        last_of_prev = first_this - timedelta(days=1)
+        first_of_prev = last_of_prev.replace(day=1)
+        return {
+            "from_date": first_of_prev.isoformat(),
+            "to_date": last_of_prev.isoformat(),
+        }
+    m = re.search(r"최근(\d+)일", t)
+    if m:
+        start = today - timedelta(days=int(m.group(1)) - 1)
+        return {"from_date": start.isoformat(), "to_date": today.isoformat()}
+    m = re.search(r"(\d{1,2})/(\d{1,2})~(\d{1,2})/(\d{1,2})", t)
+    if m:
+        mo1, d1, mo2, d2 = (int(x) for x in m.groups())
+        try:
+            start = date(today.year, mo1, d1)
+            end = date(today.year, mo2, d2)
+            return {"from_date": start.isoformat(), "to_date": end.isoformat()}
+        except ValueError:
+            return None
+    return None
+
+
+def extract_transaction_slots(state: dict) -> dict:
+    """거래내역 조회 발화에서 기간·계좌 힌트·가맹점 키워드를 추출한다."""
+    text = state.get("user_input", "")
+    ns = _ns(state)
+    compact = text.replace(" ", "")
+    updates: dict = {"route_key": "extracted"}
+
+    phrase = _extract_period_phrase(text)
+    if phrase:
+        updates[f"{ns}.period_expr"] = phrase
+
+    hint = None
+    try:
+        for a in _accounts(state.get("user_id")):
+            name = a.get("account_name", "").replace(" ", "")
+            if name and name in compact:
+                hint = a["account_name"]
+                break
+    except BankClientError:
+        pass
+    if hint:
+        updates[f"{ns}.account_hint"] = hint
+
+    for kw in _MERCHANT_KEYWORDS:
+        if kw in compact:
+            updates[f"{ns}.keyword"] = kw
+            break
+
+    return updates
+
+
+def extract_amount_summary_slots(state: dict) -> dict:
+    """기간 합계 조회 발화에서 기간·계좌 힌트·거래 방향을 추출한다."""
+    text = state.get("user_input", "")
+    ns = _ns(state)
+    compact = text.replace(" ", "")
+    updates: dict = {"route_key": "extracted"}
+
+    phrase = _extract_period_phrase(text)
+    if phrase:
+        updates[f"{ns}.period_expr"] = phrase
+
+    hint = None
+    try:
+        for a in _accounts(state.get("user_id")):
+            name = a.get("account_name", "").replace(" ", "")
+            if name and name in compact:
+                hint = a["account_name"]
+                break
+    except BankClientError:
+        pass
+    if hint:
+        updates[f"{ns}.account_hint"] = hint
+
+    if any(k in compact for k in ("썼", "지출", "소비", "나간")):
+        updates[f"{ns}.txn_type"] = "spending"
+    elif any(k in compact for k in ("들어", "입금", "수입", "받은")):
+        updates[f"{ns}.txn_type"] = "income"
+
+    return updates
+
+
+def normalize_period(state: dict) -> dict:
+    """기간 표현 문구를 구체 날짜 범위로 정규화한다 (거래내역/기간합계 공유)."""
+    phrase = _dget(state, "period_expr")
+    if not phrase:
+        return {"route_key": "needs_period"}
+    parsed = _parse_period_phrase(phrase)
+    if parsed is None:
+        return {"route_key": "needs_period"}
+    return {f"{_ns(state)}.period": parsed, "route_key": "normalized"}
+
+
+def resolve_account_scope(state: dict) -> dict:
+    """조회 대상 계좌 범위를 정한다 (거래내역/기간합계 공유).
+
+    힌트가 없거나 '전체'류면 all_accounts(전 계좌 대상). 하나로 특정되면
+    resolved. 여러 개 걸리면 select_needed. 매칭 실패는 not_found.
+    balance의 verify_account(항상 특정을 요구)와 달리, 여기선 힌트가
+    없어도 에러가 아니라 "전체 조회"로 해석한다.
+    """
+    try:
+        hint = (_dget(state, "account_hint") or "").replace(" ", "")
+        if not hint or hint in ("전체", "모두", "모든계좌", "전계좌"):
+            return {"route_key": "all_accounts"}
+        accounts = _accounts(state.get("user_id"))
+        candidates = [
+            a for a in accounts if hint in a.get("account_name", "").replace(" ", "")
+        ]
+        if not candidates:
+            return {
+                "route_key": "not_found",
+                "final_response": "해당 계좌를 찾지 못했어요.",
+            }
+        if len(candidates) == 1:
+            return {f"{_ns(state)}.account": candidates[0], "route_key": "resolved"}
+        return {
+            "route_key": "select_needed",
+            "prompt_message": (
+                f"어느 계좌를 조회할까요?\n{_account_options(candidates)}"
+            ),
+            "prompt_ui": _account_card_ui(candidates),
+        }
+    except Exception:
+        return {
+            "route_key": "error",
+            "final_response": "계좌 확인 중 문제가 발생했습니다.",
+        }
+
+
+def fetch_transactions(state: dict) -> dict:
+    """거래내역을 조회한다 (거래내역/기간합계 공유).
+
+    account/period는 ask_account/ask_period(엔진 기본 input 노드)를 거쳐
+    dict가 아니라 원시 답변 문자열로 들어올 수 있어(재검증 스텝으로
+    안 돌아가는 라우팅) 여기서 방어적으로 재해석한다.
+    """
+    ns = _ns(state)
+    user_id = state.get("user_id")
+    account_raw = _dget(state, "account")
+    period_raw = _dget(state, "period")
+    keyword = _dget(state, "keyword")
+
+    account_id = None
+    if isinstance(account_raw, dict):
+        account_id = account_raw.get("account_id")
+    elif isinstance(account_raw, str) and account_raw.strip():
+        try:
+            accounts = _accounts(user_id)
+        except BankClientError:
+            accounts = []
+        compact = account_raw.replace(" ", "")
+        matches = [
+            a for a in accounts if compact in a.get("account_name", "").replace(" ", "")
+        ]
+        if len(matches) == 1:
+            account_id = matches[0]["account_id"]
+
+    period = period_raw
+    if isinstance(period, str):
+        period = _parse_period_phrase(period)
+    if not isinstance(period, dict) or "from_date" not in period:
+        return {
+            "route_key": "error",
+            "final_response": "조회 기간을 확인하지 못했습니다.",
+        }
+
+    try:
+        results = get_bank_client().get_transactions(
+            user_id,
+            account_id=account_id,
+            start_date=period["from_date"],
+            end_date=period["to_date"],
+        )
+    except BankClientError:
+        return {
+            "route_key": "error",
+            "final_response": "거래내역 조회 중 문제가 발생했습니다.",
+        }
+
+    if keyword:
+        results = [t for t in results if keyword in t.get("merchant", "")]
+
+    if not results:
+        return {f"{ns}.results": [], "route_key": "empty"}
+    return {f"{ns}.results": results, "route_key": "success"}
+
+
+def generate_transaction_response(state: dict) -> dict:
+    """조회된 거래내역을 목록 문장으로 만든다 (결정적)."""
+    results = _dget(state, "results") or []
+    if not results:
+        return {"route_key": "failed"}
+    lines = [f"- {t['date']} {t['merchant']} {t['amount']:,}원" for t in results]
+    text = "조회된 거래내역입니다.\n" + "\n".join(lines)
+    return {"final_response": text, "route_key": "success"}
+
+
+def sum_transactions(state: dict) -> dict:
+    """조회된 거래내역을 방향(txn_type)별로 합산한다. 방향 미지정 시 지출 기준."""
+    results = _dget(state, "results") or []
+    direction = _dget(state, "txn_type") or "spending"
+    total = sum(t.get("amount", 0) for t in results if t.get("type") == direction)
+    return {f"{_ns(state)}.total": total, "route_key": "done"}
+
+
+def generate_amount_summary_response(state: dict) -> dict:
+    """기간 합계 결과를 응답 문장으로 만든다 (결정적)."""
+    total = _dget(state, "total")
+    if total is None:
+        return {"route_key": "failed"}
+    label = "입금" if _dget(state, "txn_type") == "income" else "지출"
+    text = f"해당 기간 {label} 합계는 {total:,}원입니다."
+    return {"final_response": text, "route_key": "success"}
 
 
 # ── 감사 로그 ──────────────────────────────────────────────────────────────────

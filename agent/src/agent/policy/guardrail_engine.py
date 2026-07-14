@@ -74,27 +74,28 @@ class GuardrailEngine:
     @classmethod
     def _evaluate_clause(cls, clause: str, context: dict) -> bool:
         """단일 절(`a == b` 등)을 평가한다. 파싱 실패/변수 누락은 False."""
-        match = _CLAUSE.match(clause)
-        if not match:
+        m = _CLAUSE.match(clause)
+        if not m:
             return False
-        left = cls._resolve_operand(match.group(1), context)
-        right = cls._resolve_operand(match.group(3), context)
+        left = cls._resolve_operand(m.group(1), context)
+        right = cls._resolve_operand(m.group(3), context)
         if left is _MISSING or right is _MISSING:
             return False
-        op = match.group(2)
+        op = m.group(2)
         try:
-            if op == "==":
-                return left == right
-            if op == "!=":
-                return left != right
-            if op == ">=":
-                return left >= right
-            if op == "<=":
-                return left <= right
-            if op == ">":
-                return left > right
-            if op == "<":
-                return left < right
+            match op:
+                case "==":
+                    return left == right
+                case "!=":
+                    return left != right
+                case ">=":
+                    return left >= right
+                case "<=":
+                    return left <= right
+                case ">":
+                    return left > right
+                case "<":
+                    return left < right
         except TypeError:
             return False
         return False

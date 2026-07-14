@@ -21,7 +21,12 @@ from typing import Protocol
 
 import httpx
 
-from agent.data.mock_bank import AUDIT_LOG, MOCK_ACCOUNTS, MOCK_RECIPIENTS
+from agent.data.mock_bank import (
+    AUDIT_LOG,
+    MOCK_ACCOUNTS,
+    MOCK_RECIPIENTS,
+    MOCK_TRANSACTIONS,
+)
 
 
 class BankClientError(Exception):
@@ -39,6 +44,14 @@ class BankClient(Protocol):
         self, user_id: str, recipient_name: str | None = None
     ) -> list[dict]: ...
 
+    def get_transactions(
+        self,
+        user_id: str,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict]: ...
+
     def transfer(
         self,
         user_id: str,
@@ -48,6 +61,10 @@ class BankClient(Protocol):
         memo: str | None = None,
     ) -> dict: ...
 
+    def transfer_internal(
+        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
+    ) -> dict: ...
+
     def post_audit_log(
         self,
         event_type: str,
@@ -55,6 +72,10 @@ class BankClient(Protocol):
         tool_id: str | None,
         result: dict,
     ) -> dict: ...
+
+    def set_default_account(self, user_id: str, account_id: str) -> dict: ...
+
+    def set_account_alias(self, user_id: str, account_id: str, alias: str) -> dict: ...
 
 
 class LocalBankClient:
@@ -76,6 +97,22 @@ class LocalBankClient:
         if recipient_name:
             return [r for r in recipients if recipient_name in r.get("name", "")]
         return recipients
+
+    def get_transactions(
+        self,
+        user_id: str,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict]:
+        results = MOCK_TRANSACTIONS.get(user_id, [])
+        if account_id:
+            results = [t for t in results if t.get("account_id") == account_id]
+        if start_date:
+            results = [t for t in results if t.get("date", "") >= start_date]
+        if end_date:
+            results = [t for t in results if t.get("date", "") <= end_date]
+        return sorted(results, key=lambda t: t.get("date", ""), reverse=True)
 
     def transfer(
         self,
@@ -108,6 +145,29 @@ class LocalBankClient:
             "status": "completed",
         }
 
+    def transfer_internal(
+        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
+    ) -> dict:
+        accounts = MOCK_ACCOUNTS.get(user_id, [])
+        from_account = next(
+            (a for a in accounts if a.get("account_id") == from_account_id), None
+        )
+        to_account = next(
+            (a for a in accounts if a.get("account_id") == to_account_id), None
+        )
+        if from_account is None or to_account is None:
+            raise BankClientError("계좌를 찾을 수 없습니다.")
+        if from_account["balance"] < amount:
+            raise BankClientError("잔액이 부족합니다.")
+
+        from_account["balance"] -= amount
+        to_account["balance"] += amount
+
+        return {
+            "transaction_id": f"txn_{uuid.uuid4().hex[:8]}",
+            "status": "completed",
+        }
+
     def post_audit_log(
         self,
         event_type: str,
@@ -123,6 +183,25 @@ class LocalBankClient:
         }
         AUDIT_LOG.append(entry)
         return {"log_id": f"local_log_{len(AUDIT_LOG):04d}"}
+
+    def set_default_account(self, user_id: str, account_id: str) -> dict:
+        """대상 계좌를 기본 출금계좌로 지정하고 나머지는 해제한다 (in-place)."""
+        accounts = MOCK_ACCOUNTS.get(user_id, [])
+        target = next((a for a in accounts if a.get("account_id") == account_id), None)
+        if target is None:
+            raise BankClientError(f"계좌를 찾을 수 없습니다: {account_id}")
+        for a in accounts:
+            a["is_default"] = a.get("account_id") == account_id
+        return {"account_id": account_id, "is_default": True}
+
+    def set_account_alias(self, user_id: str, account_id: str, alias: str) -> dict:
+        """대상 계좌의 별칭을 설정한다 (in-place)."""
+        accounts = MOCK_ACCOUNTS.get(user_id, [])
+        target = next((a for a in accounts if a.get("account_id") == account_id), None)
+        if target is None:
+            raise BankClientError(f"계좌를 찾을 수 없습니다: {account_id}")
+        target["alias"] = alias
+        return {"account_id": account_id, "alias": alias}
 
 
 class HttpBankClient:
@@ -168,6 +247,27 @@ class HttpBankClient:
             raise BankClientError(f"수취인 조회 실패: HTTP {response.status_code}")
         return response.json().get("recipient_candidates", [])
 
+    def get_transactions(
+        self,
+        user_id: str,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict]:
+        params: dict = {"user_id": user_id}
+        if account_id:
+            params["account_id"] = account_id
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        response = self._request("GET", "/api/transactions", params=params)
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            raise BankClientError(f"거래내역 조회 실패: HTTP {response.status_code}")
+        return response.json().get("transactions", [])
+
     def transfer(
         self,
         user_id: str,
@@ -190,6 +290,22 @@ class HttpBankClient:
             raise BankClientError(f"송금 실행 실패: HTTP {response.status_code}")
         return response.json()
 
+    def transfer_internal(
+        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
+    ) -> dict:
+        body = {
+            "user_id": user_id,
+            "from_account_id": from_account_id,
+            "to_account_id": to_account_id,
+            "amount": amount,
+        }
+        response = self._request(
+            "POST", "/api/transactions/transfer-internal", json=body
+        )
+        if response.status_code >= 400:
+            raise BankClientError(f"본인이체 실행 실패: HTTP {response.status_code}")
+        return response.json()
+
     def post_audit_log(
         self,
         event_type: str,
@@ -206,6 +322,20 @@ class HttpBankClient:
         response = self._request("POST", "/api/audit-logs", json=body)
         if response.status_code >= 400:
             raise BankClientError(f"감사 로그 전송 실패: HTTP {response.status_code}")
+        return response.json()
+
+    def set_default_account(self, user_id: str, account_id: str) -> dict:
+        body = {"user_id": user_id, "account_id": account_id}
+        response = self._request("POST", "/api/accounts/default", json=body)
+        if response.status_code >= 400:
+            raise BankClientError(f"기본계좌 설정 실패: HTTP {response.status_code}")
+        return response.json()
+
+    def set_account_alias(self, user_id: str, account_id: str, alias: str) -> dict:
+        body = {"user_id": user_id, "account_id": account_id, "alias": alias}
+        response = self._request("POST", "/api/accounts/alias", json=body)
+        if response.status_code >= 400:
+            raise BankClientError(f"별칭 설정 실패: HTTP {response.status_code}")
         return response.json()
 
 

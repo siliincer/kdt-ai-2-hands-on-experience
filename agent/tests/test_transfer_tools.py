@@ -30,8 +30,9 @@ from agent.tools.bank_tools import (
 )
 
 
-def _state(user_id="user_001", **data) -> dict:
-    return {"user_id": user_id, "data": data}
+def _state(user_id="user_001", workflow_id="wf_external_transfer", **data) -> dict:
+    # 공유 tool(verify_amount 등)이 _ns로 네임스페이스를 알아내므로 workflow_id 필요
+    return {"user_id": user_id, "workflow_id": workflow_id, "data": data}
 
 
 # ── 파서 헬퍼 ─────────────────────────────────────────────────────────────────

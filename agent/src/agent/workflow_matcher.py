@@ -16,8 +16,49 @@ from agent.llm import get_llm
 from agent.paths import WORKFLOWS_PATH
 
 # 폴백용 키워드 규칙(LLM 실패 시에만 사용)
+# LLM 미사용(키 없음) 시 폴백. 위에서부터 먼저 매칭되는 규칙이 이긴다.
+# LLM 경로는 시트 example_utterance로 분류하므로, 이 키워드는 그 보조판이다.
+#
+# 순서 규칙: 구체적인(다른 워크플로우와 안 겹치는) 키워드를 위에,
+# "통장"/"잔액"처럼 범용적인 키워드는 맨 아래에 둔다. "통장"은 거의 모든
+# 계좌 관련 발화에 등장하므로 balance_inquiry를 맨 뒤(다른 게 하나도
+# 안 걸렸을 때만 잡히는 catch-all)로 둬야 한다.
 _KEYWORD_RULES = [
-    (("보내", "송금", "이체", "에게", "한테"), "wf_external_transfer"),
+    (("에게", "한테", "송금", "보내"), "wf_external_transfer"),
+    (
+        ("옮겨", "본인 계좌", "내 계좌로", "통장으로", "계좌 간", "이체"),
+        "wf_internal_transfer",
+    ),
+    (
+        ("기본", "출금 계좌로", "나가게 해"),
+        "wf_set_default_account",
+    ),
+    (
+        ("별칭", "라고 해", "라 해", "라고 불러", "라 불러", "이름 붙"),
+        "wf_set_account_alias",
+    ),
+    (
+        ("계좌 목록", "계좌 뭐", "무슨 계좌", "어떤 계좌", "계좌 다 보"),
+        "wf_account_list",
+    ),
+    (
+        ("거래내역", "거래 내역", "결제 내역", "이용 내역", "사용 내역", "입출금 내역"),
+        "wf_transaction_history",
+    ),
+    (
+        (
+            "얼마 썼",
+            "얼마 쓴",
+            "지출",
+            "소비",
+            "얼마 들어",
+            "얼마 받",
+            "수입",
+            "입금 얼마",
+        ),
+        "wf_period_amount_summary",
+    ),
+    # 가장 범용적인 규칙 — 위 어느 것도 안 걸렸을 때만 잔액조회로 (catch-all)
     (("잔액", "통장", "얼마 있어", "얼마야"), "wf_balance_inquiry"),
 ]
 

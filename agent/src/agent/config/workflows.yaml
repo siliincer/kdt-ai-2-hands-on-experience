@@ -5,6 +5,7 @@ wf_global_agent_entry:
   description: "모든 사용자 입력을 최초로 수신하고,\nGlobal Guardrail 검사를 거친 뒤 \n안전 정책을 통과한 요청만 \n\
     개별 업무 Workflow로 라우팅한다."
   max_risk_level: R5
+  Flowchart: wf_global_agent_entry
   steps:
   - step_order: 1
     step_id: run_global_guardrail
@@ -19,32 +20,47 @@ wf_global_agent_entry:
     on_fail_condition: 정책 위반 요청 / Prompt Injection / 실행 불가 요청
     on_success_next_step_id: match_workflow
     on_fail_next_step_id: return_response
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 2
     step_id: match_workflow
     step_name: Workflow 매칭
     step_type: routing
     task_id: workflow_matching
     tool_id: match_workflow
-    output_data_key: matched_workflow_id
+    output_data_key: ''
     step_risk_level: R1
     ui_type: ''
     step_message: ''
     on_fail_condition: 매칭 가능한 Workflow 없음
     on_success_next_step_id: execute_matched_workflow
     on_fail_next_step_id: return_response
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 4
     step_id: execute_matched_workflow
     step_name: 매칭된 Workflow 실행
     step_type: subworkflow
     task_id: workflow_execution
     tool_id: ''
-    output_data_key: workflow_result
+    output_data_key: ''
     step_risk_level: R5
     ui_type: ''
     step_message: ''
     on_fail_condition: 개별 Workflow 실행 실패
     on_success_next_step_id: return_response
     on_fail_next_step_id: return_response
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 5
     step_id: return_response
     step_name: 응답 반환
@@ -58,6 +74,11 @@ wf_global_agent_entry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 6
     step_id: show_global_blocked
     step_name: 전역 정책 차단 안내
@@ -71,6 +92,11 @@ wf_global_agent_entry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 7
     step_id: show_no_matching_workflow
     step_name: Workflow 매칭 실패 안내
@@ -84,6 +110,11 @@ wf_global_agent_entry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 8
     step_id: show_workflow_failed
     step_name: Workflow 실행 실패 안내
@@ -97,6 +128,11 @@ wf_global_agent_entry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   routes:
   - from_step_id: run_global_guardrail
     route_key: allowed
@@ -154,6 +190,7 @@ wf_external_transfer:
   example_utterance: 철수에게 5만 원 보내줘
   description: 수취인 확인 후 타인 송금을 실행한다.
   max_risk_level: R4
+  Flowchart: wf_external_transfer
   steps:
   - step_order: 1
     step_id: extract_transfer_slots
@@ -169,6 +206,11 @@ wf_external_transfer:
     on_success_next_step_id: LLM은 여기서 1회만 사용해 사용자의 자연어에서 수취인, 금액, 출금 계좌 힌트, 메모 후보값을
       최대한 추출한다. 이 Step은 실패 분기를 만들지 않고 빈 값은 null로 저장한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 2
     step_id: check_recipient_input
     step_name: 수취인 입력 유무 확인
@@ -182,12 +224,17 @@ wf_external_transfer:
     on_fail_condition: 수취인 입력 없음
     on_success_next_step_id: 수취인 입력값이 있는지 확인한다. 값이 없으면 ask_recipient로 이동한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 3
     step_id: ask_recipient
     step_name: 수취인 입력 요청
     step_type: input
     task_id: recipient_input
-    tool_id: ''
+    tool_id: select_recipient
     output_data_key: transfer.recipient
     step_risk_level: R2
     ui_type: recipient_input
@@ -195,6 +242,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 수취인 정보가 없을 때 이름 또는 계좌번호를 자유 입력으로 받는다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 4
     step_id: resolve_recipient_input
     step_name: 수취인 입력 해석
@@ -208,6 +260,11 @@ wf_external_transfer:
     on_fail_condition: 수취인 입력 유형 판별 실패
     on_success_next_step_id: 수취인 입력값이 계좌번호인지 이름인지 판별하고, 계좌번호 또는 이름 필드로 정규화한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 5
     step_id: verify_recipient_account
     step_name: 수취인 계좌번호 확인
@@ -221,6 +278,11 @@ wf_external_transfer:
     on_fail_condition: 계좌번호 형식 오류 / 송금 불가 계좌
     on_success_next_step_id: 수취인 입력이 계좌번호인 경우 계좌번호 형식과 송금 가능 여부를 확인하고 최종 수취인 계좌로 확정한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 6
     step_id: show_invalid_recipient_account
     step_name: 수취인 계좌 확인 실패 안내
@@ -234,6 +296,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 8
     step_id: check_amount_input
     step_name: 송금 금액 유무 확인
@@ -247,6 +314,11 @@ wf_external_transfer:
     on_fail_condition: 금액 없음
     on_success_next_step_id: 송금 금액 입력값이 있는지 확인한다. 값이 없으면 ask_amount_input으로 이동한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 9
     step_id: ask_amount
     step_name: 송금 금액 입력
@@ -260,6 +332,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 송금 금액이 없을 때 사용자에게 금액을 입력받는다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 10
     step_id: verify_amount
     step_name: 송금 금액 확인
@@ -273,6 +350,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 송금 금액을 숫자로 정규화하고 최소금액, 최대금액, 한도 조건을 확인한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 12
     step_id: verify_from_account
     step_name: 출금 계좌 확인
@@ -286,6 +368,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 출금 계좌 힌트, 기본 계좌, 사용 가능한 계좌 목록을 기준으로 실제 출금 계좌를 확정한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 13
     step_id: ask_from_account
     step_name: 출금 계좌 선택
@@ -299,6 +386,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 출금 계좌 후보가 여러 개이거나 기본 계좌를 확정할 수 없을 때 사용자가 계좌를 선택한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 14
     step_id: check_balance
     step_name: 출금 가능 잔액 확인
@@ -312,6 +404,11 @@ wf_external_transfer:
     on_fail_condition: 잔액 부족
     on_success_next_step_id: 선택된 출금 계좌의 사용 가능 잔액이 송금 금액보다 충분한지 확인한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 15
     step_id: show_insufficient_balance
     step_name: 잔액 부족 안내
@@ -325,6 +422,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 잔액 부족으로 송금이 중단된 경우 사용자에게 안내한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 16
     step_id: run_transfer_guardrail
     step_name: 송금 정책 검사
@@ -338,6 +440,11 @@ wf_external_transfer:
     on_fail_condition: 고위험 송금 / 정책 위반 / 경고 필요 / 추가 인증 필요
     on_success_next_step_id: 송금 금액, 수취인 계좌, 출금 계좌, 정책 조건을 바탕으로 실행 가능 여부를 판단한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 17
     step_id: show_transfer_warning
     step_name: 송금 주의 안내
@@ -355,6 +462,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 고액 송금, 신규 수취인, 의심 패턴 등 차단은 아니지만 사용자에게 주의 안내가 필요한 경우 표시한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 18
     step_id: show_transfer_blocked
     step_name: 송금 차단 안내
@@ -368,6 +480,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 정책 조건에 의해 송금이 차단된 경우 사용자에게 안내하고 종료한다.
     on_fail_next_step_id: 위험도 평가 또는 정책 조건에 의해 송금이 차단된 경우 사용자에게 안내한다.
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 19
     step_id: review_transfer
     step_name: 송금 정보 확인
@@ -381,6 +498,11 @@ wf_external_transfer:
     on_fail_condition: 사용자 승인 거절 / 입력 수정
     on_success_next_step_id: 사용자에게 최종 송금 내용을 보여주고 명시적 승인을 요청한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 21
     step_id: show_transfer_cancelled
     step_name: 송금 취소 안내
@@ -394,6 +516,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: 사용자가 승인하지 않았거나 승인 시간이 만료된 경우 안내한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 22
     step_id: authenticate_user
     step_name: 사용자 본인 인증 요청
@@ -407,6 +534,11 @@ wf_external_transfer:
     on_fail_condition: 인증 취소 / 인증 만료
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 24
     step_id: show_authentication_failed
     step_name: 본인 인증 실패 안내
@@ -420,6 +552,11 @@ wf_external_transfer:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 25
     step_id: run_pre_execution_guardrail
     step_name: 실행 직전 정책 검사
@@ -433,6 +570,11 @@ wf_external_transfer:
     on_fail_condition: 승인 내용 불일치 / 인증 불일치 / 승인 만료 / 실행 직전 차단
     on_success_next_step_id: 승인된 요청에 한해 Fake Money 기반 Mock 송금을 실행한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 26
     step_id: execute_transfer
     step_name: 송금 실행
@@ -446,6 +588,11 @@ wf_external_transfer:
     on_fail_condition: 송금 실행 실패 / Tool 오류
     on_success_next_step_id: 송금 실행 Tool에서 오류가 발생한 경우 사용자에게 안내한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 27
     step_id: show_transfer_failed
     step_name: 송금 실패 안내
@@ -454,11 +601,16 @@ wf_external_transfer:
     tool_id: ''
     output_data_key: ''
     step_risk_level: R0
-    ui_type: error_message
+    ui_type: ''
     step_message: 송금 처리 중 문제가 발생했습니다.
     on_fail_condition: ''
     on_success_next_step_id: 송금 실행 결과를 사용자에게 보여줄 최종 응답으로 변환한다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 28
     step_id: show_transfer_result
     step_name: 송금 결과 응답 생성
@@ -472,6 +624,11 @@ wf_external_transfer:
     on_fail_condition: 응답 생성 실패
     on_success_next_step_id: 송금 실행 이후 응답 생성에 실패한 경우의 fallback 응답이다.
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 30
     step_id: write_audit_log
     step_name: Audit Log 기록
@@ -485,6 +642,11 @@ wf_external_transfer:
     on_fail_condition: 로그 기록 실패
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   routes:
   - from_step_id: extract_transfer_slots
     route_key: success
@@ -758,6 +920,7 @@ wf_balance_inquiry:
   example_utterance: 잔액 얼마야?
   description: 본인 계좌에 현재 잔액을 조회한다.
   max_risk_level: R1
+  Flowchart: wf_balance_inquiry
   steps:
   - step_order: 1
     step_id: extract_balance_slots
@@ -772,21 +935,31 @@ wf_balance_inquiry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 2
     step_id: verify_account
     step_name: 조회 계좌 확인
     step_type: tool
     task_id: ''
     tool_id: verify_account
-    output_data_key: balance.selected_accounts
+    output_data_key: balance.selected_account
     step_risk_level: R1
     ui_type: ''
     step_message: ''
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 3
-    step_id: ask_account_selection
+    step_id: ask_account
     step_name: 조회 계좌 선택
     step_type: input
     task_id: ''
@@ -798,6 +971,11 @@ wf_balance_inquiry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 4
     step_id: apply_account_selection
     step_name: 선택 계좌 적용
@@ -811,19 +989,29 @@ wf_balance_inquiry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 5
     step_id: fetch_balance
     step_name: 잔액 조회
     step_type: tool
     task_id: ''
     tool_id: fetch_balance
-    output_data_key: balance.balance_results
+    output_data_key: balance.balance_result
     step_risk_level: R1
     ui_type: ''
     step_message: ''
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 6
     step_id: show_balance_result
     step_name: 잔액 조회 결과 응답 생성
@@ -837,6 +1025,11 @@ wf_balance_inquiry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 7
     step_id: show_balance_failed
     step_name: 잔액 조회 실패 안내
@@ -850,6 +1043,11 @@ wf_balance_inquiry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   - step_order: 8
     step_id: write_audit_log
     step_name: Audit Log 기록
@@ -863,6 +1061,11 @@ wf_balance_inquiry:
     on_fail_condition: ''
     on_success_next_step_id: ''
     on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
   routes:
   - from_step_id: extract_balance_slots
     route_key: extracted
@@ -878,7 +1081,7 @@ wf_balance_inquiry:
     route_key: select_needed
     route_name: 계좌 선택 필요
     condition_description: 복수 계좌이거나 힌트 매칭 실패한 경우
-    to_step_id: ask_account_selection
+    to_step_id: ask_account
   - from_step_id: fetch_balance
     route_key: success
     route_name: 조회 성공
@@ -894,12 +1097,12 @@ wf_balance_inquiry:
     route_name: 계좌 조회 실패
     condition_description: 계좌 목록 조회 중 오류가 발생한 경우
     to_step_id: show_balance_failed
-  - from_step_id: ask_account_selection
+  - from_step_id: ask_account
     route_key: submitted
     route_name: 입력 제출
     condition_description: 사용자가 계좌를 선택·제출한 경우
     to_step_id: apply_account_selection
-  - from_step_id: ask_account_selection
+  - from_step_id: ask_account
     route_key: cancelled
     route_name: 선택 취소
     condition_description: 사용자가 선택을 취소한 경우
@@ -913,7 +1116,7 @@ wf_balance_inquiry:
     route_key: invalid
     route_name: 선택 오류
     condition_description: 유효한 계좌를 못 고른 경우
-    to_step_id: ask_account_selection
+    to_step_id: ask_account
   - from_step_id: fetch_balance
     route_key: failed
     route_name: 조회 실패
@@ -943,4 +1146,1758 @@ wf_balance_inquiry:
     route_key: log_failed
     route_name: 로그 기록 실패
     condition_description: Audit Log 기록에 실패했지만 사용자 흐름은 종료
+    to_step_id: END
+wf_account_list:
+  workflow_name: 계좌 목록 조회
+  workflow_type: inquiry
+  example_utterance: 내 계좌 뭐뭐 있어?
+  description: 본인 계좌 목록을 조회한다.
+  max_risk_level: R1
+  Flowchart: wf_account_list
+  steps:
+  - step_order: 1
+    step_id: fetch_account_list
+    step_name: 계좌 목록 조회
+    step_type: tool
+    task_id: ''
+    tool_id: fetch_account_list
+    output_data_key: account.list
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 2
+    step_id: show_account_list
+    step_name: 계좌 목록 응답
+    step_type: response
+    task_id: ''
+    tool_id: generate_account_list_response
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: account_list
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 3
+    step_id: show_no_account
+    step_name: 계좌 없음 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: 조회할 수 있는 계좌가 없어요.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 4
+    step_id: show_account_list_failed
+    step_name: 계좌 목록 조회 실패 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: error_message
+    step_message: 계좌 목록 조회 중 문제가 발생했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 5
+    step_id: write_audit_log
+    step_name: Audit Log 기록
+    step_type: log
+    task_id: ''
+    tool_id: write_audit_log
+    output_data_key: log_id
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  routes:
+  - from_step_id: fetch_account_list
+    route_key: success
+    route_name: 조회 성공
+    condition_description: 계좌 목록 조회 성공
+    to_step_id: show_account_list
+  - from_step_id: fetch_account_list
+    route_key: empty
+    route_name: 계좌 없음
+    condition_description: 등록된 계좌가 없는 경우
+    to_step_id: show_no_account
+  - from_step_id: fetch_account_list
+    route_key: error
+    route_name: 조회 실패
+    condition_description: 계좌 목록 조회 중 오류
+    to_step_id: show_account_list_failed
+  - from_step_id: show_account_list
+    route_key: success
+    route_name: 응답 생성 완료
+    condition_description: 응답이 정상 생성됨
+    to_step_id: write_audit_log
+  - from_step_id: show_account_list
+    route_key: failed
+    route_name: 응답 생성 실패
+    condition_description: 응답 생성 실패
+    to_step_id: show_account_list_failed
+  - from_step_id: show_no_account
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 계좌 없음 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: show_account_list_failed
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 실패 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: write_audit_log
+    route_key: logged
+    route_name: 로그 완료
+    condition_description: 로그 기록 완료
+    to_step_id: END
+  - from_step_id: write_audit_log
+    route_key: log_failed
+    route_name: 로그 실패
+    condition_description: 로그 실패해도 종료
+    to_step_id: END
+wf_transaction_history:
+  workflow_name: 거래내역 조회
+  workflow_type: inquiry
+  example_utterance: 지난주 결제 내역 보여줘
+  description: 본인 계좌의 거래내역을 조회한다(단순 조회 + 키워드/가맹점 검색).
+  max_risk_level: R1
+  Flowchart: wf_transaction_history
+  steps:
+  - step_order: 1
+    step_id: extract_transaction_slots
+    step_name: 거래내역 정보 추출
+    step_type: tool
+    task_id: ''
+    tool_id: extract_transaction_slots
+    output_data_key: txn.account_hint
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 2
+    step_id: normalize_period
+    step_name: 기간 정규화
+    step_type: tool
+    task_id: ''
+    tool_id: normalize_period
+    output_data_key: txn.period
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 3
+    step_id: ask_period
+    step_name: 기간 되묻기
+    step_type: input
+    task_id: ''
+    tool_id: ask_period
+    output_data_key: txn.period
+    step_risk_level: R1
+    ui_type: period_input
+    step_message: '어느 기간을 볼까요? (예: 이번 달, 지난주, 7/1~7/7)'
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 4
+    step_id: resolve_account_scope
+    step_name: 조회 계좌 범위 결정
+    step_type: tool
+    task_id: ''
+    tool_id: resolve_account_scope
+    output_data_key: txn.account
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 5
+    step_id: ask_account
+    step_name: 계좌 선택
+    step_type: input
+    task_id: ''
+    tool_id: select_account
+    output_data_key: txn.account
+    step_risk_level: R1
+    ui_type: account_selection
+    step_message: 어느 계좌의 거래내역을 볼까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 6
+    step_id: fetch_transactions
+    step_name: 거래내역 조회
+    step_type: tool
+    task_id: ''
+    tool_id: fetch_transactions
+    output_data_key: txn.results
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 7
+    step_id: show_txn_result
+    step_name: 거래내역 응답
+    step_type: response
+    task_id: ''
+    tool_id: generate_transaction_response
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: transaction_list
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 8
+    step_id: show_no_txn
+    step_name: 거래내역 없음 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: 해당 기간에 거래내역이 없어요.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 9
+    step_id: show_txn_failed
+    step_name: 거래내역 조회 실패 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: error_message
+    step_message: 거래내역 조회 중 문제가 발생했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 10
+    step_id: write_audit_log
+    step_name: Audit Log 기록
+    step_type: log
+    task_id: ''
+    tool_id: write_audit_log
+    output_data_key: log_id
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  routes:
+  - from_step_id: extract_transaction_slots
+    route_key: extracted
+    route_name: 추출 완료
+    condition_description: 슬롯 추출 완료
+    to_step_id: normalize_period
+  - from_step_id: normalize_period
+    route_key: normalized
+    route_name: 정규화 완료
+    condition_description: 구체 날짜 범위 산출(미지정은 최근 1개월)
+    to_step_id: resolve_account_scope
+  - from_step_id: normalize_period
+    route_key: needs_period
+    route_name: 기간 재확인
+    condition_description: 기간 언급했으나 해석 불가·무효
+    to_step_id: ask_period
+  - from_step_id: normalize_period
+    route_key: error
+    route_name: 기간 오류
+    condition_description: 기간 처리 오류
+    to_step_id: show_txn_failed
+  - from_step_id: ask_period
+    route_key: resolved
+    route_name: 기간 확정
+    condition_description: 되물어 기간 확정
+    to_step_id: resolve_account_scope
+  - from_step_id: ask_period
+    route_key: invalid
+    route_name: 기간 재입력
+    condition_description: 여전히 불명확 → 재질문
+    to_step_id: ask_period
+  - from_step_id: ask_period
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_txn_failed
+  - from_step_id: resolve_account_scope
+    route_key: all_accounts
+    route_name: 전체 계좌
+    condition_description: 계좌 힌트가 없어 전체 계좌 조회
+    to_step_id: fetch_transactions
+  - from_step_id: resolve_account_scope
+    route_key: resolved
+    route_name: 계좌 확정
+    condition_description: 힌트가 단일 계좌로 확정
+    to_step_id: fetch_transactions
+  - from_step_id: resolve_account_scope
+    route_key: select_needed
+    route_name: 선택 필요
+    condition_description: 힌트가 복수 계좌에 매칭
+    to_step_id: ask_account
+  - from_step_id: resolve_account_scope
+    route_key: not_found
+    route_name: 계좌 없음
+    condition_description: 힌트에 맞는 계좌 없음
+    to_step_id: show_txn_failed
+  - from_step_id: resolve_account_scope
+    route_key: error
+    route_name: 조회 실패
+    condition_description: 계좌 조회 오류
+    to_step_id: show_txn_failed
+  - from_step_id: ask_account
+    route_key: selected
+    route_name: 계좌 확정
+    condition_description: 유효 계좌 선택
+    to_step_id: fetch_transactions
+  - from_step_id: ask_account
+    route_key: cancelled
+    route_name: 선택 취소
+    condition_description: 사용자 취소
+    to_step_id: show_txn_failed
+  - from_step_id: ask_account
+    route_key: invalid
+    route_name: 선택 오류
+    condition_description: 유효 계좌 못 고름 → 재질문
+    to_step_id: ask_account
+  - from_step_id: fetch_transactions
+    route_key: success
+    route_name: 조회 성공
+    condition_description: 거래내역 조회 성공
+    to_step_id: show_txn_result
+  - from_step_id: fetch_transactions
+    route_key: empty
+    route_name: 내역 없음
+    condition_description: 거래내역 없음
+    to_step_id: show_no_txn
+  - from_step_id: fetch_transactions
+    route_key: error
+    route_name: 조회 실패
+    condition_description: 거래내역 조회 오류
+    to_step_id: show_txn_failed
+  - from_step_id: show_txn_result
+    route_key: success
+    route_name: 응답 생성 완료
+    condition_description: 응답 정상 생성
+    to_step_id: write_audit_log
+  - from_step_id: show_txn_result
+    route_key: failed
+    route_name: 응답 생성 실패
+    condition_description: 응답 생성 실패
+    to_step_id: show_txn_failed
+  - from_step_id: show_no_txn
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 내역 없음 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: show_txn_failed
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 실패 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: write_audit_log
+    route_key: logged
+    route_name: 로그 완료
+    condition_description: 로그 기록 완료
+    to_step_id: END
+  - from_step_id: write_audit_log
+    route_key: log_failed
+    route_name: 로그 실패
+    condition_description: 로그 실패해도 종료
+    to_step_id: END
+wf_period_amount_summary:
+  workflow_name: 기간 내 지출/입금 조회
+  workflow_type: inquiry
+  example_utterance: 이번 달 얼마 썼어?
+  description: 기간 내 지출 또는 입금 합계를 조회한다.
+  max_risk_level: R1
+  Flowchart: ''
+  steps:
+  - step_order: 1
+    step_id: extract_amount_summary_slots
+    step_name: 기간·지출입금 추출
+    step_type: tool
+    task_id: ''
+    tool_id: extract_amount_summary_slots
+    output_data_key: sum.account_hint
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 2
+    step_id: normalize_period
+    step_name: 기간 정규화
+    step_type: tool
+    task_id: ''
+    tool_id: normalize_period
+    output_data_key: sum.period
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 3
+    step_id: ask_period
+    step_name: 기간 되묻기
+    step_type: input
+    task_id: ''
+    tool_id: ask_period
+    output_data_key: sum.period
+    step_risk_level: R1
+    ui_type: period_input
+    step_message: '어느 기간을 볼까요? (예: 이번 달, 지난주, 7/1~7/7)'
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 4
+    step_id: resolve_account_scope
+    step_name: 조회 계좌 범위 결정
+    step_type: tool
+    task_id: ''
+    tool_id: resolve_account_scope
+    output_data_key: sum.account
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 5
+    step_id: ask_account
+    step_name: 계좌 선택
+    step_type: input
+    task_id: ''
+    tool_id: select_account
+    output_data_key: sum.account
+    step_risk_level: R1
+    ui_type: account_selection
+    step_message: 어느 계좌 기준으로 볼까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 6
+    step_id: fetch_transactions
+    step_name: 거래내역 조회
+    step_type: tool
+    task_id: ''
+    tool_id: fetch_transactions
+    output_data_key: sum.results
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 7
+    step_id: sum_transactions
+    step_name: 지출/입금 합계 계산
+    step_type: tool
+    task_id: ''
+    tool_id: sum_transactions
+    output_data_key: sum.total
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 8
+    step_id: show_sum_result
+    step_name: 합계 요약 응답
+    step_type: response
+    task_id: ''
+    tool_id: generate_amount_summary_response
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 9
+    step_id: show_no_txn
+    step_name: 거래내역 없음 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: 해당 기간에 거래내역이 없어요.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 10
+    step_id: show_sum_failed
+    step_name: 합계 조회 실패 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: error_message
+    step_message: 지출/입금 조회 중 문제가 발생했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 11
+    step_id: write_audit_log
+    step_name: Audit Log 기록
+    step_type: log
+    task_id: ''
+    tool_id: write_audit_log
+    output_data_key: log_id
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  routes:
+  - from_step_id: extract_amount_summary_slots
+    route_key: extracted
+    route_name: 추출 완료
+    condition_description: 슬롯 추출 완료
+    to_step_id: normalize_period
+  - from_step_id: normalize_period
+    route_key: normalized
+    route_name: 정규화 완료
+    condition_description: 구체 날짜 범위 산출(미지정은 최근 1개월)
+    to_step_id: resolve_account_scope
+  - from_step_id: normalize_period
+    route_key: needs_period
+    route_name: 기간 재확인
+    condition_description: 기간 언급했으나 해석 불가·무효
+    to_step_id: ask_period
+  - from_step_id: normalize_period
+    route_key: error
+    route_name: 기간 오류
+    condition_description: 기간 처리 오류
+    to_step_id: show_sum_failed
+  - from_step_id: ask_period
+    route_key: resolved
+    route_name: 기간 확정
+    condition_description: 되물어 기간 확정
+    to_step_id: resolve_account_scope
+  - from_step_id: ask_period
+    route_key: invalid
+    route_name: 기간 재입력
+    condition_description: 여전히 불명확 → 재질문
+    to_step_id: ask_period
+  - from_step_id: ask_period
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_sum_failed
+  - from_step_id: resolve_account_scope
+    route_key: all_accounts
+    route_name: 전체 계좌
+    condition_description: 계좌 힌트가 없어 전체 계좌 조회
+    to_step_id: fetch_transactions
+  - from_step_id: resolve_account_scope
+    route_key: resolved
+    route_name: 계좌 확정
+    condition_description: 힌트가 단일 계좌로 확정
+    to_step_id: fetch_transactions
+  - from_step_id: resolve_account_scope
+    route_key: select_needed
+    route_name: 선택 필요
+    condition_description: 힌트가 복수 계좌에 매칭
+    to_step_id: ask_account
+  - from_step_id: resolve_account_scope
+    route_key: not_found
+    route_name: 계좌 없음
+    condition_description: 힌트에 맞는 계좌 없음
+    to_step_id: show_sum_failed
+  - from_step_id: resolve_account_scope
+    route_key: error
+    route_name: 조회 실패
+    condition_description: 계좌 조회 오류
+    to_step_id: show_sum_failed
+  - from_step_id: ask_account
+    route_key: selected
+    route_name: 계좌 확정
+    condition_description: 유효 계좌 선택
+    to_step_id: fetch_transactions
+  - from_step_id: ask_account
+    route_key: cancelled
+    route_name: 선택 취소
+    condition_description: 사용자 취소
+    to_step_id: show_sum_failed
+  - from_step_id: fetch_transactions
+    route_key: success
+    route_name: 조회 성공
+    condition_description: 거래내역 조회 성공
+    to_step_id: sum_transactions
+  - from_step_id: fetch_transactions
+    route_key: empty
+    route_name: 내역 없음
+    condition_description: 거래내역 없음
+    to_step_id: show_no_txn
+  - from_step_id: fetch_transactions
+    route_key: error
+    route_name: 조회 실패
+    condition_description: 거래내역 조회 오류
+    to_step_id: show_sum_failed
+  - from_step_id: sum_transactions
+    route_key: done
+    route_name: 합계 완료
+    condition_description: 합계 계산 완료
+    to_step_id: show_sum_result
+  - from_step_id: show_sum_result
+    route_key: success
+    route_name: 응답 생성 완료
+    condition_description: 응답 정상 생성
+    to_step_id: write_audit_log
+  - from_step_id: show_sum_result
+    route_key: failed
+    route_name: 응답 생성 실패
+    condition_description: 응답 생성 실패
+    to_step_id: show_sum_failed
+  - from_step_id: show_no_txn
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 내역 없음 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: show_sum_failed
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 실패 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: write_audit_log
+    route_key: logged
+    route_name: 로그 완료
+    condition_description: 로그 기록 완료
+    to_step_id: END
+  - from_step_id: write_audit_log
+    route_key: log_failed
+    route_name: 로그 실패
+    condition_description: 로그 실패해도 종료
+    to_step_id: END
+wf_set_default_account:
+  workflow_name: 기본 출금 계좌 설정
+  workflow_type: setting
+  example_utterance: 앞으로 송금은 카카오뱅크로 나가게 해줘
+  description: 기본 출금 계좌를 설정한다.
+  max_risk_level: R2
+  Flowchart: ''
+  steps:
+  - step_order: 1
+    step_id: extract_setting_slots
+    step_name: 설정 대상 추출
+    step_type: tool
+    task_id: ''
+    tool_id: extract_setting_slots
+    output_data_key: default.account_hint
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 2
+    step_id: verify_target_account
+    step_name: 조회 계좌 확인
+    step_type: tool
+    task_id: ''
+    tool_id: verify_target_account
+    output_data_key: default.account
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 3
+    step_id: ask_target_account
+    step_name: 계좌 선택
+    step_type: input
+    task_id: ''
+    tool_id: select_account
+    output_data_key: default.account
+    step_risk_level: R1
+    ui_type: account_selection
+    step_message: 어느 계좌 기준으로 볼까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 5
+    step_id: review_default_account
+    step_name: 기본 출금 계좌 변경 확인
+    step_type: approval
+    task_id: ''
+    tool_id: request_setting_approval
+    output_data_key: default.decision
+    step_risk_level: R2
+    ui_type: confirm_modal
+    step_message: 기본 출금 계좌를 변경할까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 6
+    step_id: apply_default_account
+    step_name: 기본 출금 계좌 적용
+    step_type: tool
+    task_id: ''
+    tool_id: apply_default_account
+    output_data_key: default.result
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 7
+    step_id: show_default_result
+    step_name: 설정 완료 안내
+    step_type: response
+    task_id: ''
+    tool_id: generate_setting_response
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 8
+    step_id: show_setting_cancelled
+    step_name: 설정 취소 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: 설정을 취소했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 9
+    step_id: show_setting_failed
+    step_name: 설정 실패 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: error_message
+    step_message: 설정 중 문제가 발생했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 10
+    step_id: write_audit_log
+    step_name: Audit Log 기록
+    step_type: log
+    task_id: ''
+    tool_id: write_audit_log
+    output_data_key: log_id
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  routes:
+  - from_step_id: extract_setting_slots
+    route_key: extracted
+    route_name: 추출 완료
+    condition_description: 슬롯 추출 완료
+    to_step_id: verify_target_account
+  - from_step_id: verify_target_account
+    route_key: confirmed
+    route_name: 계좌 확정
+    condition_description: 단일 계좌 확정
+    to_step_id: review_default_account
+  - from_step_id: verify_target_account
+    route_key: select_needed
+    route_name: 선택 필요
+    condition_description: 복수/미매칭으로 선택 필요
+    to_step_id: ask_target_account
+  - from_step_id: verify_target_account
+    route_key: not_found
+    route_name: 계좌 없음
+    condition_description: 등록 계좌 없음
+    to_step_id: show_setting_failed
+  - from_step_id: verify_target_account
+    route_key: error
+    route_name: 조회 실패
+    condition_description: 계좌 조회 오류
+    to_step_id: show_setting_failed
+  - from_step_id: ask_target_account
+    route_key: selected
+    route_name: 계좌 확정
+    condition_description: 유효 계좌 선택
+    to_step_id: review_default_account
+  - from_step_id: ask_target_account
+    route_key: cancelled
+    route_name: 선택 취소
+    condition_description: 사용자 취소
+    to_step_id: show_setting_failed
+  - from_step_id: review_default_account
+    route_key: approved
+    route_name: 승인
+    condition_description: 사용자 확인
+    to_step_id: apply_default_account
+  - from_step_id: review_default_account
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_setting_cancelled
+  - from_step_id: apply_default_account
+    route_key: success
+    route_name: 적용 성공
+    condition_description: 설정 적용 성공
+    to_step_id: show_default_result
+  - from_step_id: apply_default_account
+    route_key: error
+    route_name: 적용 실패
+    condition_description: 설정 적용 실패
+    to_step_id: show_setting_failed
+  - from_step_id: show_default_result
+    route_key: success
+    route_name: 응답 생성 완료
+    condition_description: 응답 정상 생성
+    to_step_id: write_audit_log
+  - from_step_id: show_default_result
+    route_key: failed
+    route_name: 응답 생성 실패
+    condition_description: 응답 생성 실패
+    to_step_id: show_setting_failed
+  - from_step_id: show_setting_cancelled
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 취소 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: show_setting_failed
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 실패 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: write_audit_log
+    route_key: logged
+    route_name: 로그 완료
+    condition_description: 로그 기록 완료
+    to_step_id: END
+  - from_step_id: write_audit_log
+    route_key: log_failed
+    route_name: 로그 실패
+    condition_description: 로그 실패해도 종료
+    to_step_id: END
+wf_set_account_alias:
+  workflow_name: 계좌 별칭 설정
+  workflow_type: setting
+  example_utterance: 카카오뱅크를 생활비통장이라 해줘
+  description: 계좌에 별칭을 설정한다.
+  max_risk_level: R2
+  Flowchart: ''
+  steps:
+  - step_order: 1
+    step_id: extract_setting_slots
+    step_name: 설정 대상 추출
+    step_type: tool
+    task_id: ''
+    tool_id: extract_setting_slots
+    output_data_key: alias.account_hint
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 2
+    step_id: verify_target_account
+    step_name: 조회 계좌 확인
+    step_type: tool
+    task_id: ''
+    tool_id: verify_target_account
+    output_data_key: alias.account
+    step_risk_level: R1
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 3
+    step_id: ask_target_account
+    step_name: 계좌 선택
+    step_type: input
+    task_id: ''
+    tool_id: select_account
+    output_data_key: alias.account
+    step_risk_level: R1
+    ui_type: account_selection
+    step_message: 어느 계좌 기준으로 볼까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 5
+    step_id: review_account_alias
+    step_name: 계좌 별칭 설정 확인
+    step_type: approval
+    task_id: ''
+    tool_id: request_setting_approval
+    output_data_key: alias.decision
+    step_risk_level: R2
+    ui_type: confirm_modal
+    step_message: 계좌 별칭을 설정할까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 6
+    step_id: apply_account_alias
+    step_name: 계좌 별칭 적용
+    step_type: tool
+    task_id: ''
+    tool_id: apply_account_alias
+    output_data_key: alias.result
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 7
+    step_id: show_alias_result
+    step_name: 설정 완료 안내
+    step_type: response
+    task_id: ''
+    tool_id: generate_setting_response
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 8
+    step_id: show_setting_cancelled
+    step_name: 설정 취소 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: 설정을 취소했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 9
+    step_id: show_setting_failed
+    step_name: 설정 실패 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: error_message
+    step_message: 설정 중 문제가 발생했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 10
+    step_id: write_audit_log
+    step_name: Audit Log 기록
+    step_type: log
+    task_id: ''
+    tool_id: write_audit_log
+    output_data_key: log_id
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  routes:
+  - from_step_id: extract_setting_slots
+    route_key: extracted
+    route_name: 추출 완료
+    condition_description: 슬롯 추출 완료
+    to_step_id: verify_target_account
+  - from_step_id: verify_target_account
+    route_key: confirmed
+    route_name: 계좌 확정
+    condition_description: 단일 계좌 확정
+    to_step_id: review_account_alias
+  - from_step_id: verify_target_account
+    route_key: select_needed
+    route_name: 선택 필요
+    condition_description: 복수/미매칭으로 선택 필요
+    to_step_id: ask_target_account
+  - from_step_id: verify_target_account
+    route_key: not_found
+    route_name: 계좌 없음
+    condition_description: 등록 계좌 없음
+    to_step_id: show_setting_failed
+  - from_step_id: verify_target_account
+    route_key: error
+    route_name: 조회 실패
+    condition_description: 계좌 조회 오류
+    to_step_id: show_setting_failed
+  - from_step_id: ask_target_account
+    route_key: selected
+    route_name: 계좌 확정
+    condition_description: 유효 계좌 선택
+    to_step_id: review_account_alias
+  - from_step_id: ask_target_account
+    route_key: cancelled
+    route_name: 선택 취소
+    condition_description: 사용자 취소
+    to_step_id: show_setting_failed
+  - from_step_id: review_account_alias
+    route_key: approved
+    route_name: 승인
+    condition_description: 사용자 확인
+    to_step_id: apply_account_alias
+  - from_step_id: review_account_alias
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_setting_cancelled
+  - from_step_id: apply_account_alias
+    route_key: success
+    route_name: 적용 성공
+    condition_description: 설정 적용 성공
+    to_step_id: show_alias_result
+  - from_step_id: apply_account_alias
+    route_key: error
+    route_name: 적용 실패
+    condition_description: 설정 적용 실패
+    to_step_id: show_setting_failed
+  - from_step_id: show_alias_result
+    route_key: success
+    route_name: 응답 생성 완료
+    condition_description: 응답 정상 생성
+    to_step_id: write_audit_log
+  - from_step_id: show_alias_result
+    route_key: failed
+    route_name: 응답 생성 실패
+    condition_description: 응답 생성 실패
+    to_step_id: show_setting_failed
+  - from_step_id: show_setting_cancelled
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 취소 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: show_setting_failed
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 실패 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: write_audit_log
+    route_key: logged
+    route_name: 로그 완료
+    condition_description: 로그 기록 완료
+    to_step_id: END
+  - from_step_id: write_audit_log
+    route_key: log_failed
+    route_name: 로그 실패
+    condition_description: 로그 실패해도 종료
+    to_step_id: END
+wf_internal_transfer:
+  workflow_name: 본인 계좌 간 이체
+  workflow_type: execution
+  example_utterance: 카카오뱅크에서 신한은행으로 5만원 옮겨줘
+  description: 본인 명의 계좌 간 이체를 실행한다.
+  max_risk_level: R4
+  Flowchart: ''
+  steps:
+  - step_order: 1
+    step_id: extract_internal_transfer_slots
+    step_name: 본인이체 정보 추출
+    step_type: tool
+    task_id: ''
+    tool_id: extract_internal_transfer_slots
+    output_data_key: itx.from_account
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 2
+    step_id: verify_from_account
+    step_name: 출금 계좌 확인
+    step_type: tool
+    task_id: ''
+    tool_id: verify_from_account
+    output_data_key: itx.from_account
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 3
+    step_id: ask_from_account
+    step_name: 출금 계좌 선택
+    step_type: input
+    task_id: ''
+    tool_id: select_account
+    output_data_key: itx.from_account
+    step_risk_level: R1
+    ui_type: account_selection
+    step_message: 어느 계좌 기준으로 볼까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 4
+    step_id: verify_to_account
+    step_name: 입금 계좌 확인
+    step_type: tool
+    task_id: ''
+    tool_id: verify_to_account
+    output_data_key: itx.to_account
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 5
+    step_id: ask_to_account
+    step_name: 입금 계좌 확인
+    step_type: input
+    task_id: ''
+    tool_id: select_account
+    output_data_key: itx.to_account
+    step_risk_level: R1
+    ui_type: account_selection
+    step_message: 어느 계좌 기준으로 볼까요?
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 6
+    step_id: verify_amount
+    step_name: 이체 금액 확인
+    step_type: tool
+    task_id: ''
+    tool_id: verify_amount
+    output_data_key: itx.amount
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 7
+    step_id: ask_amount
+    step_name: 이체 금액 입력
+    step_type: input
+    task_id: ''
+    tool_id: ''
+    output_data_key: itx.amount
+    step_risk_level: R2
+    ui_type: amount_input
+    step_message: 이체할 금액을 입력해 주세요.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 8
+    step_id: check_balance
+    step_name: 출금 가능 잔액 확인
+    step_type: tool
+    task_id: ''
+    tool_id: check_balance
+    output_data_key: itx.from_account
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 9
+    step_id: run_pre_execution_guardrail
+    step_name: 실행 직전 검사
+    step_type: guardrail
+    task_id: ''
+    tool_id: run_itx_pre_execution_guardrail
+    output_data_key: guardrail_result
+    step_risk_level: R5
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 10
+    step_id: review_internal_transfer
+    step_name: 이체 내용 확인
+    step_type: approval
+    task_id: ''
+    tool_id: request_itx_approval
+    output_data_key: itx.approval
+    step_risk_level: R2
+    ui_type: confirm_modal
+    step_message: 이체 내용을 확인해 주세요.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 11
+    step_id: execute_internal_transfer
+    step_name: 본인 계좌 간 이체 실행
+    step_type: tool
+    task_id: ''
+    tool_id: execute_internal_transfer
+    output_data_key: itx.result
+    step_risk_level: R4
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 12
+    step_id: show_itx_result
+    step_name: 이체 완료 응답
+    step_type: response
+    task_id: ''
+    tool_id: generate_internal_transfer_response
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 13
+    step_id: show_itx_cancelled
+    step_name: 이체 취소 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: message
+    step_message: 이체를 취소했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 14
+    step_id: show_itx_blocked
+    step_name: 이체 차단 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: blocked_message
+    step_message: 이 이체는 안전 정책상 진행할 수 없습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 15
+    step_id: show_itx_failed
+    step_name: 이체 실패 안내
+    step_type: response
+    task_id: ''
+    tool_id: ''
+    output_data_key: final_response
+    step_risk_level: R0
+    ui_type: error_message
+    step_message: 이체 처리 중 문제가 발생했습니다.
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  - step_order: 16
+    step_id: write_audit_log
+    step_name: Audit Log 기록
+    step_type: log
+    task_id: ''
+    tool_id: write_audit_log
+    output_data_key: log_id
+    step_risk_level: R2
+    ui_type: ''
+    step_message: ''
+    on_fail_condition: ''
+    on_success_next_step_id: ''
+    on_fail_next_step_id: ''
+    _2: ''
+    _3: ''
+    _4: ''
+    _5: ''
+    _6: ''
+  routes:
+  - from_step_id: extract_internal_transfer_slots
+    route_key: extracted
+    route_name: 추출 완료
+    condition_description: 슬롯 추출 완료
+    to_step_id: verify_from_account
+  - from_step_id: verify_from_account
+    route_key: verified
+    route_name: 출금계좌 확정
+    condition_description: 출금 계좌 단일 확정
+    to_step_id: verify_to_account
+  - from_step_id: verify_from_account
+    route_key: select_needed
+    route_name: 선택 필요
+    condition_description: 출금 계좌 선택 필요
+    to_step_id: ask_from_account
+  - from_step_id: verify_from_account
+    route_key: error
+    route_name: 확인 실패
+    condition_description: 출금 계좌 확인 오류
+    to_step_id: show_itx_failed
+  - from_step_id: ask_from_account
+    route_key: selected
+    route_name: 선택 완료
+    condition_description: 고른 계좌를 verify가 transfer.from_account로 확정
+    to_step_id: verify_from_account
+  - from_step_id: ask_from_account
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_itx_cancelled
+  - from_step_id: verify_to_account
+    route_key: verified
+    route_name: 입금계좌 확정
+    condition_description: 입금 계좌 단일 확정
+    to_step_id: verify_amount
+  - from_step_id: verify_to_account
+    route_key: select_needed
+    route_name: 선택 필요
+    condition_description: 입금 계좌 선택 필요
+    to_step_id: ask_to_account
+  - from_step_id: verify_to_account
+    route_key: invalid
+    route_name: 확인 실패
+    condition_description: 입금 계좌 확인 불가
+    to_step_id: show_itx_failed
+  - from_step_id: ask_to_account
+    route_key: selected
+    route_name: 선택 완료
+    condition_description: 고른 계좌를 verify가 itx.to_account로 확정
+    to_step_id: verify_to_account
+  - from_step_id: ask_to_account
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_itx_cancelled
+  - from_step_id: verify_amount
+    route_key: valid
+    route_name: 금액 유효
+    condition_description: 금액 정규화·한도 통과
+    to_step_id: check_balance
+  - from_step_id: verify_amount
+    route_key: invalid
+    route_name: 금액 재입력
+    condition_description: 금액 확인 실패
+    to_step_id: ask_amount
+  - from_step_id: ask_amount
+    route_key: submitted
+    route_name: 금액 제출
+    condition_description: 금액 입력
+    to_step_id: check_balance
+  - from_step_id: ask_amount
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_itx_cancelled
+  - from_step_id: check_balance
+    route_key: sufficient
+    route_name: 잔액 충분
+    condition_description: 잔액 충분
+    to_step_id: run_pre_execution_guardrail
+  - from_step_id: check_balance
+    route_key: insufficient
+    route_name: 잔액 부족
+    condition_description: 잔액 부족 → 출금 계좌 재선택
+    to_step_id: ask_from_account
+  - from_step_id: run_pre_execution_guardrail
+    route_key: allowed
+    route_name: 통과
+    condition_description: 정책 통과
+    to_step_id: review_internal_transfer
+  - from_step_id: run_pre_execution_guardrail
+    route_key: blocked
+    route_name: 차단
+    condition_description: 정책 차단
+    to_step_id: show_itx_blocked
+  - from_step_id: review_internal_transfer
+    route_key: approved
+    route_name: 승인
+    condition_description: 사용자 승인
+    to_step_id: execute_internal_transfer
+  - from_step_id: review_internal_transfer
+    route_key: cancelled
+    route_name: 취소
+    condition_description: 사용자 취소
+    to_step_id: show_itx_cancelled
+  - from_step_id: review_internal_transfer
+    route_key: edit_amount
+    route_name: 금액 수정
+    condition_description: 금액 수정 요청
+    to_step_id: ask_amount
+  - from_step_id: review_internal_transfer
+    route_key: edit_from_account
+    route_name: 출금계좌 수정
+    condition_description: 출금 계좌 수정 요청
+    to_step_id: ask_from_account
+  - from_step_id: review_internal_transfer
+    route_key: edit_to_account
+    route_name: 입금계좌 수정
+    condition_description: 입금 계좌 수정 요청
+    to_step_id: ask_to_account
+  - from_step_id: execute_internal_transfer
+    route_key: success
+    route_name: 이체 성공
+    condition_description: 이체 실행 성공
+    to_step_id: show_itx_result
+  - from_step_id: execute_internal_transfer
+    route_key: failed
+    route_name: 이체 실패
+    condition_description: 이체 실행 실패
+    to_step_id: show_itx_failed
+  - from_step_id: show_itx_result
+    route_key: success
+    route_name: 응답 생성 완료
+    condition_description: 응답 정상 생성
+    to_step_id: write_audit_log
+  - from_step_id: show_itx_result
+    route_key: failed
+    route_name: 응답 생성 실패
+    condition_description: 응답 생성 실패
+    to_step_id: show_itx_failed
+  - from_step_id: show_itx_cancelled
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 취소 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: show_itx_blocked
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 차단 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: show_itx_failed
+    route_key: completed
+    route_name: 안내 완료
+    condition_description: 실패 안내 완료
+    to_step_id: write_audit_log
+  - from_step_id: write_audit_log
+    route_key: logged
+    route_name: 로그 완료
+    condition_description: 로그 기록 완료
+    to_step_id: END
+  - from_step_id: write_audit_log
+    route_key: log_failed
+    route_name: 로그 실패
+    condition_description: 로그 실패해도 종료
     to_step_id: END
