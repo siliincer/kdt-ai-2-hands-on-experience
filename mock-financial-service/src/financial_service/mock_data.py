@@ -33,30 +33,35 @@ MOCK_ACCOUNTS: list[dict] = [
     {
         "account_id": "acct-0001-0000-0000-000000000001",
         "owner": "김지훈",
+        "alias": "김지훈 생활비통장",
         "account_number": "110-001-000001",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0002-0000-0000-000000000002",
         "owner": "박서연",
+        "alias": "박서연 메인통장",
         "account_number": "110-002-000002",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0003-0000-0000-000000000003",
         "owner": "이도윤",
+        "alias": "이도윤 프리랜서통장",
         "account_number": "110-003-000003",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0004-0000-0000-000000000004",
         "owner": "최수아",
+        "alias": "최수아 통장",
         "account_number": "110-004-000004",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0005-0000-0000-000000000005",
         "owner": "정도윤",
+        "alias": "정도윤 통장",
         "account_number": "110-005-000005",
         "currency": "KRW",
     },
@@ -456,42 +461,49 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
     {
         "account_id": "acct-b001-0000-0000-000000000001",
         "owner": "통신사",
+        "alias": "통신비·구독료 자동납부",
         "account_number": "990-001-000001",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b002-0000-0000-000000000002",
         "owner": "헬스장",
+        "alias": "헬스장 회비",
         "account_number": "990-002-000002",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b003-0000-0000-000000000003",
         "owner": "학원",
+        "alias": "자녀 학원비",
         "account_number": "990-003-000003",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b004-0000-0000-000000000004",
         "owner": "관리사무소",
+        "alias": "월세·관리비",
         "account_number": "990-004-000004",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b005-0000-0000-000000000005",
         "owner": "저축은행",
+        "alias": "저축 이체",
         "account_number": "990-005-000005",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b006-0000-0000-000000000006",
         "owner": "증권사",
+        "alias": "투자 자동이체",
         "account_number": "990-006-000006",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b007-0000-0000-000000000007",
         "owner": "대출은행",
+        "alias": "대출이자",
         "account_number": "990-007-000007",
         "currency": "KRW",
     },
@@ -726,6 +738,24 @@ _ACCOUNT_CARDS: dict[str, list[str]] = {}
 for _row in MOCK_CARDS:
     _ACCOUNT_CARDS.setdefault(_row["account_id"], []).append(_row["card_id"])
 
+# Merchant name pools per spending category — picked via the same seeded
+# random.Random used for amounts/dates, so merchant assignment stays
+# deterministic too.
+_MERCHANTS_DINING = [
+    "연남동 파스타",
+    "김밥천국",
+    "교촌치킨",
+    "스타벅스",
+    "새마을식당",
+    "본죽",
+]
+_MERCHANTS_MART = ["이마트", "홈플러스", "롯데마트", "GS25", "CU편의점", "세븐일레븐"]
+_MERCHANTS_SHOPPING = ["쿠팡", "무신사", "29CM", "네이버쇼핑", "올리브영"]
+_MERCHANTS_TRAVEL = ["대한항공", "아고다", "야놀자", "여기어때"]
+_MERCHANTS_DELIVERY = ["배달의민족", "쿠팡이츠", "요기요"]
+_MERCHANTS_TRANSIT = ["티머니", "카카오T", "SRT"]
+_MERCHANTS_HOBBY = ["교보문고", "다이소", "네이버페이 - 굿즈샵", "스팀"]
+
 
 def _dt(year: int, month: int, day: int, hour: int = 9, minute: int = 0) -> datetime:
     return datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
@@ -768,228 +798,189 @@ def _build_transaction_dataset() -> tuple[
     """
     seq = _Counter()
     balance: dict[str, int] = dict(_STARTING_BALANCE)
-    # events: (date, kind, account_id, receiver_or_card, amount, status)
-    events: list[tuple[date, str, str, str, int, str]] = []
+    # events: (date, kind, account_id, receiver_or_card, amount, status, merchant)
+    # merchant is None for "transfer" kind; a merchant/store label for "card".
+    events: list[tuple[date, str, str, str, int, str, str | None]] = []
 
     def add_transfer(
         d: date, sender: str, receiver: str, amount: int, status: str = "success"
     ) -> None:
-        events.append((d, "transfer", sender, receiver, amount, status))
+        events.append((d, "transfer", sender, receiver, amount, status, None))
 
-    def add_card(d: date, account_id: str, amount: int, card_index: int = 0) -> None:
+    def add_card(
+        d: date, account_id: str, amount: int, merchant: str, card_index: int = 0
+    ) -> None:
         cards = _ACCOUNT_CARDS.get(account_id)
         if not cards:
             return
         card_id = cards[card_index % len(cards)]
-        events.append((d, "card", account_id, card_id, amount, "success"))
+        events.append((d, "card", account_id, card_id, amount, "success", merchant))
 
     # ── 김지훈 (acct-0001) — 안정형 직장인, salary day 25 ─────────────────────
     for y, m, first, last in _MONTH_WINDOWS:
         rnd = random.Random(f"{_ACCT1}-{y}{m:02d}")
         if first <= 25 <= last:
-            events.append(
-                (date(y, m, 25), "transfer", "SALARY", _ACCT1, 2_450_000, "success")
+            add_transfer(date(y, m, 25), "SALARY", _ACCT1, 2_450_000)
+            add_transfer(
+                date(y, m, _clip_day(26, last)), _ACCT1, _SAVINGS_BILLER, 370_000
             )
-            events.append(
-                (
-                    date(y, m, _clip_day(26, last)),
-                    "transfer",
-                    _ACCT1,
-                    _SAVINGS_BILLER,
-                    370_000,
-                    "success",
-                )
+            add_transfer(date(y, m, _clip_day(27, last)), _ACCT1, _MGMT_BILLER, 540_000)
+            add_transfer(
+                date(y, m, _clip_day(27, last)), _ACCT1, _TELECOM_BILLER, 120_000
             )
-            events.append(
-                (
-                    date(y, m, _clip_day(27, last)),
-                    "transfer",
-                    _ACCT1,
-                    _MGMT_BILLER,
-                    540_000,
-                    "success",
-                )
-            )
-            events.append(
-                (
-                    date(y, m, _clip_day(27, last)),
-                    "transfer",
-                    _ACCT1,
-                    _TELECOM_BILLER,
-                    120_000,
-                    "success",
-                )
-            )
-            events.append(
-                (
-                    date(y, m, _clip_day(28, last)),
-                    "transfer",
-                    _ACCT1,
-                    _GYM_BILLER,
-                    100_000,
-                    "success",
-                )
-            )
+            add_transfer(date(y, m, _clip_day(28, last)), _ACCT1, _GYM_BILLER, 100_000)
         # 카드결제: 외식 10건 / 마트-편의점 4건 / 쇼핑 2건
         for _ in range(10):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT1, rnd.randint(8_000, 15_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT1,
+                rnd.randint(8_000, 15_000),
+                rnd.choice(_MERCHANTS_DINING),
+                card_index=0,
+            )
         for _ in range(4):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT1, rnd.randint(15_000, 60_000), card_index=1)
+            add_card(
+                date(y, m, d),
+                _ACCT1,
+                rnd.randint(15_000, 60_000),
+                rnd.choice(_MERCHANTS_MART),
+                card_index=1,
+            )
         for _ in range(2):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT1, rnd.randint(30_000, 80_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT1,
+                rnd.randint(30_000, 80_000),
+                rnd.choice(_MERCHANTS_SHOPPING),
+                card_index=0,
+            )
     # 4개월 중 1회 여행 특별 소비 + 1회 경조사비 송금
-    add_card(date(2026, 5, 16), _ACCT1, 260_000, card_index=1)
+    add_card(
+        date(2026, 5, 16), _ACCT1, 260_000, rnd.choice(_MERCHANTS_TRAVEL), card_index=1
+    )
     add_transfer(date(2026, 6, 20), _ACCT1, _ACCT2, 100_000)  # 경조사비
 
     # ── 박서연 (acct-0002) — 재테크 워킹맘, salary day 21 ─────────────────────
     for y, m, first, last in _MONTH_WINDOWS:
         rnd = random.Random(f"{_ACCT2}-{y}{m:02d}")
         if first <= 21 <= last:
-            events.append(
-                (date(y, m, 21), "transfer", "SALARY", _ACCT2, 4_200_000, "success")
+            add_transfer(date(y, m, 21), "SALARY", _ACCT2, 4_200_000)
+            add_transfer(date(y, m, _clip_day(21, last)), _ACCT2, _LOAN_BILLER, 630_000)
+            add_transfer(date(y, m, _clip_day(22, last)), _ACCT2, _MGMT_BILLER, 170_000)
+            add_transfer(
+                date(y, m, _clip_day(22, last)), _ACCT2, _ACADEMY_BILLER, 420_000
             )
-            events.append(
-                (
-                    date(y, m, _clip_day(21, last)),
-                    "transfer",
-                    _ACCT2,
-                    _LOAN_BILLER,
-                    630_000,
-                    "success",
-                )
+            add_transfer(
+                date(y, m, _clip_day(23, last)), _ACCT2, _INVEST_BILLER, 840_000
             )
-            events.append(
-                (
-                    date(y, m, _clip_day(22, last)),
-                    "transfer",
-                    _ACCT2,
-                    _MGMT_BILLER,
-                    170_000,
-                    "success",
-                )
-            )
-            events.append(
-                (
-                    date(y, m, _clip_day(22, last)),
-                    "transfer",
-                    _ACCT2,
-                    _ACADEMY_BILLER,
-                    420_000,
-                    "success",
-                )
-            )
-            events.append(
-                (
-                    date(y, m, _clip_day(23, last)),
-                    "transfer",
-                    _ACCT2,
-                    _INVEST_BILLER,
-                    840_000,
-                    "success",
-                )
-            )
-            events.append(
-                (
-                    date(y, m, _clip_day(23, last)),
-                    "transfer",
-                    _ACCT2,
-                    _SAVINGS_BILLER,
-                    340_000,
-                    "success",
-                )
+            add_transfer(
+                date(y, m, _clip_day(23, last)), _ACCT2, _SAVINGS_BILLER, 340_000
             )
         # 카드결제: 마트 대량구매 5건(주1회) / 외식(야근 배달 등) 6건 / 쇼핑 2건
         for _ in range(5):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT2, rnd.randint(100_000, 200_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT2,
+                rnd.randint(100_000, 200_000),
+                rnd.choice(_MERCHANTS_MART),
+                card_index=0,
+            )
         for _ in range(6):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT2, rnd.randint(15_000, 60_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT2,
+                rnd.randint(15_000, 60_000),
+                rnd.choice(_MERCHANTS_DINING + _MERCHANTS_DELIVERY),
+                card_index=0,
+            )
         for _ in range(2):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT2, rnd.randint(50_000, 250_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT2,
+                rnd.randint(50_000, 250_000),
+                rnd.choice(_MERCHANTS_SHOPPING),
+                card_index=0,
+            )
     add_card(
-        date(2026, 4, 12), _ACCT2, 480_000, card_index=0
+        date(2026, 4, 12), _ACCT2, 480_000, rnd.choice(_MERCHANTS_TRAVEL), card_index=0
     )  # 가족 여행/명절 지출 급증
 
     # ── 이도윤 (acct-0003) — 불안정 프리랜서, 불규칙 입금 + 리스크 신호 ────────
     for y, m, first, last in _MONTH_WINDOWS:
         rnd = random.Random(f"{_ACCT3}-{y}{m:02d}")
         income_day = rnd.randint(max(first, 5), min(last, 20))
-        events.append(
-            (
-                date(y, m, income_day),
-                "transfer",
-                "SALARY",
-                _ACCT3,
-                rnd.randint(1_500_000, 2_800_000),
-                "success",
-            )
+        add_transfer(
+            date(y, m, income_day), "SALARY", _ACCT3, rnd.randint(1_500_000, 2_800_000)
         )
         # 배달음식 18건 / 편의점 8건 / 온라인쇼핑·취미 3건 / 교통 4건
         for _ in range(18):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT3, rnd.randint(15_000, 28_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT3,
+                rnd.randint(15_000, 28_000),
+                rnd.choice(_MERCHANTS_DELIVERY),
+                card_index=0,
+            )
         for _ in range(8):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT3, rnd.randint(3_000, 7_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT3,
+                rnd.randint(3_000, 7_000),
+                rnd.choice(_MERCHANTS_MART),
+                card_index=0,
+            )
         for _ in range(3):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT3, rnd.randint(10_000, 40_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT3,
+                rnd.randint(10_000, 40_000),
+                rnd.choice(_MERCHANTS_SHOPPING + _MERCHANTS_HOBBY),
+                card_index=0,
+            )
         for _ in range(4):
             d = rnd.randint(first, last)
-            add_card(date(y, m, d), _ACCT3, rnd.randint(3_000, 12_000), card_index=0)
+            add_card(
+                date(y, m, d),
+                _ACCT3,
+                rnd.randint(3_000, 12_000),
+                rnd.choice(_MERCHANTS_TRANSIT),
+                card_index=0,
+            )
     # 보복소비 클러스터: 하루 3건 몰림 (5월)
     for amt in (90_000, 120_000, 60_000):
-        add_card(date(2026, 5, 23), _ACCT3, amt, card_index=0)
+        add_card(
+            date(2026, 5, 23),
+            _ACCT3,
+            amt,
+            rnd.choice(_MERCHANTS_SHOPPING),
+            card_index=0,
+        )
     # 지인에게 급하게 소액 이체받기 (계좌간송금 입금, 비정기)
     add_transfer(date(2026, 6, 28), "FRIEND", _ACCT3, 200_000)
     # 리스크 신호 3건: 결제 실패 → 재시도 성공 (일반결제)
-    events.append(
-        (date(2026, 4, 15), "transfer", _ACCT3, _TELECOM_BILLER, 65_000, "failure")
-    )
-    events.append(
-        (date(2026, 4, 17), "transfer", _ACCT3, _TELECOM_BILLER, 65_000, "success")
-    )
-    events.append(
-        (date(2026, 5, 10), "transfer", _ACCT3, _TELECOM_BILLER, 18_900, "failure")
-    )
-    events.append(
-        (date(2026, 5, 11), "transfer", _ACCT3, _TELECOM_BILLER, 18_900, "success")
-    )
-    events.append(
-        (date(2026, 6, 1), "transfer", _ACCT3, _MGMT_BILLER, 350_000, "failure")
-    )
-    events.append(
-        (date(2026, 6, 3), "transfer", _ACCT3, _MGMT_BILLER, 350_000, "success")
-    )
+    add_transfer(date(2026, 4, 15), _ACCT3, _TELECOM_BILLER, 65_000, status="failure")
+    add_transfer(date(2026, 4, 17), _ACCT3, _TELECOM_BILLER, 65_000)
+    add_transfer(date(2026, 5, 10), _ACCT3, _TELECOM_BILLER, 18_900, status="failure")
+    add_transfer(date(2026, 5, 11), _ACCT3, _TELECOM_BILLER, 18_900)
+    add_transfer(date(2026, 6, 1), _ACCT3, _MGMT_BILLER, 350_000, status="failure")
+    add_transfer(date(2026, 6, 3), _ACCT3, _MGMT_BILLER, 350_000)
     # 월세(고정) — 리스크 신호가 없는 달만 정상 청구
     for y, m, first, last in _MONTH_WINDOWS:
         if (y, m) in ((2026, 6),):
             continue  # already covered by the fail/retry pair above
-        events.append(
-            (
-                date(y, m, _clip_day(3, last)),
-                "transfer",
-                _ACCT3,
-                _MGMT_BILLER,
-                520_000,
-                "success",
-            )
-        )
+        add_transfer(date(y, m, _clip_day(3, last)), _ACCT3, _MGMT_BILLER, 520_000)
         if (y, m) != (2026, 4):  # April covered by the fail/retry pair above
-            events.append(
-                (
-                    date(y, m, _clip_day(14, last)),
-                    "transfer",
-                    _ACCT3,
-                    _TELECOM_BILLER,
-                    130_000,
-                    "success",
-                )
+            add_transfer(
+                date(y, m, _clip_day(14, last)), _ACCT3, _TELECOM_BILLER, 130_000
             )
 
     # ── acct-0004 / acct-0005 — 페르소나 미지정, 김지훈 축소판 기본값 ─────────
@@ -997,55 +988,52 @@ def _build_transaction_dataset() -> tuple[
         for y, m, first, last in _MONTH_WINDOWS:
             rnd = random.Random(f"{acct}-{y}{m:02d}")
             if first <= salary_day <= last:
-                events.append(
-                    (
-                        date(y, m, salary_day),
-                        "transfer",
-                        "SALARY",
-                        acct,
-                        2_000_000,
-                        "success",
-                    )
+                add_transfer(date(y, m, salary_day), "SALARY", acct, 2_000_000)
+                add_transfer(
+                    date(y, m, _clip_day(salary_day + 1, last)),
+                    acct,
+                    _MGMT_BILLER,
+                    400_000,
                 )
-                events.append(
-                    (
-                        date(y, m, _clip_day(salary_day + 1, last)),
-                        "transfer",
-                        acct,
-                        _MGMT_BILLER,
-                        400_000,
-                        "success",
-                    )
+                add_transfer(
+                    date(y, m, _clip_day(salary_day + 1, last)),
+                    acct,
+                    _TELECOM_BILLER,
+                    100_000,
                 )
-                events.append(
-                    (
-                        date(y, m, _clip_day(salary_day + 1, last)),
-                        "transfer",
-                        acct,
-                        _TELECOM_BILLER,
-                        100_000,
-                        "success",
-                    )
-                )
-                events.append(
-                    (
-                        date(y, m, _clip_day(salary_day + 2, last)),
-                        "transfer",
-                        acct,
-                        _SAVINGS_BILLER,
-                        200_000,
-                        "success",
-                    )
+                add_transfer(
+                    date(y, m, _clip_day(salary_day + 2, last)),
+                    acct,
+                    _SAVINGS_BILLER,
+                    200_000,
                 )
             for _ in range(6):
                 d = rnd.randint(first, last)
-                add_card(date(y, m, d), acct, rnd.randint(8_000, 20_000), card_index=0)
+                add_card(
+                    date(y, m, d),
+                    acct,
+                    rnd.randint(8_000, 20_000),
+                    rnd.choice(_MERCHANTS_DINING),
+                    card_index=0,
+                )
             for _ in range(3):
                 d = rnd.randint(first, last)
-                add_card(date(y, m, d), acct, rnd.randint(15_000, 50_000), card_index=0)
+                add_card(
+                    date(y, m, d),
+                    acct,
+                    rnd.randint(15_000, 50_000),
+                    rnd.choice(_MERCHANTS_MART),
+                    card_index=0,
+                )
             for _ in range(1):
                 d = rnd.randint(first, last)
-                add_card(date(y, m, d), acct, rnd.randint(30_000, 70_000), card_index=0)
+                add_card(
+                    date(y, m, d),
+                    acct,
+                    rnd.randint(30_000, 70_000),
+                    rnd.choice(_MERCHANTS_SHOPPING),
+                    card_index=0,
+                )
 
     # ── Chronological walk: build Transaction / LedgerEntry / CardLedgerEntry rows ──
     events.sort(key=lambda e: (e[0], 0 if e[1] == "card" else 1))
@@ -1054,7 +1042,7 @@ def _build_transaction_dataset() -> tuple[
     ledger_entries: list[dict] = []
     card_ledger_entries: list[dict] = []
 
-    for ev_date, kind, a, b, amount, status in events:
+    for ev_date, kind, a, b, amount, status, merchant in events:
         n = seq.next()
         created_at = _dt(ev_date.year, ev_date.month, ev_date.day)
 
@@ -1065,6 +1053,7 @@ def _build_transaction_dataset() -> tuple[
                     "card_id": b,
                     "amount": amount,
                     "idempotency_key": f"mock-card-{n:06d}",
+                    "merchant_name": merchant,
                     "created_at": created_at,
                 }
             )
@@ -1133,6 +1122,7 @@ MOCK_EXTERNAL_SOURCE_ACCOUNTS: list[dict] = [
     {
         "account_id": "acct-b099-0000-0000-000000000099",
         "owner": "외부입금원(급여/지인송금)",
+        "alias": "급여·지인 입금",
         "account_number": "999-000-000099",
         "currency": "KRW",
     },

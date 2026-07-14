@@ -44,6 +44,10 @@ class Account(Base):
 
     account_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     owner: Mapped[str] = mapped_column(String(255), nullable=False)
+    # optional user-facing nickname (e.g. "생활비 통장") — distinct from owner
+    # (real name) and bank_name; purely a display label, no business logic
+    # depends on it.
+    alias: Mapped[str | None] = mapped_column(String(100), nullable=True)
     bank_name: Mapped[str] = mapped_column(
         String(50), nullable=False, default=BANK_NAME
     )
@@ -103,6 +107,11 @@ class CardLedgerEntry(Base):
     idempotency_key: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
+    # optional merchant/store label (e.g. "이마트", "배달의민족"). Real card
+    # networks receive this from the merchant terminal at authorization time;
+    # this app's POST /cards/{id}/charges doesn't collect one from the client,
+    # so it stays null unless set directly (mock data always sets it).
+    merchant_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )
