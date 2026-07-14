@@ -10,8 +10,8 @@ Verifies:
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 import pytest
 from sqlalchemy import create_engine, inspect
@@ -21,7 +21,7 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from financial_service.database import Base
-from financial_service.models import Account, Card, CardProduct
+from financial_service.models import CardProduct
 
 # Import seed function via direct path injection (seed script uses sys.path trick)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -38,7 +38,6 @@ def mem_url():
 @pytest.fixture()
 def seeded_summary(mem_url):
     """Run seed once and return its summary dict."""
-    from scripts.seed_dev_db import seed  # noqa: PLC0415
 
     engine = create_engine(
         mem_url,
@@ -112,7 +111,6 @@ def test_seed_fk_integrity_passes(mem_url):
 
 def test_card_products_no_fk_to_cards(mem_url):
     """Structural: card_products table must not reference cards."""
-    from scripts.seed_dev_db import seed  # noqa: PLC0415
     from sqlalchemy import create_engine
 
     engine = create_engine(mem_url, connect_args={"check_same_thread": False})

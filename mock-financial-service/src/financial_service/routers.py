@@ -13,17 +13,16 @@ from .crud import (
     get_account,
     get_balance,
     get_ledger_entries,
-    refresh_snapshot,
     transfer,
 )
 from .database import get_db
+from .models import BANK_NAME
 from .schemas import (
     AccountCreate,
     AccountResponse,
     BalanceResponse,
     ErrorResponse,
     LedgerEntryResponse,
-    SnapshotResponse,
     TransferRequest,
     TransferResponse,
 )
@@ -132,28 +131,6 @@ def get_transactions_endpoint(
     ]
 
 
-# ── 5a. POST /accounts/{account_id}/snapshot — refresh balance cache ─────────
-
-
-@router.post(
-    "/accounts/{account_id}/snapshot",
-    response_model=SnapshotResponse,
-    status_code=200,
-    responses={404: {"model": ErrorResponse}},
-    summary="Refresh per-account balance snapshot (정보계 cache)",
-)
-def refresh_snapshot_endpoint(account_id: str, db: DbDep):
-    """Overwrite single-row balance cache for account.
-
-    Idempotent: calling N times leaves exactly 1 row with the latest watermark.
-    """
-    acct = get_account(db, account_id)
-    if acct is None:
-        _err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
-    snap = refresh_snapshot(db, account_id)
-    return snap
-
-
 # ── 5. POST /transfers — transfer ────────────────────────────────────────────
 
 
@@ -188,6 +165,10 @@ def transfer_endpoint(
         transfer_id=txn.transaction_id,
         from_account=txn.sender_account_id,
         to_account=txn.receiver_account_id,
+        sender_bank_name=BANK_NAME,
+        sender_account_number=payload.sender_account_number,
+        receiver_bank_name=payload.receiver_bank_name,
+        receiver_account_number=payload.receiver_account_number,
         amount=txn.amount,
         status=txn.status,
         created_at=txn.created_at,

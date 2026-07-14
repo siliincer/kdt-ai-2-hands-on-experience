@@ -33,26 +33,31 @@ MOCK_ACCOUNTS: list[dict] = [
     {
         "account_id": "acct-0001-0000-0000-000000000001",
         "owner": "김지훈",
+        "account_number": "110-001-000001",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0002-0000-0000-000000000002",
         "owner": "박서연",
+        "account_number": "110-002-000002",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0003-0000-0000-000000000003",
         "owner": "이도윤",
+        "account_number": "110-003-000003",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0004-0000-0000-000000000004",
         "owner": "최수아",
+        "account_number": "110-004-000004",
         "currency": "KRW",
     },
     {
         "account_id": "acct-0005-0000-0000-000000000005",
         "owner": "정도윤",
+        "account_number": "110-005-000005",
         "currency": "KRW",
     },
 ]
@@ -118,8 +123,16 @@ MOCK_CARDS: list[dict] = [
 
 
 def make_account_rows() -> list[Account]:
-    """Return Account ORM instances (not yet committed)."""
-    return [Account(**d) for d in MOCK_ACCOUNTS]
+    """Return Account ORM instances (not yet committed).
+
+    balance is injected from MOCK_FINAL_BALANCES (computed by
+    _build_transaction_dataset()) so every row satisfies the canonical
+    Account.balance invariant on creation, not just default=0.
+    """
+    return [
+        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
+        for d in MOCK_ACCOUNTS
+    ]
 
 
 def make_card_rows() -> list[Card]:
@@ -443,36 +456,43 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
     {
         "account_id": "acct-b001-0000-0000-000000000001",
         "owner": "통신사",
+        "account_number": "990-001-000001",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b002-0000-0000-000000000002",
         "owner": "헬스장",
+        "account_number": "990-002-000002",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b003-0000-0000-000000000003",
         "owner": "학원",
+        "account_number": "990-003-000003",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b004-0000-0000-000000000004",
         "owner": "관리사무소",
+        "account_number": "990-004-000004",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b005-0000-0000-000000000005",
         "owner": "저축은행",
+        "account_number": "990-005-000005",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b006-0000-0000-000000000006",
         "owner": "증권사",
+        "account_number": "990-006-000006",
         "currency": "KRW",
     },
     {
         "account_id": "acct-b007-0000-0000-000000000007",
         "owner": "대출은행",
+        "account_number": "990-007-000007",
         "currency": "KRW",
     },
 ]
@@ -486,11 +506,17 @@ BILLER_ACCOUNT_ID: dict[str, str] = {
 def make_biller_account_rows() -> list[Account]:
     """Return biller Account ORM instances (not yet committed).
 
+    balance is injected from MOCK_FINAL_BALANCES so billers reflect the
+    total they actually received (canonical Account.balance invariant).
+
     These are payment-receiver accounts for general payments (통신비, 헬스장,
     학원비, 관리비).  They are distinct from user-owned MOCK_ACCOUNTS so that
     existing card-service tests that assert exactly 5 user accounts are unaffected.
     """
-    return [Account(**d) for d in MOCK_BILLER_ACCOUNTS]
+    return [
+        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
+        for d in MOCK_BILLER_ACCOUNTS
+    ]
 
 
 # ── Schema validation ──────────────────────────────────────────────────────────
@@ -722,14 +748,23 @@ class _Counter:
         return self._n
 
 
-def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict]]:
+def _build_transaction_dataset() -> tuple[
+    list[dict], list[dict], list[dict], dict[str, int]
+]:
     """Deterministically build 4 months of persona-driven transaction history.
 
-    Returns (transactions, ledger_entries, card_ledger_entries) as plain dict
-    rows ready for ``Transaction(**d)`` / ``LedgerEntry(**d)`` /
+    Returns (transactions, ledger_entries, card_ledger_entries, final_balances)
+    as plain dict rows ready for ``Transaction(**d)`` / ``LedgerEntry(**d)`` /
     ``CardLedgerEntry(**d)``. Card charges never touch account balances
     (mirrors the app's card deferred-settlement design — see Card docstring
     in models.py); only account-transfer / general-payment events do.
+
+    ``final_balances`` maps every account_id that appears as a sender or
+    receiver (user, biller, or external-source) to its ending balance after
+    the full chronological walk — this is the canonical ``Account.balance``
+    value each row must be seeded with (see Account.balance docstring in
+    models.py: it must always equal SUM(CREDIT) - SUM(DEBIT) over
+    ledger_entries, so mock rows have to satisfy the same invariant).
     """
     seq = _Counter()
     balance: dict[str, int] = dict(_STARTING_BALANCE)
@@ -1088,7 +1123,7 @@ def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict]]:
             }
         )
 
-    return transactions, ledger_entries, card_ledger_entries
+    return transactions, ledger_entries, card_ledger_entries, dict(balance)
 
 
 # External payroll-deposit / peer-transfer source. Not a "biller" (money flows
@@ -1098,19 +1133,33 @@ MOCK_EXTERNAL_SOURCE_ACCOUNTS: list[dict] = [
     {
         "account_id": "acct-b099-0000-0000-000000000099",
         "owner": "외부입금원(급여/지인송금)",
+        "account_number": "999-000-000099",
         "currency": "KRW",
     },
 ]
 
 
 def make_external_source_account_rows() -> list[Account]:
-    """Return the external-source Account row (payroll deposits, peer transfers)."""
-    return [Account(**d) for d in MOCK_EXTERNAL_SOURCE_ACCOUNTS]
+    """Return the external-source Account row (payroll deposits, peer transfers).
+
+    balance is injected from MOCK_FINAL_BALANCES so it satisfies the same
+    canonical-balance invariant as every other Account row (see Account.balance
+    docstring in models.py). This account only ever sends money (DEBIT), so
+    its balance is expected to be deeply negative — it represents value
+    entering the modeled system from outside, not a real funded account.
+    """
+    return [
+        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
+        for d in MOCK_EXTERNAL_SOURCE_ACCOUNTS
+    ]
 
 
-MOCK_TRANSACTIONS, MOCK_LEDGER_ENTRIES, MOCK_CARD_LEDGER_ENTRIES = (
-    _build_transaction_dataset()
-)
+(
+    MOCK_TRANSACTIONS,
+    MOCK_LEDGER_ENTRIES,
+    MOCK_CARD_LEDGER_ENTRIES,
+    MOCK_FINAL_BALANCES,
+) = _build_transaction_dataset()
 
 
 def make_transaction_rows() -> list[Transaction]:

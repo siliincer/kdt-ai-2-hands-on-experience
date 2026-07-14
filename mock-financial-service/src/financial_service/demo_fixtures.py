@@ -19,8 +19,7 @@ from __future__ import annotations
 
 import json
 
-from .mock_data import MOCK_ACCOUNTS, MOCK_CARDS, MOCK_CARD_PRODUCTS
-
+from .mock_data import MOCK_ACCOUNTS, MOCK_CARD_PRODUCTS, MOCK_CARDS
 
 # Field schema: each key maps to its expected Python type.
 ACCOUNT_SCHEMA: dict[str, type] = {
@@ -125,15 +124,15 @@ def load_into_db(engine) -> dict:
 
         assert n_accounts == 5, f"Expected 5 Accounts after load, got {n_accounts}"
         assert 5 <= n_cards <= 10, f"Expected 5-10 Cards after load, got {n_cards}"
-        assert n_products == 20, f"Expected 20 CardProducts after load, got {n_products}"
+        assert n_products == 20, (
+            f"Expected 20 CardProducts after load, got {n_products}"
+        )
 
         # Cards per account: 1-2 each
         accounts = session.query(Account).all()
         for acct in accounts:
             n = session.query(Card).filter(Card.account_id == acct.account_id).count()
-            assert 1 <= n <= 2, (
-                f"Account {acct.account_id} has {n} cards; expected 1-2"
-            )
+            assert 1 <= n <= 2, f"Account {acct.account_id} has {n} cards; expected 1-2"
 
         # FK integrity: every Card.account_id references a real Account
         valid_ids = {a.account_id for a in accounts}
@@ -154,8 +153,9 @@ def load_into_db(engine) -> dict:
 
         # card_products must not reference cards (structural: no FK columns)
         for cp in products:
-            assert not hasattr(cp, "card_id") or cp.__class__.__table__.c.keys().count("card_id") == 0, (
-                "CardProduct must not have a card_id FK column"
-            )
+            assert (
+                not hasattr(cp, "card_id")
+                or cp.__class__.__table__.c.keys().count("card_id") == 0
+            ), "CardProduct must not have a card_id FK column"
 
     return {"accounts": n_accounts, "cards": n_cards, "card_products": n_products}

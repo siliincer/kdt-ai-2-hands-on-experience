@@ -9,6 +9,7 @@ erDiagram
     accounts {
         string account_id PK "UUID"
         string owner "NOT NULL"
+        bigint balance "canonical, updated atomically with every ledger write"
         string currency "3-char, default KRW"
         datetime created_at "UTC"
     }
@@ -45,25 +46,15 @@ erDiagram
         datetime timestamp "UTC"
     }
 
-    balance_snapshots {
-        string account_id PK_FK "→ accounts, one row per account"
-        bigint cached_balance "SUM(CREDIT)-SUM(DEBIT) at watermark"
-        int last_entry_rowid "high-water-mark, ledger_entries.rowid"
-        bigint sum_credit "stored credit sum up to watermark"
-        bigint sum_debit "stored debit sum up to watermark"
-        datetime refreshed_at "UTC, last refresh timestamp"
-    }
-
     accounts ||--o{ transactions : "sender"
     accounts ||--o{ transactions : "receiver"
     accounts ||--o{ ledger_entries : "has"
     transactions ||--o{ ledger_entries : "generates"
-    accounts ||--o| balance_snapshots : "cached by"
 ```
 
 ## 뷰 (View)
 
-정보계 직접-DB 읽기 경로로 3개 뷰 제공 (모두 SELECT 전용, idempotent `CREATE VIEW IF NOT EXISTS`).
+정보계 직접-DB 읽기 경로로 2개 뷰 제공 (모두 SELECT 전용, idempotent `CREATE VIEW IF NOT EXISTS`).
 
 ### `v_infobank_account_balances` — 실시간 계좌별 집계
 
@@ -89,21 +80,15 @@ GROUP BY a.account_id, a.owner, a.currency, a.created_at;
 
 `ledger_entries` 를 `accounts.owner`/`currency` 와 조인한 비정규화 뷰. 컬럼: `entry_id, account_id, owner, currency, transaction_id, entry_type, amount, running_balance, created_at`.
 
-### `v_account_snapshots` — 캐시 기반 뷰 (실시간 아님)
-
-`accounts` 를 `balance_snapshots` 와 LEFT JOIN — 스냅샷이 아직 없는 계좌는 캐시 필드가 NULL/0. `v_infobank_account_balances` 와 달리 마지막 `POST /accounts/{id}/snapshot` 호출 시점 기준.
-
-**설계 원칙**: 뷰는 SELECT 전용. 실시간 뷰(`v_infobank_*`)의 `balance`는 항상 원장에서 즉시 집계 — `balance_snapshots.cached_balance`(캐시)와 독립적으로 존재.
+**설계 원칙**: 뷰는 SELECT 전용. `v_infobank_account_balances` 의 `balance`는 원장에서 즉시 집계한 값이며, `accounts.balance` (원장 기록과 같은 트랜잭션에서 원자적으로 갱신되는 저장 컬럼)와 항상 동일해야 함 — 다르면 버그.
 
 ## 엔티티 설명
 
 | 엔티티 | 역할 | 계층 |
 |--------|------|------|
-| `accounts` | 계좌 메타데이터 | 계정계 |
+| `accounts` | 계좌 메타데이터 + canonical `balance` 컬럼 | 계정계 |
 | `transactions` | 송금 이벤트 헤더 + Idempotency-Key | 계정계 |
 | `ledger_entries` | 이중기입 차변/대변 원장 | 계정계 |
 | `audit_logs` | append-only 감사 로그 (DB 트리거 불변) | 계정계 |
-| `balance_snapshots` | 잔액 캐시 (정보계용, 계좌당 1행 덮어쓰기) | 정보계 캐시 |
 | `v_infobank_account_balances` | 읽기 전용 뷰, 실시간 집계 (정보계 직접-DB 읽기) | 정보계 뷰 |
 | `v_infobank_ledger_entries` | 읽기 전용 뷰, 원장 항목 조인 | 정보계 뷰 |
-| `v_account_snapshots` | 읽기 전용 뷰, 캐시 조인 (스냅샷 시점 기준) | 정보계 뷰 |

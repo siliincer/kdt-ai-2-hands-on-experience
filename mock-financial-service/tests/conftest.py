@@ -71,7 +71,7 @@ def cards() -> list[dict]:
 
 @pytest.fixture()
 def card_products() -> list[dict]:
-    """Return canonical list of 20 CardProduct dicts (standalone catalog, no Card FK)."""
+    """Return canonical list of 20 CardProduct dicts (standalone, no Card FK)."""
     from financial_service.mock_data import MOCK_CARD_PRODUCTS
 
     return list(MOCK_CARD_PRODUCTS)

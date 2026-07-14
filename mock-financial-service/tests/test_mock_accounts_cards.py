@@ -8,8 +8,6 @@ Verifies:
 """
 
 import pytest
-from sqlalchemy.orm import Session
-
 from financial_service.mock_data import (
     MOCK_ACCOUNTS,
     MOCK_CARDS,
@@ -17,6 +15,7 @@ from financial_service.mock_data import (
     make_card_rows,
 )
 from financial_service.models import Account, Card
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture()
@@ -58,7 +57,11 @@ def test_mock_card_count_exact(seeded_session):
 def test_each_account_has_one_or_two_cards(seeded_session):
     accounts = seeded_session.query(Account).all()
     for acct in accounts:
-        n = seeded_session.query(Card).filter(Card.account_id == acct.account_id).count()
+        n = (
+            seeded_session.query(Card)
+            .filter(Card.account_id == acct.account_id)
+            .count()
+        )
         assert 1 <= n <= 2, (
             f"Account {acct.account_id} ({acct.owner}) has {n} cards; expected 1-2"
         )

@@ -14,13 +14,11 @@ import json
 from collections import Counter
 
 import pytest
+from financial_service.database import Base
+from financial_service.models import Account, Card, CardProduct
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
-
-from financial_service.database import Base
-from financial_service.models import Account, Card, CardProduct
-
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -150,7 +148,8 @@ def test_json_fixture_card_account_fk_integrity():
     valid_ids = {a["account_id"] for a in data["accounts"]}
     for card in data["cards"]:
         assert card["account_id"] in valid_ids, (
-            f"JSON card {card['card_id']} references unknown account_id {card['account_id']}"
+            f"JSON card {card['card_id']} references "
+            f"unknown account_id {card['account_id']}"
         )
 
 
@@ -160,5 +159,9 @@ def test_json_fixture_card_products_standalone():
 
     data = json.loads(to_json())
     for cp in data["card_products"]:
-        assert "card_id" not in cp, f"card_product {cp['card_product_id']} must not have card_id"
-        assert "account_id" not in cp, f"card_product {cp['card_product_id']} must not have account_id"
+        assert "card_id" not in cp, (
+            f"card_product {cp['card_product_id']} must not have card_id"
+        )
+        assert "account_id" not in cp, (
+            f"card_product {cp['card_product_id']} must not have account_id"
+        )

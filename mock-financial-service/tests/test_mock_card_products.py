@@ -4,7 +4,8 @@ Verifies:
 1. MOCK_CARD_PRODUCTS list has exactly 20 entries
 2. Exactly 4 entries per each of 5 categories
 3. Category values restricted to the 5 allowed
-4. Each row has required fields: card_product_id, product_name, category, annual_fee, benefits
+4. Each row has required fields: card_product_id, product_name, category,
+   annual_fee, benefits
 5. benefits is valid JSON-encoded list with at least 1 item
 6. annual_fee is non-negative integer
 7. ORM instances insertable into in-memory SQLite (integration)
@@ -17,17 +18,16 @@ import json
 from collections import Counter
 
 import pytest
+from financial_service.database import Base
 from financial_service.mock_data import (
     CARD_PRODUCT_CATEGORIES,
     MOCK_CARD_PRODUCTS,
     make_card_product_rows,
 )
 from financial_service.models import CardProduct
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from financial_service.database import Base
 
 EXPECTED_CATEGORIES = set(CARD_PRODUCT_CATEGORIES)
 EXPECTED_TOTAL = 20
@@ -70,7 +70,9 @@ def test_benefits_valid_json_list():
 
 def test_annual_fee_non_negative():
     for i, row in enumerate(MOCK_CARD_PRODUCTS):
-        assert row["annual_fee"] >= 0, f"Row {i} annual_fee is negative: {row['annual_fee']}"
+        assert row["annual_fee"] >= 0, (
+            f"Row {i} annual_fee is negative: {row['annual_fee']}"
+        )
 
 
 def test_unique_card_product_ids():
@@ -110,8 +112,8 @@ def mem_engine():
 
 @pytest.fixture(scope="module")
 def session(mem_engine):
-    Session = sessionmaker(bind=mem_engine, autocommit=False, autoflush=False)
-    s = Session()
+    session_factory = sessionmaker(bind=mem_engine, autocommit=False, autoflush=False)
+    s = session_factory()
     s.add_all(make_card_product_rows())
     s.commit()
     yield s

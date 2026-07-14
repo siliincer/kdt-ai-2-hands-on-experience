@@ -26,12 +26,13 @@ def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
     return r.json()
 
 
-def _transfer(client, sender_id: str, receiver_id: str, amount: int, key: str) -> dict:
+def _transfer(client, sender: dict, receiver: dict, amount: int, key: str) -> dict:
     r = client.post(
         "/api/v1/transfers",
         json={
-            "sender_account_id": sender_id,
-            "receiver_account_id": receiver_id,
+            "sender_account_number": sender["account_number"],
+            "receiver_bank_name": receiver["bank_name"],
+            "receiver_account_number": receiver["account_number"],
             "amount": amount,
         },
         headers={"Idempotency-Key": key},
@@ -90,8 +91,8 @@ def test_analytics_balance_after_transfer(client):
     receiver = _make_account(client, "BalReceiver", 0)
     _transfer(
         client,
-        sender["account_id"],
-        receiver["account_id"],
+        sender,
+        receiver,
         30_000,
         "analytics-bal-001",
     )
@@ -161,8 +162,8 @@ def test_analytics_ledger_after_transfer(client):
     receiver = _make_account(client, "LedReceiver", 0)
     _transfer(
         client,
-        sender["account_id"],
-        receiver["account_id"],
+        sender,
+        receiver,
         25_000,
         "analytics-led-001",
     )
@@ -238,7 +239,7 @@ def test_analytics_balance_matches_canonical_endpoint(client):
     """Analytics balance == canonical /accounts/{id}/balance (unauthenticated)."""
     alice = _make_account(client, "CrossAlice", 200_000)
     bob = _make_account(client, "CrossBob", 50_000)
-    _transfer(client, alice["account_id"], bob["account_id"], 75_000, "cross-path-001")
+    _transfer(client, alice, bob, 75_000, "cross-path-001")
 
     for acct_id in (alice["account_id"], bob["account_id"]):
         canonical_r = client.get(f"/api/v1/accounts/{acct_id}/balance")
@@ -260,7 +261,7 @@ def test_analytics_ledger_matches_canonical_endpoint(client):
     """Analytics ledger matches /api/v1/accounts/{id}/transactions (count + types)."""
     acct = _make_account(client, "CrossLedger", 60_000)
     other = _make_account(client, "CrossLedgerOther", 0)
-    _transfer(client, acct["account_id"], other["account_id"], 15_000, "cross-path-002")
+    _transfer(client, acct, other, 15_000, "cross-path-002")
 
     canonical_r = client.get(f"/api/v1/accounts/{acct['account_id']}/transactions")
     analytics_r = client.get(

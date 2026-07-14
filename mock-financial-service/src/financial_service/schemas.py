@@ -71,8 +71,9 @@ class AuditLogResponse(BaseModel):
 
 
 class TransferRequest(BaseModel):
-    sender_account_id: str
-    receiver_account_id: str
+    sender_account_number: str
+    receiver_bank_name: str
+    receiver_account_number: str
     amount: int = Field(..., gt=0)
 
     @field_validator("amount")
@@ -87,6 +88,10 @@ class TransferResponse(BaseModel):
     transfer_id: str
     from_account: str
     to_account: str
+    sender_bank_name: str
+    sender_account_number: str
+    receiver_bank_name: str
+    receiver_account_number: str
     amount: int
     status: str
     created_at: datetime
@@ -94,18 +99,7 @@ class TransferResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── Snapshot / 정보계 ──────────────────────────────────────────────────────────
-
-
-class SnapshotResponse(BaseModel):
-    account_id: str
-    cached_balance: int
-    last_entry_rowid: int | None
-    sum_credit: int
-    sum_debit: int
-    refreshed_at: datetime
-
-    model_config = {"from_attributes": True}
+# ── Balance reconciliation / 정보계 ────────────────────────────────────────────
 
 
 class ReconciliationResponse(BaseModel):
@@ -114,7 +108,6 @@ class ReconciliationResponse(BaseModel):
     expected_balance: int
     sum_credit: int
     sum_debit: int
-    last_entry_rowid: int | None
     drift_detected: bool
     delta: int
     reconciled_at: str

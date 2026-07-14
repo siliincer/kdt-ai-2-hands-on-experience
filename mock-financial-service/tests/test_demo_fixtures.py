@@ -11,13 +11,13 @@ from collections import Counter
 
 import pytest
 
-
 # ── fixture ────────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture(scope="module")
 def fixtures():
     from financial_service.demo_fixtures import get_demo_fixtures
+
     return get_demo_fixtures()
 
 
@@ -49,7 +49,9 @@ def test_accounts_required_fields(fixtures):
 
 def test_accounts_field_types(fixtures):
     for i, row in enumerate(fixtures["accounts"]):
-        assert isinstance(row["account_id"], str), f"accounts[{i}].account_id must be str"
+        assert isinstance(row["account_id"], str), (
+            f"accounts[{i}].account_id must be str"
+        )
         assert isinstance(row["owner"], str), f"accounts[{i}].owner must be str"
         assert isinstance(row["currency"], str), f"accounts[{i}].currency must be str"
 
@@ -129,11 +131,21 @@ def test_card_products_required_fields(fixtures):
 
 def test_card_products_field_types(fixtures):
     for i, row in enumerate(fixtures["card_products"]):
-        assert isinstance(row["card_product_id"], str), f"card_products[{i}].card_product_id must be str"
-        assert isinstance(row["product_name"], str), f"card_products[{i}].product_name must be str"
-        assert isinstance(row["category"], str), f"card_products[{i}].category must be str"
-        assert isinstance(row["annual_fee"], int), f"card_products[{i}].annual_fee must be int"
-        assert isinstance(row["benefits"], str), f"card_products[{i}].benefits must be str (JSON)"
+        assert isinstance(row["card_product_id"], str), (
+            f"card_products[{i}].card_product_id must be str"
+        )
+        assert isinstance(row["product_name"], str), (
+            f"card_products[{i}].product_name must be str"
+        )
+        assert isinstance(row["category"], str), (
+            f"card_products[{i}].category must be str"
+        )
+        assert isinstance(row["annual_fee"], int), (
+            f"card_products[{i}].annual_fee must be int"
+        )
+        assert isinstance(row["benefits"], str), (
+            f"card_products[{i}].benefits must be str (JSON)"
+        )
 
 
 def test_card_products_unique_ids(fixtures):
@@ -156,7 +168,9 @@ def test_card_products_four_per_category(fixtures):
 def test_card_products_benefits_valid_json_list(fixtures):
     for i, row in enumerate(fixtures["card_products"]):
         parsed = json.loads(row["benefits"])
-        assert isinstance(parsed, list), f"card_products[{i}].benefits must be JSON list"
+        assert isinstance(parsed, list), (
+            f"card_products[{i}].benefits must be JSON list"
+        )
         assert len(parsed) >= 1, f"card_products[{i}].benefits must be non-empty"
 
 
@@ -177,12 +191,14 @@ def test_card_products_no_fk_fields(fixtures):
 
 def test_to_json_returns_string():
     from financial_service.demo_fixtures import to_json
+
     result = to_json()
     assert isinstance(result, str)
 
 
 def test_to_json_parses_to_correct_structure():
     from financial_service.demo_fixtures import to_json
+
     parsed = json.loads(to_json())
     assert set(parsed.keys()) == {"accounts", "cards", "card_products"}
     assert len(parsed["accounts"]) == 5
@@ -192,6 +208,7 @@ def test_to_json_parses_to_correct_structure():
 
 def test_to_json_indent_default():
     from financial_service.demo_fixtures import to_json
+
     result = to_json()
     # Default indent=2 means newlines are present
     assert "\n" in result
@@ -200,6 +217,7 @@ def test_to_json_indent_default():
 def test_to_json_roundtrip_consistency():
     """get_demo_fixtures() dict and to_json() parsed must be identical."""
     from financial_service.demo_fixtures import get_demo_fixtures, to_json
+
     direct = get_demo_fixtures()
     via_json = json.loads(to_json())
     assert direct == via_json

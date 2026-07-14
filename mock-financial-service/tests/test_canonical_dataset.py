@@ -12,10 +12,8 @@ from __future__ import annotations
 
 import importlib
 
-import pytest
-
-
 # ── 1. Module loads cleanly ────────────────────────────────────────────────────
+
 
 def test_mock_data_module_importable():
     mod = importlib.import_module("financial_service.mock_data")
@@ -31,6 +29,7 @@ def test_mock_data_module_importable():
 
 # ── 2. Referential integrity: Card.account_id → Account ──────────────────────
 
+
 def test_all_card_account_ids_reference_real_accounts():
     from financial_service.mock_data import MOCK_ACCOUNTS, MOCK_CARDS
 
@@ -44,6 +43,7 @@ def test_all_card_account_ids_reference_real_accounts():
 
 # ── 3. validate_dataset() passes with zero errors ─────────────────────────────
 
+
 def test_validate_dataset_returns_no_errors():
     from financial_service.mock_data import validate_dataset
 
@@ -55,6 +55,7 @@ def test_validate_dataset_returns_no_errors():
 
 
 # ── 4. card_products standalone — no FK to cards ─────────────────────────────
+
 
 def test_card_products_have_no_account_id_or_card_id_field():
     from financial_service.mock_data import MOCK_CARD_PRODUCTS
@@ -69,6 +70,7 @@ def test_card_products_have_no_account_id_or_card_id_field():
 
 
 # ── 5. Count constraints ──────────────────────────────────────────────────────
+
 
 def test_account_count_is_five():
     from financial_service.mock_data import MOCK_ACCOUNTS
@@ -92,6 +94,7 @@ def test_card_product_count_is_twenty():
 
 
 # ── 6. ORM factory functions return correct types ─────────────────────────────
+
 
 def test_make_account_rows_returns_account_orm():
     from financial_service.mock_data import make_account_rows

@@ -2,6 +2,7 @@
 
 Import as: ``from models import CardProduct, Account, Card``
 """
+
 import os
 import sys
 
@@ -11,13 +12,13 @@ if _src not in sys.path:
     sys.path.insert(0, _src)
 
 from financial_service.models import (  # noqa: E402
+    CARD_PRODUCT_CATEGORIES,
     Account,
     AuditLog,
     BalanceSnapshot,
     Card,
     CardLedgerEntry,
     CardProduct,
-    CARD_PRODUCT_CATEGORIES,
     DailyClosingSnapshot,
     LedgerEntry,
     Transaction,
