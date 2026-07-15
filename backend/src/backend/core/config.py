@@ -12,8 +12,11 @@ CORS_OPTIONS = {
     "allow_origins": [
         "http://localhost:5173",
         "http://localhost:5199",
-        "http://127.0.0.1:5173",
-        # <차기 AWS EC2 클라우드 배포 주소>
+        "http://localhost:8001",
+        "http://localhost:8002",
+        # TODO: <차기 AWS EC2 클라우드 배포 주소>
+        "http://15.164.26.234",
+        "https://15.164.26.234",
     ],
     "allow_credentials": True,
     # 로그인 쿠키나 Authorization 헤더를 포함한 요청 허용
