@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def startup():
         run_migrations()
+        print("mock-financial-service migration 완료!")
         apply_audit_triggers(engine)
         apply_analytics_views(engine)
 

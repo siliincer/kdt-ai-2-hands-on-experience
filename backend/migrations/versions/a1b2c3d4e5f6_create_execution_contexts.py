@@ -23,12 +23,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # create_type=False: 타입 생성은 아래 .create(checkfirst=True) 로만 수행한다.
+    # (기본값이면 create_table 의 컬럼이 CREATE TYPE 를 재발행해 DuplicateObject 발생)
     execution_context_status = postgresql.ENUM(
         "ACTIVE",
         "EXPIRED",
         "CANCELLED",
         "COMPLETED",
         name="execution_context_status",
+        create_type=False,
     )
     execution_context_status.create(op.get_bind(), checkfirst=True)
 

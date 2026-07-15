@@ -56,6 +56,28 @@ async def get_primary_mapped_account(
     return accounts[0] if accounts else None
 
 
+async def get_owned_accounts_by_ids(
+    session: AsyncSession, user_id: UUID, account_ids: list[UUID]
+) -> list[Account]:
+    """user 소유이면서 요청한 로컬 Account.id 목록에 속하는 계좌만 반환한다.
+
+    소유권 검증용. 다른 사용자 계좌 id 를 섞어 보내도 결과에 포함되지 않으므로,
+    호출부는 반환 개수와 요청 개수를 비교해 접근 거부를 판단할 수 있다.
+    """
+    if not account_ids:
+        return []
+    stmt = (
+        select(Account)
+        .where(
+            Account.user_id == user_id,
+            Account.id.in_(account_ids),
+        )
+        .order_by(Account.account_number)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def has_mapped_account(session: AsyncSession, user_id: UUID) -> bool:
     """이미 계정계 매핑된 Account 가 있는지(프로비저닝 멱등성)."""
     stmt = select(Account.id).where(

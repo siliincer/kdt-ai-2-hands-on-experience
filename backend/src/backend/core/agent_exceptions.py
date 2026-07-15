@@ -88,6 +88,36 @@ class AgentToolError(Exception):
         )
 
     @classmethod
+    def account_not_found(cls) -> AgentToolError:
+        return cls(
+            status_code=404,
+            category=AgentErrorCategory.REQUEST_ERROR,
+            code="ACCOUNT_NOT_FOUND",
+            message="계좌를 찾을 수 없습니다.",
+            retryable=False,
+        )
+
+    @classmethod
+    def account_access_denied(cls) -> AgentToolError:
+        return cls(
+            status_code=403,
+            category=AgentErrorCategory.AUTHORIZATION_ERROR,
+            code="ACCOUNT_ACCESS_DENIED",
+            message="계좌에 접근할 수 없습니다.",
+            retryable=False,
+        )
+
+    @classmethod
+    def invalid_request(cls, message: str) -> AgentToolError:
+        return cls(
+            status_code=400,
+            category=AgentErrorCategory.REQUEST_ERROR,
+            code="INVALID_REQUEST",
+            message=message,
+            retryable=False,
+        )
+
+    @classmethod
     def backend_temporary_error(cls) -> AgentToolError:
         return cls(
             status_code=503,

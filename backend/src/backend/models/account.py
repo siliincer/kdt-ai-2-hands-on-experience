@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, String
+from sqlalchemy import BigInteger, Boolean, ForeignKey, String, false
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,6 +41,14 @@ class Account(Base):
     # nullable: 프로비저닝(Phase 2) 전 기존 행 호환.
     external_account_id: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True
+    )
+    # 계좌 별칭(예: "생활비 통장"). 계정계 write 가 없어 로컬을 정본으로 둔다(D4).
+    alias: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # 계좌 유형(예: "checking", "savings"). 계약 ACCOUNT-LIST 응답용. 미분류면 None.
+    account_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # 기본 출금 계좌 여부. 사용자당 하나만 true(부분 유니크 인덱스로 강제).
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false(), default=False
     )
 
     user: Mapped["User"] = relationship(
