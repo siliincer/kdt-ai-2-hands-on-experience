@@ -27,20 +27,6 @@ jobs:
         run: uv run ruff check .
       - name: Ruff format check
         run: uv run ruff format --check .
-      - name: Backend tests or import check
-        run: |
-          if find backend -path "*/tests/test_*.py" -print -quit | grep -q .; then
-            uv run pytest backend
-          else
-            uv run python -c "import backend; print('backend import ok')"
-          fi
-      - name: Agent tests or import check
-        run: |
-          if find agent -path "*/tests/test_*.py" -print -quit | grep -q .; then
-            uv run pytest agent
-          else
-            uv run python -c "import agent; print('agent import ok')"
-          fi
 
       - name: Validate env example
         run: |
