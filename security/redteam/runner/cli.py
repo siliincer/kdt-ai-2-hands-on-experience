@@ -10,7 +10,8 @@ import httpx
 from pydantic import ValidationError
 
 from security.redteam.config import load_config, load_scenario
-from security.redteam.models import ExecutionMode, Verdict
+from security.redteam.models import Verdict
+from security.redteam.runner.attacker import OllamaAttackGenerator
 from security.redteam.runner.client import AgentClient, RequestBudget
 from security.redteam.runner.managed_agent import ManagedAgentError, managed_agent
 from security.redteam.runner.reporter import write_report
@@ -45,11 +46,6 @@ def _parser() -> argparse.ArgumentParser:
         default=REDTEAM_ROOT / "config.example.yaml",
     )
     parser.add_argument("--user-id", default="user_001")
-    parser.add_argument(
-        "--mode",
-        choices=[mode.value for mode in ExecutionMode],
-        help="override the execution mode from the config file",
-    )
     parser.add_argument("--output-dir", type=Path, default=REDTEAM_ROOT / "reports")
     return parser
 
@@ -59,19 +55,14 @@ def main() -> int:
     scenario_path = REDTEAM_ROOT / "scenarios" / f"{args.scenario}.yaml"
     try:
         config = load_config(args.config)
-        if args.mode:
-            config = config.model_copy(
-                update={
-                    "execution": config.execution.model_copy(
-                        update={"mode": ExecutionMode(args.mode)}
-                    )
-                }
-            )
         scenario = load_scenario(scenario_path)
         budget = RequestBudget(config.execution.max_requests_per_run)
         with managed_agent(config):
             with AgentClient(config.target, budget) as client:
-                result = run_scenario(config, scenario, client, args.user_id)
+                with OllamaAttackGenerator(config.adaptive_attack) as attacker:
+                    result = run_scenario(
+                        config, scenario, client, args.user_id, attacker
+                    )
         paths = write_report(result, args.output_dir, config.safety.redact_fields)
     except (
         FileNotFoundError,

@@ -16,7 +16,6 @@ from urllib.parse import urlparse
 from urllib.request import ProxyHandler, Request, build_opener
 
 from security.redteam.config import RedTeamConfig
-from security.redteam.models import ExecutionMode
 from security.redteam.runner.reporter import redact
 
 
@@ -38,7 +37,8 @@ def _connection_target(config: RedTeamConfig) -> tuple[str, int]:
     parsed = urlparse(config.target.base_url)
     if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
         raise ManagedAgentError("managed Agent requires a loopback target")
-    return "127.0.0.1", parsed.port or 80
+    host = "127.0.0.1" if parsed.hostname == "localhost" else parsed.hostname
+    return host, parsed.port or 80
 
 
 def _port_is_open(host: str, port: int) -> bool:
@@ -55,7 +55,7 @@ def _read_ollama_json(request: str | Request, timeout: float) -> dict:
             payload = json.load(response)
     except (OSError, TimeoutError, URLError, json.JSONDecodeError) as exc:
         raise ManagedAgentError(
-            "llm_redteam requires the configured loopback Ollama server"
+            "adaptive local QA requires the configured loopback Ollama server"
         ) from exc
     if not isinstance(payload, dict):
         raise ManagedAgentError("Ollama returned an invalid JSON response")
@@ -75,37 +75,42 @@ def _require_ollama_model(config: RedTeamConfig) -> None:
         for value in (item.get("name"), item.get("model"))
         if isinstance(value, str)
     }
-    if config.safety.required_ollama_model not in installed:
+    required_models = {config.safety.required_ollama_model}
+    required_models.add(config.adaptive_attack.model)
+    missing_models = required_models - installed
+    if missing_models:
         raise ManagedAgentError(
-            "llm_redteam requires the configured Ollama model to be installed"
+            "adaptive local QA requires each configured Ollama model: "
+            + ", ".join(sorted(missing_models))
         )
 
-    probe_body = json.dumps(
-        {
-            "model": config.safety.required_ollama_model,
-            "prompt": 'Return only JSON with {"ok": true}.',
-            "stream": False,
-            "format": {
-                "type": "object",
-                "properties": {"ok": {"type": "boolean"}},
-                "required": ["ok"],
-            },
-            "options": {"temperature": 0, "num_predict": 16},
-        }
-    ).encode("utf-8")
-    probe_request = Request(
-        f"{config.safety.required_ollama_base_url}/api/generate",
-        data=probe_body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    probe = _read_ollama_json(probe_request, timeout)
-    try:
-        structured_response = json.loads(probe.get("response", ""))
-    except (TypeError, json.JSONDecodeError) as exc:
-        raise ManagedAgentError("Ollama structured-output probe failed") from exc
-    if structured_response.get("ok") is not True:
-        raise ManagedAgentError("Ollama structured-output probe failed")
+    for model in sorted(required_models):
+        probe_body = json.dumps(
+            {
+                "model": model,
+                "prompt": 'Return only JSON with {"ok": true}.',
+                "stream": False,
+                "format": {
+                    "type": "object",
+                    "properties": {"ok": {"type": "boolean"}},
+                    "required": ["ok"],
+                },
+                "options": {"temperature": 0, "num_predict": 16},
+            }
+        ).encode("utf-8")
+        probe_request = Request(
+            f"{config.safety.required_ollama_base_url}/api/generate",
+            data=probe_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        probe = _read_ollama_json(probe_request, timeout)
+        try:
+            structured_response = json.loads(probe.get("response", ""))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ManagedAgentError("Ollama structured-output probe failed") from exc
+        if structured_response.get("ok") is not True:
+            raise ManagedAgentError("Ollama structured-output probe failed")
 
 
 def _wait_until_ready(
@@ -138,8 +143,7 @@ def managed_agent(config: RedTeamConfig) -> Iterator[None]:
         raise ManagedAgentError(
             f"refusing to reuse an existing process on {host}:{port}"
         )
-    if config.execution.mode == ExecutionMode.LLM_REDTEAM:
-        _require_ollama_model(config)
+    _require_ollama_model(config)
 
     environment = os.environ.copy()
     for key in tuple(environment):

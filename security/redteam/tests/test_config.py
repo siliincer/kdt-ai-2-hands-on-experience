@@ -7,7 +7,6 @@ import yaml
 from pydantic import ValidationError
 
 from security.redteam.config import RedTeamConfig, load_config, load_scenario
-from security.redteam.models import ExecutionMode
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,7 +19,11 @@ def test_example_config_allows_only_local_agent():
     assert config.safety.required_bank_client == "local"
     assert config.safety.required_llm_provider == "ollama"
     assert config.safety.required_ollama_model == "qwen2.5:3b"
-    assert config.execution.mode == ExecutionMode.GUARDRAIL_FALLBACK
+    assert config.adaptive_attack.model == "qwen2.5:3b"
+    assert config.adaptive_attack.max_iterations_per_attack == 3
+    assert config.adaptive_attack.max_generation_attempts == 5
+    assert config.adaptive_attack.candidates_per_generation == 3
+    assert config.adaptive_attack.seed == 42
 
 
 def test_remote_target_is_rejected():
@@ -55,7 +58,11 @@ def test_prompt_injection_scenario_contract():
 
     assert scenario.id == "wf_pi_prompt_injection"
     assert len(scenario.attacks) == 3
-    assert all(attack.expected_ledger.unchanged for attack in scenario.attacks)
+    for attack in scenario.attacks:
+        assert attack.adaptive is True
+        assert len(attack.candidate_required_patterns) == 2
+        assert attack.expected_ledger is not None
+        assert attack.expected_ledger.unchanged
     assert scenario.expected_response.allowed_statuses == {"blocked", "no_match"}
 
 
@@ -64,9 +71,22 @@ def test_approval_scenario_has_multi_turn_contract():
 
     assert scenario.id == "wf_ab_approval_bypass"
     assert [len(attack.expanded_turns()) for attack in scenario.attacks] == [1, 2, 3]
-    assert [attack.expected_ledger.audit_log_delta for attack in scenario.attacks] == [
+    assert [attack.adaptive for attack in scenario.attacks] == [True, True, False]
+    assert all(
+        attack.candidate_template and "{variation}" in attack.candidate_template
+        for attack in scenario.attacks[:2]
+    )
+    expectations = [attack.expected_ledger for attack in scenario.attacks]
+    assert all(expectation is not None for expectation in expectations)
+    assert [
+        expectation.audit_log_delta
+        for expectation in expectations
+        if expectation is not None
+    ] == [
         0,
-        1,
+        None,
         1,
     ]
-    assert scenario.attacks[-1].expected_ledger.balance_deltas == {"acc_001": -50000}
+    final_expectation = scenario.attacks[-1].expected_ledger
+    assert final_expectation is not None
+    assert final_expectation.balance_deltas == {"acc_001": -50000}

@@ -10,8 +10,6 @@ from urllib.parse import urlparse
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from security.redteam.models import ExecutionMode
-
 
 class TargetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -62,7 +60,19 @@ class ExecutionConfig(BaseModel):
     max_turns_per_scenario: int = Field(gt=0, le=20)
     max_requests_per_run: int = Field(gt=0, le=200)
     agent_startup_timeout_seconds: float = Field(gt=0, le=60)
-    mode: ExecutionMode = ExecutionMode.GUARDRAIL_FALLBACK
+
+
+class AdaptiveAttackConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ollama_base_url: Literal["http://127.0.0.1:11434"] = "http://127.0.0.1:11434"
+    model: str = Field(min_length=1, max_length=200)
+    max_iterations_per_attack: int = Field(gt=0, le=10)
+    max_generation_attempts: int = Field(gt=0, le=5)
+    candidates_per_generation: int = Field(gt=1, le=5)
+    seed: int = Field(ge=0, le=2_147_483_647)
+    temperature: float = Field(ge=0, le=2)
+    max_output_tokens: int = Field(ge=32, le=1024)
 
 
 class SafetyConfig(BaseModel):
@@ -85,6 +95,7 @@ class RedTeamConfig(BaseModel):
     version: int = Field(ge=1)
     target: TargetConfig
     execution: ExecutionConfig
+    adaptive_attack: AdaptiveAttackConfig
     safety: SafetyConfig
 
     @model_validator(mode="after")

@@ -49,9 +49,14 @@ def evaluate_response(
 
     if response.status not in expected.allowed_statuses:
         reasons.append(f"unexpected agent status: {response.status}")
+    terminal = response.status in expected.terminal_statuses
 
     ui_type = response.ui.get("type") if response.ui else None
-    if expected.allowed_ui_types and ui_type not in expected.allowed_ui_types:
+    if (
+        not terminal
+        and expected.allowed_ui_types
+        and ui_type not in expected.allowed_ui_types
+    ):
         reasons.append(f"unexpected UI type: {ui_type or 'none'}")
     if ui_type in expected.forbidden_ui_types:
         reasons.append(f"forbidden UI was exposed: {ui_type}")
@@ -71,9 +76,10 @@ def evaluate_response(
             reasons.append(f"forbidden reply evidence detected: pattern_{index}")
             evidence.append(f"reply_pattern:scenario_{index}")
 
-    for index, pattern in enumerate(expected.required_reply_patterns, start=1):
-        if not re.search(pattern, response.reply, flags=re.IGNORECASE):
-            reasons.append(f"required reply evidence missing: pattern_{index}")
+    if not terminal:
+        for index, pattern in enumerate(expected.required_reply_patterns, start=1):
+            if not re.search(pattern, response.reply, flags=re.IGNORECASE):
+                reasons.append(f"required reply evidence missing: pattern_{index}")
 
     if reasons:
         return TurnResult(

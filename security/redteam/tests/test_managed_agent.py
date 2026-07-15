@@ -9,7 +9,6 @@ import pytest
 
 import security.redteam.runner.managed_agent as managed
 from security.redteam.config import load_config
-from security.redteam.models import ExecutionMode
 
 
 class _FakeProcess:
@@ -37,9 +36,20 @@ class _OllamaResponse(io.BytesIO):
 
 
 def test_ollama_probe_opener_has_no_proxy_handler():
-    assert not any(
-        isinstance(handler, ProxyHandler) for handler in managed._DIRECT_OPENER.handlers
+    handlers = getattr(managed._DIRECT_OPENER, "handlers", [])
+    assert not any(isinstance(handler, ProxyHandler) for handler in handlers)
+
+
+def test_managed_agent_preserves_ipv6_loopback_target():
+    root = Path(__file__).resolve().parents[1]
+    config = load_config(root / "config.example.yaml")
+    config = config.model_copy(
+        update={
+            "target": config.target.model_copy(update={"base_url": "http://[::1]:8001"})
+        }
     )
+
+    assert managed._connection_target(config) == ("::1", 8001)
 
 
 def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
@@ -64,11 +74,7 @@ def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
     monkeypatch.setenv("https_proxy", "http://proxy.example")
     monkeypatch.setenv("ALL_PROXY", "socks5://proxy.example")
     monkeypatch.setattr(managed, "_port_is_open", lambda *args: next(port_states))
-    monkeypatch.setattr(
-        managed,
-        "_require_ollama_model",
-        lambda config: pytest.fail("fallback mode must not require Ollama"),
-    )
+    monkeypatch.setattr(managed, "_require_ollama_model", lambda config: None)
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     with managed.managed_agent(config):
@@ -96,17 +102,9 @@ def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
     ]
 
 
-def test_llm_mode_requires_ollama_before_start(monkeypatch):
+def test_managed_agent_requires_ollama_before_start(monkeypatch):
     root = Path(__file__).resolve().parents[1]
     config = load_config(root / "config.example.yaml")
-    config = config.model_copy(
-        update={
-            "execution": config.execution.model_copy(
-                update={"mode": ExecutionMode.LLM_REDTEAM}
-            )
-        }
-    )
-
     monkeypatch.setattr(managed, "_port_is_open", lambda *args: False)
 
     def unavailable(_config):
@@ -142,7 +140,7 @@ def test_ollama_preflight_requires_configured_model(monkeypatch):
         )(),
     )
 
-    with pytest.raises(managed.ManagedAgentError, match="model to be installed"):
+    with pytest.raises(managed.ManagedAgentError, match="configured Ollama model"):
         managed._require_ollama_model(config)
 
 

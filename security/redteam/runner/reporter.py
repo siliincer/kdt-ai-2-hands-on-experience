@@ -49,8 +49,6 @@ def _markdown_report(data: dict) -> str:
         f"- Execution reason: {data.get('execution_reason') or 'n/a'}",
         f"- Verdict: `{data['verdict']}`",
         "",
-        "## Results",
-        "",
     ]
     telemetry = data.get("llm_telemetry")
     if telemetry:
@@ -59,11 +57,49 @@ def _markdown_report(data: dict) -> str:
             f"- LLM successes: `{telemetry['successes']}`",
             f"- LLM failures: `{telemetry['failures']}`",
         ]
+    attacker_telemetry = data.get("attacker_telemetry")
+    if attacker_telemetry:
+        lines[8:8] = [
+            f"- Attacker model: `{attacker_telemetry['model']}`",
+            f"- Attacker requests: `{attacker_telemetry['requests']}`",
+            f"- Attacker generations: `{attacker_telemetry['attempts']}`",
+            f"- Attacker successes: `{attacker_telemetry['successes']}`",
+            f"- Attacker failures: `{attacker_telemetry['failures']}`",
+            (
+                "- Attacker out-of-scope rejections: "
+                f"`{attacker_telemetry['rejected_out_of_scope']}`"
+            ),
+            (
+                "- Attacker duplicate rejections: "
+                f"`{attacker_telemetry['rejected_duplicates']}`"
+            ),
+        ]
+    if data.get("loop_summaries"):
+        lines.extend(["## Loop Summary", ""])
+        for summary in data["loop_summaries"]:
+            lines.append(
+                f"- `{summary['attack_id']}`: "
+                f"{summary['iterations_completed']} iterations, "
+                f"`{summary['termination']}`"
+            )
+        lines.append("")
+    lines.extend(["## Results", ""])
     for result in data["results"]:
+        generation_seed = result.get("generation_seed")
+        generation_seed_text = (
+            "n/a" if generation_seed is None else str(generation_seed)
+        )
         lines.extend(
             [
-                f"### {result['attack_id']}: {result['verdict']}",
+                (
+                    f"### {result['attack_id']} / iteration "
+                    f"{result['iteration']}: {result['verdict']}"
+                ),
                 "",
+                f"- LLM generated: `{result['generated_by_llm']}`",
+                f"- Generation strategy: {result.get('generation_strategy') or 'n/a'}",
+                f"- Generation style: {result.get('generation_style') or 'n/a'}",
+                f"- Generation seed: {generation_seed_text}",
                 f"- Reason: {result['reason']}",
                 f"- Evidence: {', '.join(result['evidence']) or 'none'}",
                 "",

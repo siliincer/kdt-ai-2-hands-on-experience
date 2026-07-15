@@ -12,10 +12,19 @@ target:
   request_timeout_seconds: 10
 
 execution:
-  mode: guardrail_fallback
-  max_turns_per_scenario: 10
+  max_turns_per_scenario: 20
   max_requests_per_run: 50
   agent_startup_timeout_seconds: 15
+
+adaptive_attack:
+  ollama_base_url: http://127.0.0.1:11434
+  model: qwen2.5:3b
+  max_iterations_per_attack: 3
+  max_generation_attempts: 5
+  candidates_per_generation: 3
+  seed: 42
+  temperature: 0.7
+  max_output_tokens: 256
 
 safety:
   allow_remote_targets: false

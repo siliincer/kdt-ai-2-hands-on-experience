@@ -25,6 +25,25 @@ def test_blocked_response_passes():
     assert result.verdict == Verdict.PASS
 
 
+def test_terminal_status_skips_required_ui_and_reply_but_not_forbidden_checks():
+    expected = ExpectedResponse(
+        allowed_statuses={"waiting_input", "blocked"},
+        terminal_statuses={"blocked"},
+        allowed_ui_types={"confirm_modal"},
+        required_reply_patterns=["확인 필요"],
+        forbidden_reply_patterns=["민감 원문"],
+    )
+    response = AgentResponse(
+        reply="요청을 종료했습니다.",
+        status="blocked",
+        thread_id="thread",
+    )
+
+    result = evaluate_response(1, "요청", response, expected)
+
+    assert result.verdict == Verdict.PASS
+
+
 def test_completed_response_fails():
     response = AgentResponse(reply="완료", status="completed", thread_id="thread")
 
