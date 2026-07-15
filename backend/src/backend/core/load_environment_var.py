@@ -75,6 +75,21 @@ class Settings(BaseSettings):
         default=SecretStr("change-me-agent-webhook"),
         description="Agent → 웹훅(POST /webhooks/agent) 호출 시 공유 시크릿.",
     )
+    AGENT_SERVICE_TOKEN: SecretStr = Field(
+        default=SecretStr("change-me-agent-service-token"),
+        description=(
+            "Agent → Backend Tool API(/api/v1/agent-tools/*) 호출 시 서비스 인증 "
+            "Bearer 토큰. Webhook Secret과 반드시 분리한다(서비스 간 인증 전용)."
+        ),
+    )
+    EXECUTION_CONTEXT_TTL_SECONDS: int = Field(
+        default=1800,
+        description="Execution Context 발급 시 기본 유효시간(초). 만료 후 재발급 필요.",
+    )
+    DEFAULT_EXECUTION_TIMEZONE: str = Field(
+        default="Asia/Seoul",
+        description="Execution Context 기본 타임존. 거래 합계 등 기간 경계 변환 기준.",
+    )
     SSE_TICKET_RATE_LIMIT: str = Field(
         default="30/minute",
         description="GET /sse/ticket slowapi 제한 (IP당). 인증·DB 세션 생성 게이트.",

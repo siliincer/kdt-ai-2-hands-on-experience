@@ -7,6 +7,7 @@ from .agent_execution import AgentExecution
 from .approval import Approval
 from .chat_message import ChatMessage
 from .chat_session import ChatSession
+from .execution_context import ExecutionContext, ExecutionContextStatus
 from .transaction import Transaction
 from .user import User
 
@@ -17,6 +18,8 @@ __all__ = [
     "AuditLog",
     "ChatMessage",
     "ChatSession",
+    "ExecutionContext",
+    "ExecutionContextStatus",
     "Transaction",
     "User",
 ]

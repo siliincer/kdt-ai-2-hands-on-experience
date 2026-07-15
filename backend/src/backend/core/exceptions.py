@@ -8,6 +8,8 @@ from ..services.financial import (
     FinancialServiceError,
     financial_service_error_handler,
 )
+from ..utils.agent_response import agent_error_response
+from .agent_exceptions import AgentToolError
 
 
 def error_response(status_code: int, code: str, message: str, **extra):
@@ -70,6 +72,18 @@ async def response_validation_error_handler(
     )
 
 
+async def agent_tool_error_handler(request: Request, exc: AgentToolError):
+    """Agent Tool API 오류를 계약 정본 envelope(category/retryable 포함)으로 번역."""
+    return agent_error_response(
+        status_code=exc.status_code,
+        category=exc.category,
+        code=exc.code,
+        message=exc.message,
+        retryable=exc.retryable,
+        details=exc.details,
+    )
+
+
 # main.py에서 한번에 등록하기 위한 매핑 딕셔너리 생성
 exception_handlers = {
     HTTPException: http_exception_handler,
@@ -78,4 +92,5 @@ exception_handlers = {
     ValueError: value_error_handler,
     RuntimeError: custom_runtime_error_handler,
     FinancialServiceError: financial_service_error_handler,
+    AgentToolError: agent_tool_error_handler,
 }
