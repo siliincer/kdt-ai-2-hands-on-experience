@@ -1,9 +1,18 @@
 """Database engine and session configuration."""
 
+import os
+from pathlib import Path
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-DATABASE_URL = "sqlite:///./financial.db"
+# Fixed absolute path — independent of the current working directory the
+# server happens to be launched from (root vs mock-financial-service/), so
+# `financial.db` always lands in the same place instead of splitting into
+# two different files depending on where `uvicorn`/pytest was invoked.
+# Override with the DATABASE_URL env var for Postgres etc.
+_DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / "financial.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{_DEFAULT_DB_PATH}")
 
 engine = create_engine(
     DATABASE_URL,
