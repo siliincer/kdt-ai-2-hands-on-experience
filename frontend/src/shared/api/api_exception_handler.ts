@@ -101,8 +101,12 @@ export function handleBackendError(
  * @param error - 발생한 에러
  */
 export function handleRequestError(error: unknown): CommonResponse {
-  if (error instanceof TypeError && error.message === 'Failed to fetch') {
-    // fetch시 브라우저가 TypeError: Failed to fetch라는 에러 메시지를 던집니다.
+  // fetch 네트워크 실패는 모든 브라우저가 TypeError를 던지지만 메시지는
+  // 엔진마다 다르다(Chromium: "Failed to fetch", Firefox: "NetworkError
+  // when attempting to fetch resource.", WebKit: "Load failed"). 특정 문자열만
+  // 매칭하면 Chromium 밖에서 이 분기를 안 타서 사용자가 브라우저 원본 에러
+  // 문구를 그대로 보게 된다 — TypeError 여부만으로 판단.
+  if (error instanceof TypeError) {
     // 인터넷 연결 끊김, 서버 다운, CORS 에러, 도메인 오타
     return failureResponse('네트워크 연결을 확인해주세요.');
   }
@@ -124,7 +128,12 @@ export function handleRequestError(error: unknown): CommonResponse {
 export function handleRequestErrorForTanstackQuery(
   error: unknown,
 ): CommonResponse {
-  if (error instanceof TypeError && error.message === 'Failed to fetch') {
+  // fetch 네트워크 실패는 모든 브라우저가 TypeError를 던지지만 메시지는
+  // 엔진마다 다르다(Chromium: "Failed to fetch", Firefox: "NetworkError
+  // when attempting to fetch resource.", WebKit: "Load failed"). 특정 문자열만
+  // 매칭하면 Chromium 밖에서 이 분기를 안 타서 사용자가 브라우저 원본 에러
+  // 문구를 그대로 보게 된다 — TypeError 여부만으로 판단.
+  if (error instanceof TypeError) {
     throw new APIError('네트워크 연결을 확인해주세요.');
   }
 

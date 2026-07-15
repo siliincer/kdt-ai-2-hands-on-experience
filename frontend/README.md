@@ -20,6 +20,10 @@ npm install
 
 npm run dev
 
+## E2E 테스트
+
+pytest-playwright 기반, 실제 API + 실제 브라우저로 동작. [`e2e/README.md`](../e2e/README.md) 참고.
+
 ## Feature Slice Design
 
 FSD(Feature-Sliced Design)는 프론트엔드 코드를 '기능(Feature)'과 '계층(Layer)' 중심으로 나누는 설계 방법론입니다. 커다란 앱을 작은 블록 여러 개로 조립하는 방식과 같습니다.
