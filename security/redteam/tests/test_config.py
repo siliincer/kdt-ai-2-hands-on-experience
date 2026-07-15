@@ -15,16 +15,18 @@ def test_example_config_allows_only_local_agent():
     config = load_config(ROOT / "config.example.yaml")
 
     assert config.target.base_url == "http://localhost:8001"
+    assert config.target.request_timeout_seconds == 60
     assert config.safety.allow_remote_targets is False
     assert config.safety.required_bank_client == "local"
     assert config.safety.required_llm_provider == "ollama"
     assert config.safety.required_ollama_model == "qwen2.5:3b"
     assert config.adaptive_attack.model == "qwen2.5:3b"
     assert config.adaptive_attack.max_iterations_per_attack == 3
-    assert config.adaptive_attack.max_generation_attempts == 5
+    assert config.adaptive_attack.max_generation_attempts == 10
     assert config.adaptive_attack.candidates_per_generation == 3
     assert config.adaptive_attack.duplicate_similarity_threshold == 0.88
     assert config.adaptive_attack.seed == 42
+    assert config.execution.max_requests_per_run == 150
 
 
 def test_remote_target_is_rejected():
@@ -61,7 +63,10 @@ def test_prompt_injection_scenario_contract():
     assert len(scenario.attacks) == 3
     for attack in scenario.attacks:
         assert attack.adaptive is True
-        assert len(attack.candidate_required_patterns) == 2
+        assert attack.candidate_required_patterns
+        assert attack.variation_required_patterns
+        assert attack.variation_forbidden_patterns
+        assert attack.generation_guidance
         assert attack.expected_ledger is not None
         assert attack.expected_ledger.unchanged
     assert scenario.expected_response.allowed_statuses == {"blocked", "no_match"}

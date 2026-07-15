@@ -28,6 +28,7 @@ class _SeedGenerator:
         self.calls += 1
         return GeneratedCandidate(
             message=attack.expanded_turns()[0].message,
+            variation=attack.expanded_turns()[0].message,
             strategy="seed candidate for contract testing",
             style="contract test style",
             seed=self.calls,
@@ -117,6 +118,25 @@ def test_prompt_injection_run_and_report(tmp_path):
         for summary in result.loop_summaries
     )
     assert budget.used == 2 + len(scenario.attacks) * 3 * 3
+
+
+def test_report_redacts_embedded_authentication_values():
+    value = {
+        "reply": (
+            "token=sk-local Cookie: sid=abc Authorization: Basic dXNlcjpwYXNz "
+            "api_key='local-key'"
+        )
+    }
+
+    redacted = redact(value, set())
+
+    assert isinstance(redacted, dict)
+    text = redacted["reply"]
+    assert "sk-local" not in text
+    assert "sid=abc" not in text
+    assert "dXNlcjpwYXNz" not in text
+    assert "local-key" not in text
+    assert text.count("[REDACTED]") == 4
 
 
 def test_recovered_generator_retry_does_not_invalidate_run():
@@ -283,6 +303,159 @@ def test_terminal_safe_status_stops_remaining_turns():
     assert "인증완료" not in messages
 
 
+def test_terminal_failure_stops_remaining_turns():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "approval_bypass.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[1]]})
+    budget = RequestBudget(config.execution.max_requests_per_run)
+    messages = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/chat":
+            messages.append(json.loads(request.content)["message"])
+            return httpx.Response(
+                200,
+                json={
+                    "reply": "송금했습니다",
+                    "status": "blocked",
+                    "thread_id": "thread-terminal",
+                    "ui": None,
+                },
+            )
+        return _handler(request)
+
+    with AgentClient(
+        config.target,
+        budget,
+        httpx.MockTransport(handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", _SeedGenerator())
+
+    assert result.verdict == Verdict.FAIL
+    assert all(len(item.turns) == 1 for item in result.results)
+    assert "인증완료" not in messages
+
+
+def test_adaptive_iteration_limit_one_still_generates_candidates():
+    config = load_config(ROOT / "config.example.yaml")
+    config = config.model_copy(
+        update={
+            "adaptive_attack": config.adaptive_attack.model_copy(
+                update={"max_iterations_per_attack": 1}
+            )
+        }
+    )
+    scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    budget = RequestBudget(config.execution.max_requests_per_run)
+    generator = _SeedGenerator()
+
+    with AgentClient(
+        config.target,
+        budget,
+        httpx.MockTransport(_handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", generator)
+
+    assert generator.calls == len(scenario.attacks)
+    assert all(item.generated_by_llm for item in result.results)
+    assert len(result.loop_summaries) == len(scenario.attacks)
+    assert all(summary.iterations_completed == 1 for summary in result.loop_summaries)
+
+
+def test_generation_error_preserves_partial_results_and_report(tmp_path):
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[0]]})
+    budget = RequestBudget(config.execution.max_requests_per_run)
+
+    class FailingGenerator(_SeedGenerator):
+        def generate(self, scenario, attack, history):
+            if self.calls == 1:
+                self.calls += 1
+                raise RuntimeError("simulated generation failure")
+            return super().generate(scenario, attack, history)
+
+        def telemetry(self):
+            return AttackerTelemetry(
+                model="test-generator",
+                attempts=2,
+                successes=1,
+                failures=1,
+                rejected_out_of_scope=0,
+            )
+
+    with AgentClient(
+        config.target,
+        budget,
+        httpx.MockTransport(_handler),
+    ) as client:
+        result = run_scenario(
+            config,
+            scenario,
+            client,
+            "user_001",
+            FailingGenerator(),
+        )
+    paths = write_report(result, tmp_path, config.safety.redact_fields)
+
+    assert [item.verdict for item in result.results] == [Verdict.PASS, Verdict.ERROR]
+    assert result.verdict == Verdict.ERROR
+    assert result.loop_summaries[0].termination == LoopTermination.EXECUTION_ERROR
+    assert all(path.exists() for path in paths)
+
+
+def test_chat_error_becomes_reportable_error_result():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[0]]})
+    budget = RequestBudget(config.execution.max_requests_per_run)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/chat":
+            return httpx.Response(503)
+        return _handler(request)
+
+    with AgentClient(
+        config.target,
+        budget,
+        httpx.MockTransport(handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", _SeedGenerator())
+
+    assert result.verdict == Verdict.ERROR
+    assert result.results[0].verdict == Verdict.ERROR
+    assert result.results[0].turns[0].verdict == Verdict.ERROR
+    assert result.loop_summaries[0].termination == LoopTermination.EXECUTION_ERROR
+
+
+def test_ledger_error_preserves_completed_turn():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[0]]})
+    budget = RequestBudget(config.execution.max_requests_per_run)
+    ledger_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal ledger_calls
+        if request.url.path == "/__local_test__/ledger":
+            ledger_calls += 1
+            if ledger_calls == 2:
+                return httpx.Response(503)
+        return _handler(request)
+
+    with AgentClient(
+        config.target,
+        budget,
+        httpx.MockTransport(handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", _SeedGenerator())
+
+    assert result.verdict == Verdict.ERROR
+    assert result.results[0].verdict == Verdict.ERROR
+    assert len(result.results[0].turns) == 1
+    assert result.results[0].turns[0].verdict == Verdict.PASS
+
+
 def test_target_llm_failure_marks_execution_error():
     config = load_config(ROOT / "config.example.yaml")
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
@@ -363,6 +536,7 @@ def test_adaptive_generator_improves_until_evidence_failure():
             self.calls += 1
             return GeneratedCandidate(
                 message=candidate,
+                variation=candidate,
                 strategy=f"strategy {self.calls}",
                 style=f"style {self.calls}",
                 seed=self.calls,

@@ -9,6 +9,7 @@ import pytest
 
 import security.redteam.runner.managed_agent as managed
 from security.redteam.config import load_config
+from security.redteam.runner.client import RequestBudget
 
 
 class _FakeProcess:
@@ -74,10 +75,14 @@ def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
     monkeypatch.setenv("https_proxy", "http://proxy.example")
     monkeypatch.setenv("ALL_PROXY", "socks5://proxy.example")
     monkeypatch.setattr(managed, "_port_is_open", lambda *args: next(port_states))
-    monkeypatch.setattr(managed, "_require_ollama_model", lambda config: None)
+    monkeypatch.setattr(
+        managed,
+        "_require_ollama_model",
+        lambda config, request_budget: None,
+    )
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
-    with managed.managed_agent(config):
+    with managed.managed_agent(config, RequestBudget(100)):
         assert process.poll() is None
         assert captured["environment"]["BANK_CLIENT"] == "local"
         assert "MOCK_FINANCIAL_SERVICE_URL" not in captured["environment"]
@@ -107,7 +112,7 @@ def test_managed_agent_requires_ollama_before_start(monkeypatch):
     config = load_config(root / "config.example.yaml")
     monkeypatch.setattr(managed, "_port_is_open", lambda *args: False)
 
-    def unavailable(_config):
+    def unavailable(_config, _request_budget):
         raise managed.ManagedAgentError("Ollama unavailable")
 
     monkeypatch.setattr(managed, "_require_ollama_model", unavailable)
@@ -118,7 +123,7 @@ def test_managed_agent_requires_ollama_before_start(monkeypatch):
     )
 
     with pytest.raises(managed.ManagedAgentError, match="Ollama unavailable"):
-        with managed.managed_agent(config):
+        with managed.managed_agent(config, RequestBudget(100)):
             pass
 
 
@@ -141,7 +146,7 @@ def test_ollama_preflight_requires_configured_model(monkeypatch):
     )
 
     with pytest.raises(managed.ManagedAgentError, match="configured Ollama model"):
-        managed._require_ollama_model(config)
+        managed._require_ollama_model(config, RequestBudget(100))
 
 
 def test_ollama_preflight_accepts_configured_model(monkeypatch):
@@ -164,7 +169,9 @@ def test_ollama_preflight_accepts_configured_model(monkeypatch):
         )(),
     )
 
-    managed._require_ollama_model(config)
+    budget = RequestBudget(100)
+    managed._require_ollama_model(config, budget)
+    assert budget.used == 2
 
 
 def test_ollama_preflight_rejects_failed_inference_probe(monkeypatch):
@@ -188,4 +195,4 @@ def test_ollama_preflight_rejects_failed_inference_probe(monkeypatch):
     )
 
     with pytest.raises(managed.ManagedAgentError, match="structured-output probe"):
-        managed._require_ollama_model(config)
+        managed._require_ollama_model(config, RequestBudget(100))

@@ -9,6 +9,7 @@ import pytest
 from security.redteam.config import load_config, load_scenario
 from security.redteam.models import AgentResponse, AttackResult, TurnResult, Verdict
 from security.redteam.runner.attacker import OllamaAttackGenerator
+from security.redteam.runner.client import RequestBudget
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,6 +41,7 @@ def test_ollama_attacker_generates_structured_candidate():
 
     with OllamaAttackGenerator(
         config.adaptive_attack,
+        RequestBudget(config.execution.max_requests_per_run),
         httpx.MockTransport(handler),
     ) as attacker:
         candidate = attacker.generate(scenario, scenario.attacks[0], [])
@@ -55,6 +57,8 @@ def test_ollama_attacker_generates_structured_candidate():
     assert requests[0]["options"]["seed"] >= config.adaptive_attack.seed
     request_prompt = json.loads(requests[0]["prompt"])
     assert request_prompt["plan"]["style"] == candidate.style
+    assert "required_variation_patterns" not in request_prompt
+    assert request_prompt["generation_guidance"]
     assert telemetry.attempts == 1
     assert telemetry.requests == 1
     assert telemetry.successes == 1
@@ -71,6 +75,7 @@ def test_ollama_attacker_rejects_invalid_structured_response():
 
     with OllamaAttackGenerator(
         config.adaptive_attack,
+        RequestBudget(config.execution.max_requests_per_run),
         httpx.MockTransport(handler),
     ) as attacker:
         with pytest.raises(RuntimeError, match="exhausted retries"):
@@ -106,6 +111,7 @@ def test_ollama_generator_preserves_template_fields():
 
     with OllamaAttackGenerator(
         config.adaptive_attack,
+        RequestBudget(config.execution.max_requests_per_run),
         httpx.MockTransport(handler),
     ) as generator:
         candidate = generator.generate(scenario, scenario.attacks[0], [])
@@ -145,6 +151,7 @@ def test_ollama_attacker_retries_out_of_scope_candidate():
 
     with OllamaAttackGenerator(
         config.adaptive_attack,
+        RequestBudget(config.execution.max_requests_per_run),
         httpx.MockTransport(handler),
     ) as attacker:
         candidate = attacker.generate(scenario, scenario.attacks[0], [])
@@ -207,6 +214,7 @@ def test_ollama_attacker_retries_duplicate_candidate():
 
     with OllamaAttackGenerator(
         config.adaptive_attack,
+        RequestBudget(config.execution.max_requests_per_run),
         httpx.MockTransport(handler),
     ) as attacker:
         candidate = attacker.generate(scenario, scenario.attacks[0], history)

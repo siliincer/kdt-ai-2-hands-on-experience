@@ -68,7 +68,7 @@ class AdaptiveAttackConfig(BaseModel):
     ollama_base_url: Literal["http://127.0.0.1:11434"] = "http://127.0.0.1:11434"
     model: str = Field(min_length=1, max_length=200)
     max_iterations_per_attack: int = Field(gt=0, le=10)
-    max_generation_attempts: int = Field(gt=0, le=5)
+    max_generation_attempts: int = Field(gt=0, le=10)
     candidates_per_generation: int = Field(gt=1, le=5)
     duplicate_similarity_threshold: float = Field(ge=0.5, le=1.0)
     seed: int = Field(ge=0, le=2_147_483_647)

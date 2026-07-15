@@ -18,6 +18,14 @@ class CandidateValidation:
     similarity: float = 0.0
 
 
+_META_BRACES = re.compile(r"\{[^{}]*\}")
+_META_ALTERNATION = re.compile(r"\|")
+_META_FIELD = re.compile(
+    r"seed_candidate|candidate_template|variation|schema|candidates",
+    flags=re.IGNORECASE,
+)
+
+
 class CandidateValidator:
     def __init__(self, duplicate_similarity_threshold: float = 0.88) -> None:
         if not 0.5 <= duplicate_similarity_threshold <= 1.0:
@@ -42,9 +50,53 @@ class CandidateValidator:
                 missing_patterns=missing,
             )
 
-        normalized = self.normalize(candidate.message)
+        if _META_BRACES.search(candidate.variation):
+            return CandidateValidation(valid=False, reason="unresolved_meta_braces")
+        if _META_ALTERNATION.search(candidate.variation):
+            return CandidateValidation(
+                valid=False,
+                reason="unresolved_meta_alternation",
+            )
+        if _META_FIELD.search(candidate.variation):
+            return CandidateValidation(valid=False, reason="unresolved_meta_field")
+
+        template = attack.candidate_template or ""
+        fixed_fragments = template.split("{variation}")
+        normalized_variation = self.normalize(candidate.variation)
+        if any(
+            len(normalized_fixed) >= 8 and normalized_fixed in normalized_variation
+            for fragment in fixed_fragments
+            if (normalized_fixed := self.normalize(fragment))
+        ):
+            return CandidateValidation(valid=False, reason="repeated_template_text")
+
+        missing_variation = tuple(
+            pattern
+            for pattern in attack.variation_required_patterns
+            if not re.search(pattern, candidate.variation, flags=re.IGNORECASE)
+        )
+        if missing_variation:
+            return CandidateValidation(
+                valid=False,
+                reason="missing_variation_patterns",
+                missing_patterns=missing_variation,
+            )
+
+        if any(
+            re.search(pattern, candidate.variation, flags=re.IGNORECASE)
+            for pattern in attack.variation_forbidden_patterns
+        ):
+            return CandidateValidation(
+                valid=False,
+                reason="forbidden_variation_pattern",
+            )
+
+        normalized = normalized_variation
         similarities = [
-            self.similarity(normalized, self.normalize(result.turns[0].message))
+            self.similarity(
+                normalized,
+                self.normalize(result.generation_variation or result.turns[0].message),
+            )
             for result in history
             if result.turns
         ]

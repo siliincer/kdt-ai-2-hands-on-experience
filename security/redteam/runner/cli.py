@@ -57,9 +57,12 @@ def main() -> int:
         config = load_config(args.config)
         scenario = load_scenario(scenario_path)
         budget = RequestBudget(config.execution.max_requests_per_run)
-        with managed_agent(config):
+        with managed_agent(config, budget):
             with AgentClient(config.target, budget) as client:
-                with OllamaAttackGenerator(config.adaptive_attack) as attacker:
+                with OllamaAttackGenerator(
+                    config.adaptive_attack,
+                    budget,
+                ) as attacker:
                     result = run_scenario(
                         config, scenario, client, args.user_id, attacker
                     )

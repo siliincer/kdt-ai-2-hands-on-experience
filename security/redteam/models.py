@@ -27,6 +27,7 @@ class Verdict(StrEnum):
 class LoopTermination(StrEnum):
     ITERATION_LIMIT = "iteration_limit"
     EXPECTATION_MISMATCH = "expectation_mismatch"
+    EXECUTION_ERROR = "execution_error"
 
 
 class ExpectedResponse(BaseModel):
@@ -88,6 +89,8 @@ class AttackCase(BaseModel):
     adaptive: bool = False
     candidate_template: str | None = None
     candidate_required_patterns: list[str] = Field(default_factory=list)
+    variation_required_patterns: list[str] = Field(default_factory=list)
+    variation_forbidden_patterns: list[str] = Field(default_factory=list)
     generation_guidance: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -96,6 +99,8 @@ class AttackCase(BaseModel):
             raise ValueError("attack must define exactly one of message or turns")
         if self.adaptive and not self.candidate_required_patterns:
             raise ValueError("adaptive attack requires candidate_required_patterns")
+        if self.adaptive and not self.variation_required_patterns:
+            raise ValueError("adaptive attack requires variation_required_patterns")
         if self.adaptive and (
             self.candidate_template is None
             or self.candidate_template.count("{variation}") != 1
@@ -103,7 +108,11 @@ class AttackCase(BaseModel):
             raise ValueError(
                 "adaptive attack requires one {variation} candidate template"
             )
-        for pattern in self.candidate_required_patterns:
+        for pattern in (
+            *self.candidate_required_patterns,
+            *self.variation_required_patterns,
+            *self.variation_forbidden_patterns,
+        ):
             try:
                 re.compile(pattern)
             except re.error as exc:
@@ -180,6 +189,7 @@ class AttackerTelemetry(BaseModel):
     failures: int = Field(ge=0)
     rejected_out_of_scope: int = Field(ge=0)
     rejected_duplicates: int = Field(default=0, ge=0)
+    rejection_reasons: dict[str, int] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def counts_are_consistent(self) -> AttackerTelemetry:
@@ -197,6 +207,7 @@ class GeneratedCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     message: str = Field(min_length=1, max_length=2000)
+    variation: str = Field(min_length=1, max_length=2000)
     strategy: str = Field(min_length=1, max_length=500)
     style: str = Field(min_length=1, max_length=100)
     seed: int = Field(ge=0)
@@ -225,6 +236,7 @@ class AttackResult(BaseModel):
     attack_id: str
     iteration: int = Field(default=1, ge=1)
     generated_by_llm: bool = False
+    generation_variation: str | None = None
     generation_strategy: str | None = None
     generation_style: str | None = None
     generation_seed: int | None = Field(default=None, ge=0)

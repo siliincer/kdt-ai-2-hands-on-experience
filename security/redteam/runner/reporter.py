@@ -12,6 +12,17 @@ _REDACTED = "[REDACTED]"
 _LONG_NUMBER = re.compile(r"\b\d{10,16}\b")
 _HYPHENATED_NUMBER = re.compile(r"\b\d{2,6}(?:-\d{2,6}){1,3}\b")
 _BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
+_AUTH_VALUE = re.compile(
+    r"(?i)\b(authorization\s*[:=]\s*)(?:(?:bearer|basic|digest)\s+)?"
+    r"[A-Za-z0-9._~+/=-]+"
+)
+_COOKIE_VALUE = re.compile(
+    r"(?i)\b((?:set-)?cookie\s*[:=]\s*)[^,\s;]+(?:\s*;\s*[^,\s;]+)*"
+)
+_SECRET_VALUE = re.compile(
+    r"(?i)\b((?:token|api[_-]?key|secret|password)\s*[:=]\s*)"
+    r"(?:['\"])?[^'\"\s,;]+(?:['\"])?"
+)
 
 
 def _redact_hyphenated_number(match: re.Match[str]) -> str:
@@ -33,7 +44,10 @@ def redact(value: object, fields: set[str]) -> object:
     if isinstance(value, str):
         value = _LONG_NUMBER.sub(_REDACTED, value)
         value = _HYPHENATED_NUMBER.sub(_redact_hyphenated_number, value)
-        return _BEARER_TOKEN.sub(f"Bearer {_REDACTED}", value)
+        value = _BEARER_TOKEN.sub(f"Bearer {_REDACTED}", value)
+        value = _AUTH_VALUE.sub(rf"\1{_REDACTED}", value)
+        value = _COOKIE_VALUE.sub(rf"\1{_REDACTED}", value)
+        return _SECRET_VALUE.sub(rf"\1{_REDACTED}", value)
     return value
 
 
@@ -72,6 +86,10 @@ def _markdown_report(data: dict) -> str:
             (
                 "- Attacker duplicate rejections: "
                 f"`{attacker_telemetry['rejected_duplicates']}`"
+            ),
+            (
+                "- Attacker rejection reasons: "
+                f"`{attacker_telemetry.get('rejection_reasons', {})}`"
             ),
         ]
     if data.get("loop_summaries"):

@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 from urllib.request import ProxyHandler, Request, build_opener
 
 from security.redteam.config import RedTeamConfig
+from security.redteam.runner.client import RequestBudget
 from security.redteam.runner.reporter import redact
 
 
@@ -49,7 +50,12 @@ def _port_is_open(host: str, port: int) -> bool:
         return False
 
 
-def _read_ollama_json(request: str | Request, timeout: float) -> dict:
+def _read_ollama_json(
+    request: str | Request,
+    timeout: float,
+    request_budget: RequestBudget,
+) -> dict:
+    request_budget.consume()
     try:
         with _DIRECT_OPENER.open(request, timeout=timeout) as response:
             payload = json.load(response)
@@ -62,10 +68,13 @@ def _read_ollama_json(request: str | Request, timeout: float) -> dict:
     return payload
 
 
-def _require_ollama_model(config: RedTeamConfig) -> None:
+def _require_ollama_model(
+    config: RedTeamConfig,
+    request_budget: RequestBudget,
+) -> None:
     endpoint = f"{config.safety.required_ollama_base_url}/api/tags"
     timeout = min(config.target.request_timeout_seconds, 10)
-    payload = _read_ollama_json(endpoint, timeout)
+    payload = _read_ollama_json(endpoint, timeout, request_budget)
 
     models = payload.get("models", []) if isinstance(payload, dict) else []
     installed = {
@@ -104,7 +113,7 @@ def _require_ollama_model(config: RedTeamConfig) -> None:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        probe = _read_ollama_json(probe_request, timeout)
+        probe = _read_ollama_json(probe_request, timeout, request_budget)
         try:
             structured_response = json.loads(probe.get("response", ""))
         except (TypeError, json.JSONDecodeError) as exc:
@@ -136,14 +145,17 @@ def _wait_until_ready(
 
 
 @contextmanager
-def managed_agent(config: RedTeamConfig) -> Iterator[None]:
+def managed_agent(
+    config: RedTeamConfig,
+    request_budget: RequestBudget,
+) -> Iterator[None]:
     """Run a fresh Agent with the in-memory bank for this invocation only."""
     host, port = _connection_target(config)
     if _port_is_open(host, port):
         raise ManagedAgentError(
             f"refusing to reuse an existing process on {host}:{port}"
         )
-    _require_ollama_model(config)
+    _require_ollama_model(config, request_budget)
 
     environment = os.environ.copy()
     for key in tuple(environment):

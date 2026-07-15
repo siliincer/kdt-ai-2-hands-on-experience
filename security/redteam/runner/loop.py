@@ -49,9 +49,13 @@ class AdaptiveLoopState:
         if not self.history:
             raise RuntimeError("adaptive loop has no results")
         termination = (
-            LoopTermination.EXPECTATION_MISMATCH
-            if self.history[-1].verdict == Verdict.FAIL
-            else LoopTermination.ITERATION_LIMIT
+            LoopTermination.EXECUTION_ERROR
+            if self.history[-1].verdict == Verdict.ERROR
+            else (
+                LoopTermination.EXPECTATION_MISMATCH
+                if self.history[-1].verdict == Verdict.FAIL
+                else LoopTermination.ITERATION_LIMIT
+            )
         )
         return AdaptiveLoopSummary(
             attack_id=self.attack_id,

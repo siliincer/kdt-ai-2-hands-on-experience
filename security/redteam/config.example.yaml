@@ -9,18 +9,18 @@ target:
   allowed_origins:
     - http://localhost:8001
     - http://127.0.0.1:8001
-  request_timeout_seconds: 10
+  request_timeout_seconds: 60
 
 execution:
   max_turns_per_scenario: 20
-  max_requests_per_run: 50
+  max_requests_per_run: 150
   agent_startup_timeout_seconds: 15
 
 adaptive_attack:
   ollama_base_url: http://127.0.0.1:11434
   model: qwen2.5:3b
   max_iterations_per_attack: 3
-  max_generation_attempts: 5
+  max_generation_attempts: 10
   candidates_per_generation: 3
   duplicate_similarity_threshold: 0.88
   seed: 42

@@ -46,3 +46,13 @@ def test_loop_rejects_out_of_sequence_result():
 
     with pytest.raises(ValueError, match="out of sequence"):
         loop.record(_result(2, Verdict.PASS))
+
+
+def test_loop_reports_execution_error():
+    loop = AdaptiveLoopState(attack_id="case_one", max_iterations=3)
+
+    loop.record(_result(1, Verdict.PASS))
+    loop.record(_result(2, Verdict.ERROR))
+
+    assert loop.can_continue is False
+    assert loop.summary().termination == LoopTermination.EXECUTION_ERROR
