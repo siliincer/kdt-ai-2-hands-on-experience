@@ -1,5 +1,13 @@
 # Alembic 초기화 및 SQL 파일 위치 지정, 마이그레이션 실행 자동화
 
+한 줄 요약)
+
+적용하려면 alembic upgrade head
+
+롤백하려면 alembic downgrade -1
+
+자세한 건 https://github.com/siliincer/kdt-ai-2-hands-on-experience/wiki/Wiki_BE_Alembic 참조
+
 1. Alembic 초기화 (완료)
 
 $ cd backend
@@ -32,24 +40,24 @@ migrations/versions/0002_add_index.sql
 
 migrations/versions/0001_create_table.py 예시:
 
+```python
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-
 revision = '0001'
 down_revision = None
 branch_labels = None
 dependent_on = None
 
 def upgrade():
-sql = open('migrations/versions/0001_create_table.sql', 'r', encoding='utf-8').read()
-op.execute(sql)
+    sql = open('migrations/versions/0001_create_table.sql', 'r', encoding='utf-8').read()
+    op.execute(sql)
 
 def downgrade():
-op.execute("DROP TABLE IF EXISTS users;")
+    op.execute("DROP TABLE IF EXISTS users;")
 
-migrations/versions/0002_add_index.py 예시:
+# migrations/versions/0002_add_index.py 예시:
 
 from alembic import op
 
@@ -59,18 +67,26 @@ branch_labels = None
 dependent_on = None
 
 def upgrade():
-sql = open('migrations/versions/0002_add_index.sql', 'r', encoding='utf-8').read()
-op.execute(sql)
+    sql = open('migrations/versions/0002_add_index.sql', 'r', encoding='utf-8').read()
+    op.execute(sql)
 
 def downgrade():
-op.execute("DROP INDEX IF EXISTS ix_users_email;")
+    op.execute("DROP INDEX IF EXISTS ix_users_email;")
+```
 
 4. FastAPI 실행 시 마이그레이션 자동 반영
 
 앱 시작 코드에서 Alembic migration을 자동으로 적용하도록 설정합니다.
 
+단, 마이그레이션 파일은 로컬 환경에서 테이블 수정 후 직접 생성해야 합니다.
+
+```bash
+alembic revision --autogenerate -m "변경사항 메시지"
+```
+
 main.py 예시:
 
+```python
 from fastapi import FastAPI
 from alembic.config import Config
 from alembic import command
@@ -78,47 +94,52 @@ from alembic import command
 app = FastAPI()
 
 def run_migrations():
-alembic_cfg = Config('migrations/alembic.ini')
-command.upgrade(alembic_cfg, 'head')
+    alembic_cfg = Config('alembic.ini')
+    command.upgrade(alembic_cfg, 'head')
 
 @app.on_event('startup')
 async def startup_event():
-run_migrations()
+    run_migrations()
 
 @app.get('/')
 def read_root():
-return {'message': 'Hello'}
+    return {'message': 'Hello'}
+```
 
 5. Docker PostgreSQL과 유지되도록 설정
 
 docker-compose.yml 예시:
 
+```yml
 version: '3.8'
 services:
-db:
-image: postgres:15
-restart: always
-env_file: - .env
-volumes: - postgres_data:/var/lib/postgresql/data
-ports: - '5432:5432'
+    db:
+    image: postgres:15
+    restart: always
+    env_file: - .env
+    volumes: - postgres_data:/var/lib/postgresql/data
+    ports: - '5432:5432'
 
 backend:
-build: .
-command: uvicorn main:app --host 0.0.0.0 --port 8000
-env_file: - .env
-depends_on: - db
-volumes: - .:/app
-ports: - '8000:8000'
+    build: .
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    env_file: - .env
+    depends_on: - db
+    volumes: - .:/app
+    ports: - '8000:8000'
 
 volumes:
-postgres_data:
+    postgres_data:
+```
 
 .env 예시:
 
+```text
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_DB=mydb
 DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/mydb
+```
 
 6. Alembic 설정 변경
 
@@ -128,6 +149,7 @@ sqlalchemy.url = driver://user:pass@localhost/dbname
 
 migrations/env.py 에서 다음과 같이 DATABASE_URL을 사용합니다:
 
+```python
 import os
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
@@ -139,29 +161,30 @@ fileConfig(config.config_file_name)
 target_metadata = None
 
 def get_url():
-return os.getenv('DATABASE_URL')
+    return os.getenv('DATABASE_URL')
 
 def run_migrations_offline():
-url = get_url()
-context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
-with context.begin_transaction():
-context.run_migrations()
+    url = get_url()
+    context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
+    with context.begin_transaction():
+        context.run_migrations()
 
 def run_migrations_online():
-connectable = engine_from_config(
-config.get_section(config.config_ini_section),
-prefix='sqlalchemy.',
-poolclass=pool.NullPool,
-)
-with connectable.connect() as connection:
-context.configure(connection=connection, target_metadata=target_metadata)
-with context.begin_transaction():
-context.run_migrations()
+    connectable = engine_from_config(
+    config.get_section(config.config_ini_section),
+        prefix='sqlalchemy.',
+        poolclass=pool.NullPool,
+    )
+    with connectable.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+    with context.begin_transaction():
+        context.run_migrations()
 
-if context.is_offline_mode():
-run_migrations_offline()
-else:
-run_migrations_online()
+    if context.is_offline_mode():
+        run_migrations_offline()
+    else:
+        run_migrations_online()
+```
 
 7. 사용법
 

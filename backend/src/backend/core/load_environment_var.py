@@ -13,25 +13,83 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = Field(default="myuser")
     POSTGRES_PASSWORD: SecretStr = SecretStr("mypassword")
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://myuser:mypassword@postgres:5432/financial_agent",
+        default="postgresql://myuser:mypassword@postgres:5432/financial_agent",
         description="SQLAlchemy 비동기 연결 URL",
     )
 
     # Cache Configuration
-    REDIS_URL: AnyUrl = AnyUrl("redis://redis:6379/0")
+    REDIS_CACHE_URL: AnyUrl = AnyUrl("redis://redis:6379/0")
+    REDIS_STREAM_URL: AnyUrl = AnyUrl("redis://redis:6380/0")
     # redis://[호스트이름]:[포트번호]/[데이터베이스_번호]
+
+    # mock-financial-service(계정계/정보계) 연동 Configuration
+    FINANCIAL_CLIENT: str = Field(
+        default="mock",
+        description="계정계 데이터 소스: mock(내장 픽스처) | http(실서비스 호출)",
+    )
+    MOCK_FINANCIAL_SERVICE_URL: str = Field(
+        default="http://localhost:8002",
+        description="mock-financial-service base URL (FINANCIAL_CLIENT=http일 때 사용)",
+    )
+    FINANCIAL_ANALYTICS_KEY: SecretStr = Field(
+        default=SecretStr("analytics-demo-key"),
+        description="정보계(analytics) 읽기 API 키 (X-Analytics-Key 헤더)",
+    )
+    FINANCIAL_DEMO_ACCOUNT_ID: str = Field(
+        default="",
+        description="Phase 1 데모 시드: 매핑된 Account 없을 때 fallback account_id",
+    )
+    FINANCIAL_DEMO_RECEIVER_BANK_NAME: str = Field(
+        default="",
+        description="Phase 2 데모 송금 수취 은행명(계정계 단일 은행, 예: KDT은행)",
+    )
+    FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER: str = Field(
+        default="",
+        description="Phase 2 데모 송금 수취 계좌번호. 은행명과 함께 비면 실이체 미실행",
+    )
 
     # Auth Configuration
     JWT_SECRET_KEY: SecretStr = SecretStr("change-me-in-local")
     JWT_ALGORITHM: str = Field(default="HS256")
     # HMAC using SHA-256
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
+    SSE_TICKET_TTL_SECONDS: int = Field(
+        default=120,
+        description="SSE 연결용 일회성 티켓 유효 시간(초)",
+    )
+
+    # Agent Stream (Redis Streams 브릿지) Configuration
+    AGENT_STREAM_BLOCK_MS: int = Field(
+        default=15000,
+        description="XREAD BLOCK 대기 시간(ms). 타임아웃마다 keep-alive를 보낸다.",
+    )
+    AGENT_STREAM_MAXLEN: int = Field(
+        default=1000,
+        description="XADD 시 스트림 최대 길이(근사 MAXLEN ~). 재연결 리플레이 상한.",
+    )
+    AGENT_STREAM_TTL_SECONDS: int = Field(
+        default=3600,
+        description="agent:stream:{chat_session_id} 키의 TTL(초).",
+    )
+    AGENT_WEBHOOK_SECRET: SecretStr = Field(
+        default=SecretStr("change-me-agent-webhook"),
+        description="Agent → 웹훅(POST /webhooks/agent) 호출 시 공유 시크릿.",
+    )
+    SSE_TICKET_RATE_LIMIT: str = Field(
+        default="30/minute",
+        description="GET /sse/ticket slowapi 제한 (IP당). 인증·DB 세션 생성 게이트.",
+    )
+    SSE_CONNECT_RATE_LIMIT: str = Field(
+        default="60/minute",
+        description="GET /sse/connect slowapi 제한 (IP당). 재연결에 여유를 둔다.",
+    )
 
     # .env 파일 로드 설정 (pydantic v2 방식)
     model_config = SettingsConfigDict(
         env_file=find_dotenv(),
         env_file_encoding="utf-8",
         extra="ignore",
+        case_sensitive=False,  # 대소문자 구분 없이 환경변수 로드
     )
 
 

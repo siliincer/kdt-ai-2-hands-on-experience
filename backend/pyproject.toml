@@ -6,13 +6,19 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
     "alembic>=1.18.5",
-    "asyncpg>=0.30.0",
+    "asyncpg>=0.30.0", # pg 비동기식 드라이버
     "fastapi[standard]>=0.115.0",
+    "greenlet>=3.5.3",
     "httpx>=0.28.0",
+    "passlib[argon2]>=1.7.4",
+    "prometheus-fastapi-instrumentator>=8.0.2",
+    "psycopg2-binary>=2.9.12", # pg 동기식 드라이버
     "pydantic>=2.7.0",
     "pydantic-settings>=2.7.0",
     "python-dotenv>=1.0.0",
-    "redis>=5.2.0",
+    "python-jose>=3.5.0",
+    "redis>=5.2.0", # redis 연결 드라이버
+    "slowapi>=0.1.10",
     "sqlalchemy>=2.0.0",
     "uvicorn>=0.34.0",
 ]
@@ -33,5 +39,6 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v --durations=10"
 filterwarnings = [
-    "ignore::starlette.exceptions.StarletteDeprecationWarning"
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+    "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning"
 ]

@@ -1,3 +1,5 @@
+# TODO: 계정계 작성자님이 이 문서를 새로운 버전으로 바꿔주세요!
+
 # API Reference — 정보계 (Analytics) Endpoints
 
 정보계(downstream analytics) 전용 REST API. 읽기 전용.
@@ -16,6 +18,7 @@ X-Analytics-Key: <key>
 ```
 
 키 없거나 잘못된 경우:
+
 ```json
 HTTP 401
 {"error_code": "UNAUTHORIZED", "message": "Valid X-Analytics-Key required"}
@@ -27,12 +30,12 @@ HTTP 401
 
 ## 엔드포인트 목록
 
-| Method | Path | 설명 | 인증 |
-|--------|------|------|------|
-| GET | `/api/v1/analytics/accounts/{id}/balance` | 계좌 잔액 조회 (canonical, 계정계와 동일 값) | ✅ 필요 |
-| GET | `/api/v1/analytics/accounts/{id}/ledger` | 원장 항목 목록 | ✅ 필요 |
-| GET | `/api/v1/analytics/accounts/{id}/reconcile` | 저장된 잔액 vs 원장 재계산 정합성 검증 | ✅ 필요 |
-| GET | `/api/v1/analytics/accounts/{id}/audit-logs` | 계좌 관련 감사로그 조회 | ✅ 필요 |
+| Method | Path                                         | 설명                                         | 인증    |
+| ------ | -------------------------------------------- | -------------------------------------------- | ------- |
+| GET    | `/api/v1/analytics/accounts/{id}/balance`    | 계좌 잔액 조회 (canonical, 계정계와 동일 값) | ✅ 필요 |
+| GET    | `/api/v1/analytics/accounts/{id}/ledger`     | 원장 항목 목록                               | ✅ 필요 |
+| GET    | `/api/v1/analytics/accounts/{id}/reconcile`  | 저장된 잔액 vs 원장 재계산 정합성 검증       | ✅ 필요 |
+| GET    | `/api/v1/analytics/accounts/{id}/audit-logs` | 계좌 관련 감사로그 조회                      | ✅ 필요 |
 
 ---
 
@@ -59,16 +62,16 @@ X-Analytics-Key: <key>
 
 ### Response Fields
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `account_id` | string | 계좌 UUID |
-| `balance` | integer | `Account.balance` 저장 컬럼값 그대로 (원장 기록과 같은 트랜잭션에서 갱신되는 canonical balance) |
-| `currency` | string | 통화 코드 (KRW) |
+| 필드         | 타입    | 설명                                                                                            |
+| ------------ | ------- | ----------------------------------------------------------------------------------------------- |
+| `account_id` | string  | 계좌 UUID                                                                                       |
+| `balance`    | integer | `Account.balance` 저장 컬럼값 그대로 (원장 기록과 같은 트랜잭션에서 갱신되는 canonical balance) |
+| `currency`   | string  | 통화 코드 (KRW)                                                                                 |
 
 ### Response 404
 
 ```json
-{"error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found"}
+{ "error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found" }
 ```
 
 ---
@@ -86,10 +89,10 @@ X-Analytics-Key: <key>
 
 ### Query Parameters
 
-| 파라미터 | 타입 | 기본값 | 범위 | 설명 |
-|----------|------|--------|------|------|
-| `limit` | integer | 50 | 1–200 | 반환할 최대 항목 수 |
-| `offset` | integer | 0 | ≥ 0 | 건너뛸 항목 수 |
+| 파라미터 | 타입    | 기본값 | 범위  | 설명                |
+| -------- | ------- | ------ | ----- | ------------------- |
+| `limit`  | integer | 50     | 1–200 | 반환할 최대 항목 수 |
+| `offset` | integer | 0      | ≥ 0   | 건너뛸 항목 수      |
 
 ### Response 200
 
@@ -118,15 +121,15 @@ X-Analytics-Key: <key>
 
 ### Response Fields (per item)
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `entry_id` | string | 원장 항목 UUID |
-| `transaction_id` | string | 연결된 트랜잭션 UUID |
-| `account_id` | string | 계좌 UUID |
-| `entry_type` | string | `CREDIT` (입금) 또는 `DEBIT` (출금) |
-| `amount` | integer | 항목 금액 (항상 양수) |
-| `running_balance` | integer | 이 항목 기록 시점의 잔액 스냅샷 |
-| `created_at` | datetime | 기록 시각 (UTC ISO8601) |
+| 필드              | 타입     | 설명                                |
+| ----------------- | -------- | ----------------------------------- |
+| `entry_id`        | string   | 원장 항목 UUID                      |
+| `transaction_id`  | string   | 연결된 트랜잭션 UUID                |
+| `account_id`      | string   | 계좌 UUID                           |
+| `entry_type`      | string   | `CREDIT` (입금) 또는 `DEBIT` (출금) |
+| `amount`          | integer  | 항목 금액 (항상 양수)               |
+| `running_balance` | integer  | 이 항목 기록 시점의 잔액 스냅샷     |
+| `created_at`      | datetime | 기록 시각 (UTC ISO8601)             |
 
 정렬: `created_at` 내림차순 (최신 먼저).
 
@@ -184,21 +187,21 @@ X-Analytics-Key: <key>
 
 ### Response Fields (`ReconciliationResponse`)
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `account_id` | string | 계좌 UUID |
-| `cached_balance` | integer | `Account.balance` 저장값 |
-| `expected_balance` | integer | 원장 전체 재집계값 (`sum_credit - sum_debit`) |
-| `sum_credit` | integer | 원장 전체 CREDIT 합계 |
-| `sum_debit` | integer | 원장 전체 DEBIT 합계 |
-| `drift_detected` | boolean | `cached_balance ≠ expected_balance` 이면 `true` |
-| `delta` | integer | `cached_balance - expected_balance` |
-| `reconciled_at` | string | 검증 실행 시각 (UTC ISO8601) |
+| 필드               | 타입    | 설명                                            |
+| ------------------ | ------- | ----------------------------------------------- |
+| `account_id`       | string  | 계좌 UUID                                       |
+| `cached_balance`   | integer | `Account.balance` 저장값                        |
+| `expected_balance` | integer | 원장 전체 재집계값 (`sum_credit - sum_debit`)   |
+| `sum_credit`       | integer | 원장 전체 CREDIT 합계                           |
+| `sum_debit`        | integer | 원장 전체 DEBIT 합계                            |
+| `drift_detected`   | boolean | `cached_balance ≠ expected_balance` 이면 `true` |
+| `delta`            | integer | `cached_balance - expected_balance`             |
+| `reconciled_at`    | string  | 검증 실행 시각 (UTC ISO8601)                    |
 
 ### Response 404
 
 ```json
-{"error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found"}
+{ "error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found" }
 ```
 
 ---
@@ -245,33 +248,33 @@ X-Analytics-Key: <key>
 
 ### Response Fields (per item)
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `audit_log_id` | string | 감사로그 UUID |
-| `transaction_id` | string \| null | 연결된 트랜잭션 UUID (없으면 null) |
-| `actor` | string | 행위자 — 계좌생성 시 owner 명, 송금 시 sender account_id |
-| `action` | string | `ACCOUNT_CREATE` \| `TRANSFER` \| `TRANSFER_FAILED` |
-| `reason` | string | 사람이 읽을 수 있는 설명 |
-| `status` | string | `success` \| `failure` |
-| `timestamp` | datetime | 기록 시각 (UTC ISO8601) |
+| 필드             | 타입           | 설명                                                     |
+| ---------------- | -------------- | -------------------------------------------------------- |
+| `audit_log_id`   | string         | 감사로그 UUID                                            |
+| `transaction_id` | string \| null | 연결된 트랜잭션 UUID (없으면 null)                       |
+| `actor`          | string         | 행위자 — 계좌생성 시 owner 명, 송금 시 sender account_id |
+| `action`         | string         | `ACCOUNT_CREATE` \| `TRANSFER` \| `TRANSFER_FAILED`      |
+| `reason`         | string         | 사람이 읽을 수 있는 설명                                 |
+| `status`         | string         | `success` \| `failure`                                   |
+| `timestamp`      | datetime       | 기록 시각 (UTC ISO8601)                                  |
 
 정렬: `timestamp` 내림차순.
 
 ### Response 404
 
 ```json
-{"error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found"}
+{ "error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found" }
 ```
 
 ---
 
 ## 에러 코드 전체 목록
 
-| error_code | HTTP | 발생 상황 |
-|------------|------|-----------|
-| `UNAUTHORIZED` | 401 | X-Analytics-Key 없음 또는 불일치 |
-| `ACCOUNT_NOT_FOUND` | 404 | 존재하지 않는 계좌 ID |
-| `VALIDATION_ERROR` | 422 | 입력 파라미터 오류 |
+| error_code          | HTTP | 발생 상황                        |
+| ------------------- | ---- | -------------------------------- |
+| `UNAUTHORIZED`      | 401  | X-Analytics-Key 없음 또는 불일치 |
+| `ACCOUNT_NOT_FOUND` | 404  | 존재하지 않는 계좌 ID            |
+| `VALIDATION_ERROR`  | 422  | 입력 파라미터 오류               |
 
 ---
 
@@ -279,12 +282,12 @@ X-Analytics-Key: <key>
 
 이 엔드포인트들은 인증 없음. 계정계 owner-side API.
 
-| Method | Path | 설명 |
-|--------|------|------|
-| POST | `/api/v1/accounts` | 계좌 생성 (201) |
-| GET | `/api/v1/accounts/{id}` | 계좌 조회 (200/404) |
-| GET | `/api/v1/accounts/{id}/balance` | 저장된 잔액 조회 (200/404) |
-| GET | `/api/v1/accounts/{id}/transactions` | 원장 이력 조회 (200/404) |
-| POST | `/api/v1/transfers` | 송금 (200, Idempotency-Key 필수) |
+| Method | Path                                 | 설명                             |
+| ------ | ------------------------------------ | -------------------------------- |
+| POST   | `/api/v1/accounts`                   | 계좌 생성 (201)                  |
+| GET    | `/api/v1/accounts/{id}`              | 계좌 조회 (200/404)              |
+| GET    | `/api/v1/accounts/{id}/balance`      | 저장된 잔액 조회 (200/404)       |
+| GET    | `/api/v1/accounts/{id}/transactions` | 원장 이력 조회 (200/404)         |
+| POST   | `/api/v1/transfers`                  | 송금 (200, Idempotency-Key 필수) |
 
 계정계 잔액 (`GET /accounts/{id}/balance`) 과 정보계 잔액 (`GET /analytics/accounts/{id}/balance`) 은 동일한 저장 컬럼(`Account.balance`)을 읽으므로 같은 값을 반환해야 함.

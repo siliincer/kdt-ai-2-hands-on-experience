@@ -29,9 +29,6 @@ AI Financial Copilot Sandbox는 실제 금융 거래가 아닌 Fake Money 환경
 ├── backend/
 ├── agent/
 ├── mock-financial-service/
-├── db/
-│   ├── init/
-│   └── migrations/
 ├── docs/
 ├── nginx/
 ├── .github/

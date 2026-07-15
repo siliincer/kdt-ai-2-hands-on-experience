@@ -1,43 +1,32 @@
 name: CI
-
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
-
 permissions:
   contents: read
-
 jobs:
   python-quality:
     name: Python quality checks
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           version: "latest"
-
       - name: Set up Python
         run: uv python install 3.11
-
       - name: Sync dependencies
         run: uv sync --frozen --python 3.11
-
       - name: Check lockfile
         run: uv lock --check
-
       - name: Ruff lint
         run: uv run ruff check .
-
       - name: Ruff format check
         run: uv run ruff format --check .
-
       - name: Backend tests or import check
         run: |
           if find backend -path "*/tests/test_*.py" -print -quit | grep -q .; then
@@ -45,7 +34,6 @@ jobs:
           else
             uv run python -c "import backend; print('backend import ok')"
           fi
-
       - name: Agent tests or import check
         run: |
           if find agent -path "*/tests/test_*.py" -print -quit | grep -q .; then
@@ -60,14 +48,13 @@ jobs:
             APP_ENV
             LOG_LEVEL
             DATABASE_URL
-            REDIS_URL
+            REDIS_CACHE_URL
+            REDIS_STREAM_URL
             JWT_SECRET_KEY
             JWT_ALGORITHM
             ACCESS_TOKEN_EXPIRE_MINUTES
             LLM_PROVIDER
             BACKEND_BASE_URL
-            AGENT_SERVICE_URL
-            MOCK_FINANCIAL_SERVICE_URL
             VITE_API_BASE_URL
           )
 
@@ -81,24 +68,20 @@ jobs:
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
       - name: Set up Node.js
         if: hashFiles('frontend/package.json') != ''
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: "24"
-
       - name: Build frontend or skip
         run: |
           if [ ! -f frontend/package.json ]; then
             echo "frontend/package.json not found; skipping frontend build"
             exit 0
           fi
-
           cd frontend
           if [ -f package-lock.json ]; then
             npm ci
@@ -106,36 +89,28 @@ jobs:
             npm install
           fi
           npm run build
-
   docker-check:
     name: Docker checks
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
       - name: Prepare Docker Compose env
         run: cp .env.example .env
-
       - name: Docker Compose syntax check
         run: |
           if [ ! -s docker-compose.yml ]; then
             echo "docker-compose.yml is empty or missing; skipping compose syntax check"
             exit 0
           fi
-
           docker compose -f docker-compose.yml config
-
       - name: Docker image build or skip
         run: |
           dockerfiles=$(find . -path "*/Dockerfile" -type f)
-
           if [ -z "${dockerfiles}" ]; then
             echo "No Dockerfile found; skipping Docker image build"
             exit 0
           fi
-
           for dockerfile in ${dockerfiles}; do
             image_name=$(dirname "${dockerfile}" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')
             docker build -t "ci-${image_name}:latest" -f "${dockerfile}" .

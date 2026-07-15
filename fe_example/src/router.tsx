@@ -9,6 +9,7 @@ import BillRoute from "./app/routes/BillRoute";
 import BudgetRoute from "./app/routes/BudgetRoute";
 import AutoTransferRoute from "./app/routes/AutoTransferRoute";
 import CardRoute from "./app/routes/CardRoute";
+import ErrorMessageRoute from "./app/routes/ErrorMessageRoute";
 import ErrorRoute from "./app/routes/ErrorRoute";
 
 export const router = createHashRouter([
@@ -22,5 +23,6 @@ export const router = createHashRouter([
   { path: "/budget", element: <BudgetRoute /> },
   { path: "/autotransfer", element: <AutoTransferRoute /> },
   { path: "/card", element: <CardRoute /> },
+  { path: "/error", element: <ErrorMessageRoute /> },
   { path: "*", element: <ErrorRoute /> },
 ]);

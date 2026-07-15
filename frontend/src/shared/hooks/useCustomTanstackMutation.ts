@@ -37,7 +37,9 @@ export function useCustomTanstackMutation<TData, TVariables = void>({
         method: 'POST', // 기본값 설정을 하되, 사용자가 fetchOptions로 PUT 등을 주면 덮어씌워짐
         headers: isJson ? { 'Content-Type': 'application/json' } : undefined,
         ...fetchOptions,
-        body: isJson ? JSON.stringify(variables) : (variables as any),
+        body: isJson
+          ? JSON.stringify(variables)
+          : (variables as unknown as BodyInit),
       });
     },
     ...options,
@@ -45,8 +47,9 @@ export function useCustomTanstackMutation<TData, TVariables = void>({
 }
 
 /*
+사용 예시:
 const { mutate, isPending, error, isError } = useCustomTanstackMutation<CreateUserResponse, CreateUserPayload>({
-    url: '/api/users',
+    url: '/api/v1/users',
     fetchOptions: { method: 'POST' }, // 필요 시 PUT, DELETE 등으로 변경 가능
     onSuccess: (data) => {
         alert(`생성 성공! ID: ${data.id}`);

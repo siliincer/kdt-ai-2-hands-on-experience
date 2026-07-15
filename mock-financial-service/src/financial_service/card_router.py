@@ -5,9 +5,9 @@ Charge endpoint requires Idempotency-Key header
 (same pattern as POST /api/v1/transfers).
 """
 
-from typing import Annotated
+from typing import Annotated, cast
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
 from .crud import (
@@ -27,14 +27,11 @@ from .schemas import (
     CardSettleResponse,
     ErrorResponse,
 )
+from .utils import throw_err
 
 card_router = APIRouter(tags=["카드"])
 
 DbDep = Annotated[Session, Depends(get_db)]
-
-
-def _err(status: int, code: str, msg: str):
-    raise HTTPException(status_code=status, detail={"error_code": code, "message": msg})
 
 
 # ── POST /cards — create card ─────────────────────────────────────────────────
@@ -51,7 +48,8 @@ def create_card_endpoint(payload: CardCreate, db: DbDep):
     try:
         card = create_card(db, payload)
     except NotFoundError as e:
-        _err(404, e.error_code, e.message)
+        throw_err(404, e.error_code, e.message)
+
     return CardResponse(
         card_id=card.card_id,
         account_id=card.account_id,
@@ -73,7 +71,7 @@ def create_card_endpoint(payload: CardCreate, db: DbDep):
 def get_card_endpoint(card_id: str, db: DbDep):
     card = get_card(db, card_id)
     if card is None:
-        _err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
+        throw_err(404, "CARD_NOT_FOUND", f"Card {card_id} not found")
     return CardResponse(
         card_id=card.card_id,
         account_id=card.account_id,
@@ -104,14 +102,14 @@ def charge_card_endpoint(
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ):
     if not idempotency_key:
-        _err(422, "MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required")
+        throw_err(422, "MISSING_IDEMPOTENCY_KEY", "Idempotency-Key header is required")
 
     try:
         entry = charge_card(db, card_id, payload, idempotency_key)
     except ValidationError as e:
-        _err(422, e.error_code, e.message)
+        throw_err(422, e.error_code, e.message)
     except NotFoundError as e:
-        _err(404, e.error_code, e.message)
+        throw_err(404, e.error_code, e.message)
 
     return CardChargeResponse(
         card_ledger_entry_id=entry.card_ledger_entry_id,
@@ -138,15 +136,18 @@ def settle_card_endpoint(card_id: str, db: DbDep):
     try:
         txn = settle_card(db, card_id)
     except ValidationError as e:
-        _err(422, e.error_code, e.message)
+        throw_err(422, e.error_code, e.message)
     except NotFoundError as e:
-        _err(404, e.error_code, e.message)
+        throw_err(404, e.error_code, e.message)
+
+    settlement_watermark_rowid = cast(int, txn.settlement_watermark_rowid)
+    settlement_card_id = cast(str, txn.settlement_card_id)
 
     return CardSettleResponse(
         transaction_id=txn.transaction_id,
-        card_id=txn.settlement_card_id,
+        card_id=settlement_card_id,
         settled_amount=txn.amount,
-        settlement_watermark_rowid=txn.settlement_watermark_rowid,
+        settlement_watermark_rowid=settlement_watermark_rowid,
         status=txn.status,
         created_at=txn.created_at,
     )
