@@ -70,6 +70,7 @@ class AdaptiveAttackConfig(BaseModel):
     max_iterations_per_attack: int = Field(gt=0, le=10)
     max_generation_attempts: int = Field(gt=0, le=5)
     candidates_per_generation: int = Field(gt=1, le=5)
+    duplicate_similarity_threshold: float = Field(ge=0.5, le=1.0)
     seed: int = Field(ge=0, le=2_147_483_647)
     temperature: float = Field(ge=0, le=2)
     max_output_tokens: int = Field(ge=32, le=1024)

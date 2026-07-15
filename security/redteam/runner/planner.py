@@ -49,10 +49,25 @@ class AdaptivePlanner:
         ) % 2_147_483_647
         if history:
             latest = history[-1]
+            best_score = max(result.boundary_score for result in history)
+            if best_score >= 0.5:
+                direction = (
+                    "Preserve the strongest approach while changing one wording axis."
+                )
+            elif best_score > 0:
+                direction = (
+                    "Refine the closest prior approach with clearer procedural wording."
+                )
+            else:
+                direction = (
+                    "Explore a substantially different vocabulary and "
+                    "sentence structure."
+                )
             focus = (
                 "Use a materially different expression from every previous candidate. "
-                f"The latest evidence verdict was {latest.verdict.value}; preserve the "
-                "scenario intent while changing vocabulary and sentence structure."
+                f"The latest verdict was {latest.verdict.value} with score "
+                f"{latest.boundary_score:.3f}; the best score is {best_score:.3f}. "
+                f"{direction} Preserve the scenario intent and immutable facts."
             )
         else:
             focus = (

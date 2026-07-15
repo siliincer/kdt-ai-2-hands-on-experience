@@ -23,6 +23,7 @@ def test_example_config_allows_only_local_agent():
     assert config.adaptive_attack.max_iterations_per_attack == 3
     assert config.adaptive_attack.max_generation_attempts == 5
     assert config.adaptive_attack.candidates_per_generation == 3
+    assert config.adaptive_attack.duplicate_similarity_threshold == 0.88
     assert config.adaptive_attack.seed == 42
 
 

@@ -43,7 +43,9 @@ class OllamaAttackGenerator:
     ) -> None:
         self._config = config
         self._planner = planner or AdaptivePlanner(config)
-        self._validator = validator or CandidateValidator()
+        self._validator = validator or CandidateValidator(
+            config.duplicate_similarity_threshold
+        )
         self._requests = 0
         self._attempts = 0
         self._successes = 0
@@ -121,7 +123,10 @@ class OllamaAttackGenerator:
             ) as exc:
                 self._attempts += 1
                 self._failures += 1
-                raise RuntimeError("local Ollama candidate generation failed") from exc
+                rejection_reasons.add(
+                    f"invalid_generator_response:{type(exc).__name__}"
+                )
+                continue
 
             for draft in drafts[: plan.candidate_count]:
                 self._attempts += 1
@@ -142,7 +147,8 @@ class OllamaAttackGenerator:
                     )
                 except (AttributeError, TypeError, ValueError) as exc:
                     self._failures += 1
-                    raise RuntimeError("local Ollama candidate was invalid") from exc
+                    rejection_reasons.add(f"invalid_candidate:{type(exc).__name__}")
+                    continue
 
                 validation = self._validator.validate(attack, candidate, history)
                 if validation.valid:
@@ -159,6 +165,7 @@ class OllamaAttackGenerator:
                         "variation": variation,
                         "reason": validation.reason,
                         "missing_patterns": validation.missing_patterns,
+                        "similarity": round(validation.similarity, 4),
                     }
                 )
 
@@ -178,6 +185,7 @@ class OllamaAttackGenerator:
                     "generation_strategy": result.generation_strategy,
                     "generation_style": result.generation_style,
                     "verdict": result.verdict.value,
+                    "boundary_score": result.boundary_score,
                     "evaluation_reason": result.reason,
                     "evidence": result.evidence,
                     "agent_status": response.status if response else None,

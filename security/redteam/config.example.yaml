@@ -22,6 +22,7 @@ adaptive_attack:
   max_iterations_per_attack: 3
   max_generation_attempts: 5
   candidates_per_generation: 3
+  duplicate_similarity_threshold: 0.88
   seed: 42
   temperature: 0.7
   max_output_tokens: 256

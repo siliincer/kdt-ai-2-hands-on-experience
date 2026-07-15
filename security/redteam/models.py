@@ -216,6 +216,7 @@ class TurnResult(BaseModel):
     message: str
     response: AgentResponse | None = None
     verdict: Verdict
+    boundary_score: float = Field(default=0.0, ge=0.0, le=1.0)
     reason: str
     evidence: list[str] = Field(default_factory=list)
 
@@ -228,6 +229,7 @@ class AttackResult(BaseModel):
     generation_style: str | None = None
     generation_seed: int | None = Field(default=None, ge=0)
     verdict: Verdict
+    boundary_score: float = Field(default=0.0, ge=0.0, le=1.0)
     reason: str
     evidence: list[str] = Field(default_factory=list)
     turns: list[TurnResult]
@@ -236,6 +238,7 @@ class AttackResult(BaseModel):
 class AdaptiveLoopSummary(BaseModel):
     attack_id: str
     iterations_completed: int = Field(ge=1)
+    best_score: float = Field(default=0.0, ge=0.0, le=1.0)
     termination: LoopTermination
 
 

@@ -80,6 +80,7 @@ def _markdown_report(data: dict) -> str:
             lines.append(
                 f"- `{summary['attack_id']}`: "
                 f"{summary['iterations_completed']} iterations, "
+                f"best score `{summary['best_score']:.3f}`, "
                 f"`{summary['termination']}`"
             )
         lines.append("")
@@ -100,6 +101,7 @@ def _markdown_report(data: dict) -> str:
                 f"- Generation strategy: {result.get('generation_strategy') or 'n/a'}",
                 f"- Generation style: {result.get('generation_style') or 'n/a'}",
                 f"- Generation seed: {generation_seed_text}",
+                f"- Boundary score: `{result['boundary_score']:.3f}`",
                 f"- Reason: {result['reason']}",
                 f"- Evidence: {', '.join(result['evidence']) or 'none'}",
                 "",
@@ -111,6 +113,7 @@ def _markdown_report(data: dict) -> str:
                 [
                     f"#### Turn {turn['turn']}: {turn['verdict']}",
                     "",
+                    f"- Boundary score: `{turn['boundary_score']:.3f}`",
                     f"- Reason: {turn['reason']}",
                     f"- Evidence: {', '.join(turn['evidence']) or 'none'}",
                     f"- Message: {turn['message']}",

@@ -43,6 +43,17 @@ class _SeedGenerator:
         )
 
 
+class _RecoveredGenerator(_SeedGenerator):
+    def telemetry(self):
+        return AttackerTelemetry(
+            model="test-generator",
+            attempts=self.calls + 1,
+            successes=self.calls,
+            failures=1,
+            rejected_out_of_scope=0,
+        )
+
+
 def _handler(request: httpx.Request) -> httpx.Response:
     if request.url.path == "/health":
         return httpx.Response(200, json={"status": "ok"})
@@ -106,6 +117,29 @@ def test_prompt_injection_run_and_report(tmp_path):
         for summary in result.loop_summaries
     )
     assert budget.used == 2 + len(scenario.attacks) * 3 * 3
+
+
+def test_recovered_generator_retry_does_not_invalidate_run():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    budget = RequestBudget(config.execution.max_requests_per_run)
+
+    with AgentClient(
+        config.target,
+        budget,
+        httpx.MockTransport(_handler),
+    ) as client:
+        result = run_scenario(
+            config,
+            scenario,
+            client,
+            "user_001",
+            _RecoveredGenerator(),
+        )
+
+    assert result.verdict == Verdict.PASS
+    assert result.execution_reason is not None
+    assert "after bounded retries" in result.execution_reason
 
 
 def test_multi_turn_scenario_preserves_thread_ids():

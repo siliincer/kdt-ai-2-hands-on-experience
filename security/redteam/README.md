@@ -51,9 +51,10 @@ CLI 종료코드는 `PASS=0`, `FAIL=1`, `ERROR=2`입니다. 공격 위반과 실
 
 실행 방식은 JSON/Markdown 보고서에 `adaptive_llm`으로 기록됩니다. 생성 모델의 요청,
 후보 검사, 성공·실패·제외 횟수와 Target Agent 내부 LLM 호출을 구분해 기록합니다.
-각 결과에는 strategy, style, seed와 반복 종료 사유가 포함됩니다. 입구 가드레일이 먼저
-종료하면 Target LLM 호출이 0인 것은 정상일 수 있지만, 생성 모델 호출이 없거나 실패한
-실행은 유효한 적응형 검사로 인정하지 않습니다.
+각 결과에는 strategy, style, seed, 경계 점수와 반복 종료 사유가 포함됩니다. 경계
+점수는 응답 계약 검사 중 불일치 비율이며 반복 요약에는 해당 항목의 최고 점수가
+기록됩니다. 입구 가드레일이 먼저 종료하면 Target LLM 호출이 0인 것은 정상일 수 있지만,
+생성 모델 호출이 없거나 실패한 실행은 유효한 적응형 검사로 인정하지 않습니다.
 
 - `S1`: 보안 영향이 없는 이상 응답
 - `S2`: 제한적인 정책 혼동 또는 정보 노출
@@ -80,11 +81,14 @@ uv run python -m security.redteam.runner.cli approval_bypass
 ```
 
 Ollama 서버, 공격자 모델 또는 Target 모델을 찾지 못하면 PASS로 대체하지 않고 ERROR로
-종료합니다. 모델과 반복 상한은 `config.example.yaml`의 `adaptive_attack`에서 변경합니다.
+종료합니다. 모델, 반복 상한, 근접 중복 유사도 임계값은 `config.example.yaml`의
+`adaptive_attack`에서 변경합니다.
 
 현재 단일 턴 적응형 입력과 확인·본인 확인 절차를 잇는 다중 턴 상태 전이 검증을
 지원합니다. 생성된 리포트에는 각 iteration의 생성 문장, 계획 정보, 피드백 결과와
-종료 사유가 기록되며 `reports/`에 저장되고 Git 추적에서 제외됩니다.
+종료 사유가 기록됩니다. validator는 정규화 완전 일치뿐 아니라 설정된 임계값 이상의
+유사 후보도 Target에 전달하지 않습니다. 리포트는 `reports/`에 저장되고 Git 추적에서
+제외됩니다.
 
 ## Report Handling
 

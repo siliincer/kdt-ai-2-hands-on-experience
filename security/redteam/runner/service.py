@@ -7,10 +7,8 @@ from datetime import UTC, datetime
 
 from security.redteam.config import RedTeamConfig
 from security.redteam.models import (
-    AdaptiveLoopSummary,
     AttackCase,
     AttackResult,
-    LoopTermination,
     Scenario,
     ScenarioResult,
     Verdict,
@@ -18,6 +16,7 @@ from security.redteam.models import (
 from security.redteam.runner.attacker import AttackGenerator
 from security.redteam.runner.client import AgentClient
 from security.redteam.runner.evaluator import evaluate_ledger, evaluate_response
+from security.redteam.runner.loop import AdaptiveLoopState
 
 
 class SafetyPolicyError(RuntimeError):
@@ -82,6 +81,9 @@ def _execute_attack(
         if any(result.verdict == Verdict.FAIL for result in turn_results)
         else Verdict.PASS
     )
+    boundary_score = max(
+        (result.boundary_score for result in turn_results), default=0.0
+    )
     evidence = [item for result in turn_results for item in result.evidence]
     ledger_reason = None
     if attack.expected_ledger is not None and before_ledger is not None:
@@ -93,6 +95,7 @@ def _execute_attack(
         evidence.extend(ledger_evidence)
         if ledger_verdict == Verdict.FAIL:
             attack_verdict = Verdict.FAIL
+            boundary_score = 1.0
     reason = (
         "response and ledger evidence matched the expected outcome"
         if attack_verdict == Verdict.PASS
@@ -108,6 +111,7 @@ def _execute_attack(
         generation_style=generation_style,
         generation_seed=generation_seed,
         verdict=attack_verdict,
+        boundary_score=boundary_score,
         reason=reason,
         evidence=evidence,
         turns=turn_results,
@@ -150,12 +154,12 @@ def run_scenario(
 
     client.check_health()
     results: list[AttackResult] = []
-    loop_summaries: list[AdaptiveLoopSummary] = []
+    loop_summaries = []
     for attack, attempts in zip(scenario.attacks, attempt_counts, strict=True):
-        history: list[AttackResult] = []
-        for iteration in range(1, attempts + 1):
+        loop = AdaptiveLoopState(attack_id=attack.id, max_iterations=attempts)
+        while loop.can_continue:
             generated = (
-                attacker.generate(scenario, attack, history)
+                attacker.generate(scenario, attack, loop.history)
                 if attempts > 1 and attacker is not None
                 else None
             )
@@ -170,24 +174,12 @@ def run_scenario(
                 ),
                 generation_style=generated.style if generated is not None else None,
                 generation_seed=generated.seed if generated is not None else None,
-                iteration=iteration,
+                iteration=loop.next_iteration,
             )
             results.append(result)
-            history.append(result)
-            if attempts > 1 and result.verdict == Verdict.FAIL:
-                break
+            loop.record(result)
         if attempts > 1:
-            loop_summaries.append(
-                AdaptiveLoopSummary(
-                    attack_id=attack.id,
-                    iterations_completed=len(history),
-                    termination=(
-                        LoopTermination.EXPECTATION_MISMATCH
-                        if history[-1].verdict == Verdict.FAIL
-                        else LoopTermination.ITERATION_LIMIT
-                    ),
-                )
-            )
+            loop_summaries.append(loop.summary())
 
     verdict = (
         Verdict.FAIL
@@ -202,17 +194,15 @@ def run_scenario(
             if verdict != Verdict.FAIL:
                 verdict = Verdict.ERROR
             execution_reason = "adaptive run did not generate an LLM attack"
-        elif attacker_telemetry.failures > 0:
-            if verdict != Verdict.FAIL:
-                verdict = Verdict.ERROR
-            execution_reason = "one or more attacker LLM generations failed"
         elif llm_telemetry.failures > 0:
             if verdict != Verdict.FAIL:
                 verdict = Verdict.ERROR
             execution_reason = "one or more target LLM calls failed"
         else:
             execution_reason = (
-                "attacker LLM generated all adaptive candidates successfully"
+                "attacker LLM generated all adaptive candidates after bounded retries"
+                if attacker_telemetry.failures > 0
+                else "attacker LLM generated all adaptive candidates successfully"
             )
     else:
         if llm_telemetry.attempts == 0:
