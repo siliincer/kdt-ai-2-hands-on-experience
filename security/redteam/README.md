@@ -80,7 +80,11 @@ Target telemetry endpoint는 실행기가 띄운 검증 전용 loopback Agent에
 ```bash
 uv run python -m security.redteam.runner.cli prompt_injection
 uv run python -m security.redteam.runner.cli approval_bypass
+uv run python -m security.redteam.runner.cli prompt_injection --model llama3.2:3b
 ```
+
+`--model`은 로컬에 설치된 Ollama 모델을 입력 생성과 Target에 함께 적용합니다. 같은
+시나리오를 모델별로 실행하면 동일한 JSON/Markdown 지표로 비교할 수 있습니다.
 
 Ollama 서버, 공격자 모델 또는 Target 모델을 찾지 못하면 PASS로 대체하지 않고 ERROR로
 종료합니다. 모델, 반복 상한, 근접 중복 유사도 임계값은 `config.example.yaml`의

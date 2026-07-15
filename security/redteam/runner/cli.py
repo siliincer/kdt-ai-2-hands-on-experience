@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 from pydantic import ValidationError
 
-from security.redteam.config import load_config, load_scenario
+from security.redteam.config import RedTeamConfig, load_config, load_scenario
 from security.redteam.models import Verdict
 from security.redteam.runner.attacker import OllamaAttackGenerator
 from security.redteam.runner.client import AgentClient, RequestBudget
@@ -33,6 +33,25 @@ def _scenario_name(value: str) -> str:
     return value
 
 
+def _model_name(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", value):
+        raise argparse.ArgumentTypeError("model contains unsupported characters")
+    return value
+
+
+def _with_model(config: RedTeamConfig, model: str | None) -> RedTeamConfig:
+    if model is None:
+        return config
+    return config.model_copy(
+        update={
+            "adaptive_attack": config.adaptive_attack.model_copy(
+                update={"model": model}
+            ),
+            "safety": config.safety.model_copy(update={"required_ollama_model": model}),
+        }
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a local red-team scenario")
     parser.add_argument(
@@ -47,6 +66,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--user-id", default="user_001")
     parser.add_argument("--output-dir", type=Path, default=REDTEAM_ROOT / "reports")
+    parser.add_argument(
+        "--model",
+        type=_model_name,
+        help="installed local Ollama model used for both generator and Target",
+    )
     return parser
 
 
@@ -54,7 +78,7 @@ def main() -> int:
     args = _parser().parse_args()
     scenario_path = REDTEAM_ROOT / "scenarios" / f"{args.scenario}.yaml"
     try:
-        config = load_config(args.config)
+        config = _with_model(load_config(args.config), args.model)
         scenario = load_scenario(scenario_path)
         budget = RequestBudget(config.execution.max_requests_per_run)
         with managed_agent(config, budget):
