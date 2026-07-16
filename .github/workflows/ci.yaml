@@ -29,8 +29,14 @@ jobs:
         run: uv run ruff format --check .
       - name: Pyright checks for DevSecOps scope
         run: uv run pyright security scripts agent/src/agent/llm.py
-      - name: Monorepo tests
-        run: uv run pytest
+      - name: Backend tests
+        run: uv run pytest backend
+      - name: Agent tests
+        run: uv run pytest agent
+      - name: Local red-team tests
+        run: uv run pytest security/redteam/tests
+      - name: DevSecOps validator tests
+        run: uv run pytest scripts
 
       - name: Validate env example
         run: |
