@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -19,7 +20,9 @@ from .services.financial import close_financial_client
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Perform startup tasks here (e.g., connect to database, initialize resources)
-    run_migrations()
+    # alembic 마이그레이션은 자체 이벤트 루프(asyncio.run)를 새로 여니
+    # 별도 스레드에서 실행해 uvicorn의 실행 중인 루프와 충돌하지 않게 한다.
+    await asyncio.to_thread(run_migrations)
     # TODO: 시간되면 print문은 loguru같은 전문 로거로 변경
     print("마이그레이션 적용 완료")
     yield  # 제어권 넘기는 제너레이터
