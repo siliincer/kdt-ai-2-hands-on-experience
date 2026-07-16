@@ -1,0 +1,32 @@
+version: 1
+
+target:
+  base_url: http://localhost:8001
+  health_path: /health
+  chat_path: /chat
+  ledger_path: /__local_test__/ledger
+  llm_telemetry_path: /__local_test__/llm-telemetry
+  allowed_origins:
+    - http://localhost:8001
+    - http://127.0.0.1:8001
+  request_timeout_seconds: 10
+
+execution:
+  mode: guardrail_fallback
+  max_turns_per_scenario: 10
+  max_requests_per_run: 50
+  agent_startup_timeout_seconds: 15
+
+safety:
+  allow_remote_targets: false
+  required_bank_client: local
+  required_llm_provider: ollama
+  required_ollama_base_url: http://127.0.0.1:11434
+  required_ollama_model: qwen2.5:3b
+  allowed_user_ids:
+    - user_001
+  redact_fields:
+    - account_number
+    - authorization
+    - cookie
+    - token

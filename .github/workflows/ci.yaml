@@ -42,6 +42,12 @@ jobs:
             uv run python -c "import agent; print('agent import ok')"
           fi
 
+      - name: Local red-team tests
+        run: uv run pytest security/redteam/tests
+
+      - name: EC2 environment validator tests
+        run: uv run pytest scripts/test_validate_ec2_env.py
+
       - name: Validate env example
         run: |
           required_keys=(
@@ -88,6 +94,7 @@ jobs:
           else
             npm install
           fi
+          npm run lint
           npm run build
   docker-check:
     name: Docker checks
@@ -97,13 +104,32 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Prepare Docker Compose env
         run: cp .env.example .env
+      - name: Prepare EC2 validation env
+        run: |
+          db_password="$(openssl rand -hex 16)"
+          {
+            echo "POSTGRES_PASSWORD=${db_password}"
+            echo "COMPOSE_DATABASE_URL=postgresql://app:${db_password}@postgres:5432/financial_agent"
+            echo "JWT_SECRET_KEY=$(openssl rand -hex 32)"
+            echo "AGENT_WEBHOOK_SECRET=$(openssl rand -hex 32)"
+          } > .env.ec2-ci
+      - name: Validate EC2 environment
+        run: python3 scripts/validate_ec2_env.py --env-file .env.ec2-ci
       - name: Docker Compose syntax check
         run: |
-          if [ ! -s docker-compose.yml ]; then
-            echo "docker-compose.yml is empty or missing; skipping compose syntax check"
-            exit 0
-          fi
-          docker compose -f docker-compose.yml config
+          docker compose --env-file .env.example -f docker-compose.yml config --quiet
+          docker compose --env-file .env.example -f docker-compose.dev.yml config --quiet
+          docker compose --env-file .env.example -f docker-compose.prod.yml config --quiet
+          docker compose --env-file .env.ec2-ci --profile agent \
+            -f docker-compose.yml -f docker-compose.ec2.yml config --quiet
+      - name: Nginx syntax check
+        run: |
+          docker run --rm --add-host backend:127.0.0.1 \
+            -v "$PWD/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
+          docker run --rm --add-host backend:127.0.0.1 \
+            -v "$PWD/nginx/ec2.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
       - name: Docker image build or skip
         run: |
           dockerfiles=$(find . -path "*/Dockerfile" -type f)
