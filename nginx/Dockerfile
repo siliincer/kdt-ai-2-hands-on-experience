@@ -2,7 +2,9 @@ FROM nginx:1.30.3-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae
 
 RUN apk add --no-cache --upgrade \
     c-ares=1.34.8-r0 \
-    libexpat=2.8.2-r0
+    libexpat=2.8.2-r0 \
+    curl=8.20.0-r0 \
+    libcurl=8.20.0-r0
 
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 
