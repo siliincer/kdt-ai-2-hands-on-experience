@@ -180,6 +180,7 @@ jobs:
 
           docker volume create "${volume_name}"
           docker run -d --name ci-legacy-seed --user 0:0 \
+            -e DATABASE_URL=sqlite:////data/financial.db \
             -v "${volume_name}:/data" \
             -w /data kdt-team3/mock-financial-service:local
           for attempt in {1..30}; do
@@ -200,6 +201,7 @@ jobs:
             stat -c '%u:%g' /data/financial.db)"
           test "${owner}" = "10001:10001"
           docker run -d --name ci-legacy-runtime --user 10001:10001 \
+            -e DATABASE_URL=sqlite:////data/financial.db \
             -v "${volume_name}:/data" \
             -w /data kdt-team3/mock-financial-service:local
           for attempt in {1..30}; do
