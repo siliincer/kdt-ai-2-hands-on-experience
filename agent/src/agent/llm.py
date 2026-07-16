@@ -28,7 +28,13 @@ from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
-load_dotenv()
+
+def _load_local_environment() -> None:
+    if os.getenv("AGENT_DISABLE_DOTENV") != "1":
+        load_dotenv()
+
+
+_load_local_environment()
 
 # 제공자별 기본 모델 (LLM_MODEL 미지정 시)
 _DEFAULT_MODELS = {
@@ -57,16 +63,6 @@ def _resolve_model(provider: str, model: str | None) -> str:
             or _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
         )
 
-    # 제공자-모델 불일치 보호: 예전 .env에 남은 다른 제공자용 모델명이
-    # 조용히 404를 내지 않도록 해당 제공자 기본 모델로 되돌린다.
-    if provider == "vertex" and resolved_model.startswith("gpt"):
-        return _DEFAULT_MODELS["vertex"]
-    if provider == "openai" and resolved_model.startswith("gemini"):
-        return _DEFAULT_MODELS["openai"]
-    if provider == "ollama" and (
-        resolved_model.startswith("gpt") or resolved_model.startswith("gemini")
-    ):
-        return _DEFAULT_MODELS["ollama"]
     return resolved_model
 
 

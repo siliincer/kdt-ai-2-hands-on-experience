@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, datetime
 
@@ -11,6 +12,9 @@ from security.redteam.config import RedTeamConfig
 from security.redteam.models import (
     AttackCase,
     AttackResult,
+    CandidateAction,
+    CandidatePolarity,
+    CandidateTarget,
     Scenario,
     ScenarioResult,
     TurnResult,
@@ -42,12 +46,31 @@ def _error_result(
     *,
     turns=None,
 ) -> AttackResult:
+    preserved_turns = list(turns or [])
+    has_failure = any(turn.verdict == Verdict.FAIL for turn in preserved_turns)
+    failure_reasons = list(
+        dict.fromkeys(
+            turn.reason for turn in preserved_turns if turn.verdict == Verdict.FAIL
+        )
+    )
+    execution_reason = f"{stage} failed: {type(error).__name__}"
+    reason = (
+        f"security expectation mismatch: {'; '.join(failure_reasons)}; "
+        f"{execution_reason}"
+        if failure_reasons
+        else execution_reason
+    )
     return AttackResult(
         attack_id=attack.id,
         iteration=iteration,
-        verdict=Verdict.ERROR,
-        reason=f"{stage} failed: {type(error).__name__}",
-        turns=list(turns or []),
+        verdict=Verdict.FAIL if has_failure else Verdict.ERROR,
+        reason=reason,
+        execution_error=f"{stage}:{type(error).__name__}",
+        boundary_score=max(
+            (turn.boundary_score for turn in preserved_turns), default=0.0
+        ),
+        evidence=[item for turn in preserved_turns for item in turn.evidence],
+        turns=preserved_turns,
     )
 
 
@@ -88,6 +111,10 @@ def _execute_attack(
     generation_style: str | None,
     generation_seed: int | None,
     iteration: int,
+    generation_requested_action: CandidateAction | None = None,
+    generation_target: CandidateTarget | None = None,
+    generation_polarity: CandidatePolarity | None = None,
+    generation_reported_speech: bool | None = None,
 ) -> AttackResult:
     turns = attack.expanded_turns()
     if first_message is not None:
@@ -105,6 +132,7 @@ def _execute_attack(
     thread_id = None
     turn_results = []
     for index, turn in enumerate(turns, start=1):
+        requested_thread_id = thread_id
         try:
             response = client.chat(turn.message, user_id, thread_id)
         except _BOUNDED_EXECUTION_ERRORS as exc:
@@ -123,10 +151,34 @@ def _execute_attack(
                 exc,
                 turns=turn_results,
             )
-        thread_id = response.thread_id
         expected = turn.expected_response or scenario.expected_response
         turn_result = evaluate_response(index, turn.message, response, expected)
+        if (
+            requested_thread_id is not None
+            and response.thread_id != requested_thread_id
+        ):
+            drift_reason = (
+                f"thread continuity mismatch: expected {requested_thread_id}, "
+                f"got {response.thread_id}"
+            )
+            turn_result = turn_result.model_copy(
+                update={
+                    "verdict": Verdict.FAIL,
+                    "boundary_score": 1.0,
+                    "reason": f"{turn_result.reason}; {drift_reason}",
+                    "evidence": [
+                        *turn_result.evidence,
+                        "state:thread_continuity_mismatch",
+                    ],
+                }
+            )
         turn_results.append(turn_result)
+        if (
+            requested_thread_id is not None
+            and response.thread_id != requested_thread_id
+        ):
+            break
+        thread_id = response.thread_id
         if response.status in expected.terminal_statuses:
             break
 
@@ -175,6 +227,10 @@ def _execute_attack(
         generation_strategy=generation_strategy,
         generation_style=generation_style,
         generation_seed=generation_seed,
+        generation_requested_action=generation_requested_action,
+        generation_target=generation_target,
+        generation_polarity=generation_polarity,
+        generation_reported_speech=generation_reported_speech,
         verdict=attack_verdict,
         boundary_score=boundary_score,
         reason=reason,
@@ -189,7 +245,14 @@ def run_scenario(
     client: AgentClient,
     user_id: str,
     attacker: AttackGenerator | None = None,
+    *,
+    run_started_at: datetime | None = None,
+    run_started_monotonic: float | None = None,
 ) -> ScenarioResult:
+    started_at = run_started_at or datetime.now(UTC)
+    started_monotonic = (
+        run_started_monotonic if run_started_monotonic is not None else time.monotonic()
+    )
     validate_runtime(config, user_id)
     if any(attack.adaptive for attack in scenario.attacks) and attacker is None:
         raise SafetyPolicyError("adaptive LLM execution requires an input generator")
@@ -211,7 +274,9 @@ def run_scenario(
         if attack.expected_ledger
     )
     generation_requests = sum(
-        attempts * config.adaptive_attack.max_generation_attempts
+        attempts
+        * config.adaptive_attack.max_generation_attempts
+        * (1 + config.adaptive_attack.candidates_per_generation)
         for attack, attempts in zip(scenario.attacks, attempt_counts, strict=True)
         if attack.adaptive
     )
@@ -257,9 +322,19 @@ def run_scenario(
                 ),
                 generation_style=generated.style if generated is not None else None,
                 generation_seed=generated.seed if generated is not None else None,
+                generation_requested_action=(
+                    generated.requested_action if generated is not None else None
+                ),
+                generation_target=generated.target if generated is not None else None,
+                generation_polarity=(
+                    generated.polarity if generated is not None else None
+                ),
+                generation_reported_speech=(
+                    generated.reported_speech if generated is not None else None
+                ),
                 iteration=loop.next_iteration,
             )
-            if result.verdict == Verdict.ERROR and generated is not None:
+            if result.execution_error is not None and generated is not None:
                 result = result.model_copy(
                     update={
                         "generated_by_llm": True,
@@ -267,6 +342,10 @@ def run_scenario(
                         "generation_strategy": generated.strategy,
                         "generation_style": generated.style,
                         "generation_seed": generated.seed,
+                        "generation_requested_action": generated.requested_action,
+                        "generation_target": generated.target,
+                        "generation_polarity": generated.polarity,
+                        "generation_reported_speech": generated.reported_speech,
                     }
                 )
             results.append(result)
@@ -286,7 +365,7 @@ def run_scenario(
     attacker_telemetry = attacker.telemetry() if attacker is not None else None
     adaptive_enabled = any(attack.adaptive for attack in scenario.attacks)
     if adaptive_enabled:
-        if any(result.verdict == Verdict.ERROR for result in results):
+        if any(result.execution_error for result in results):
             execution_reason = "adaptive execution ended with a bounded runtime error"
         elif telemetry_error is not None:
             execution_reason = "target LLM telemetry collection failed"
@@ -318,9 +397,12 @@ def run_scenario(
         else:
             execution_reason = "all observed LLM calls completed successfully"
 
+    completed_at = datetime.now(UTC)
     return ScenarioResult(
         run_id=f"rt_{uuid.uuid4().hex[:12]}",
-        started_at=datetime.now(UTC),
+        started_at=started_at,
+        completed_at=completed_at,
+        duration_seconds=max(0.0, time.monotonic() - started_monotonic),
         target_origin=config.target.base_url.rstrip("/"),
         scenario_id=scenario.id,
         scenario_name=scenario.name,

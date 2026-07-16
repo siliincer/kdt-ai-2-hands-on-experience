@@ -50,7 +50,10 @@ class AdaptiveLoopState:
             raise RuntimeError("adaptive loop has no results")
         termination = (
             LoopTermination.EXECUTION_ERROR
-            if self.history[-1].verdict == Verdict.ERROR
+            if (
+                self.history[-1].execution_error is not None
+                or self.history[-1].verdict == Verdict.ERROR
+            )
             else (
                 LoopTermination.EXPECTATION_MISMATCH
                 if self.history[-1].verdict == Verdict.FAIL

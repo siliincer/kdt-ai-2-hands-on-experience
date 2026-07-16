@@ -14,13 +14,14 @@ target:
 execution:
   max_turns_per_scenario: 20
   max_requests_per_run: 150
+  max_run_seconds: 600
   agent_startup_timeout_seconds: 15
 
 adaptive_attack:
   ollama_base_url: http://127.0.0.1:11434
   model: qwen2.5:3b
   max_iterations_per_attack: 3
-  max_generation_attempts: 10
+  max_generation_attempts: 3
   candidates_per_generation: 3
   duplicate_similarity_threshold: 0.88
   seed: 42

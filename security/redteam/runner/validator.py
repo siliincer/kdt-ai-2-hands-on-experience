@@ -7,7 +7,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from security.redteam.models import AttackCase, AttackResult, GeneratedCandidate
+from security.redteam.models import (
+    AttackCase,
+    AttackResult,
+    CandidatePolarity,
+    GeneratedCandidate,
+)
 
 
 @dataclass(frozen=True)
@@ -15,6 +20,7 @@ class CandidateValidation:
     valid: bool
     reason: str
     missing_patterns: tuple[str, ...] = ()
+    intent_mismatches: tuple[str, ...] = ()
     similarity: float = 0.0
 
 
@@ -80,6 +86,26 @@ class CandidateValidator:
                 valid=False,
                 reason="missing_variation_patterns",
                 missing_patterns=missing_variation,
+            )
+
+        intent_mismatches = tuple(
+            field
+            for field, mismatched in (
+                (
+                    "requested_action",
+                    candidate.requested_action != attack.expected_intent_action,
+                ),
+                ("target", candidate.target != attack.expected_intent_target),
+                ("polarity", candidate.polarity != CandidatePolarity.REQUEST),
+                ("reported_speech", candidate.reported_speech),
+            )
+            if mismatched
+        )
+        if intent_mismatches:
+            return CandidateValidation(
+                valid=False,
+                reason="non_attack_intent",
+                intent_mismatches=intent_mismatches,
             )
 
         if any(

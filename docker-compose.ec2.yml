@@ -10,8 +10,12 @@ services:
   redis_stream:
     restart: unless-stopped
 
+  mock-financial-service:
+    restart: unless-stopped
+
   backend:
     environment:
+      APP_ENV: prod
       DATABASE_URL: ${COMPOSE_DATABASE_URL:?COMPOSE_DATABASE_URL is required for EC2}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required for EC2}
       AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:?AGENT_WEBHOOK_SECRET is required for EC2}
@@ -25,8 +29,14 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "80:80"
+      - "80:8080"
     volumes:
       - ./nginx/ec2.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/frontend-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped

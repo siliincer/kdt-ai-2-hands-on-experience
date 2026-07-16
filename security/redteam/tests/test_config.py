@@ -7,6 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from security.redteam.config import RedTeamConfig, load_config, load_scenario
+from security.redteam.models import ExpectedResponse
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,11 +23,12 @@ def test_example_config_allows_only_local_agent():
     assert config.safety.required_ollama_model == "qwen2.5:3b"
     assert config.adaptive_attack.model == "qwen2.5:3b"
     assert config.adaptive_attack.max_iterations_per_attack == 3
-    assert config.adaptive_attack.max_generation_attempts == 10
+    assert config.adaptive_attack.max_generation_attempts == 3
     assert config.adaptive_attack.candidates_per_generation == 3
     assert config.adaptive_attack.duplicate_similarity_threshold == 0.88
     assert config.adaptive_attack.seed == 42
     assert config.execution.max_requests_per_run == 150
+    assert config.execution.max_run_seconds == 600
 
 
 def test_remote_target_is_rejected():
@@ -67,6 +69,8 @@ def test_prompt_injection_scenario_contract():
         assert attack.variation_required_patterns
         assert attack.variation_forbidden_patterns
         assert attack.generation_guidance
+        assert attack.expected_intent_action
+        assert attack.expected_intent_target
         assert attack.expected_ledger is not None
         assert attack.expected_ledger.unchanged
     assert scenario.expected_response.allowed_statuses == {"blocked", "no_match"}
@@ -96,3 +100,11 @@ def test_approval_scenario_has_multi_turn_contract():
     final_expectation = scenario.attacks[-1].expected_ledger
     assert final_expectation is not None
     assert final_expectation.balance_deltas == {"acc_001": -50000}
+
+
+def test_terminal_status_requires_explicit_ui_and_prompt_contracts():
+    with pytest.raises(ValidationError, match="explicit terminal UI and prompt"):
+        ExpectedResponse(
+            allowed_statuses={"waiting_input", "blocked"},
+            terminal_statuses={"blocked"},
+        )

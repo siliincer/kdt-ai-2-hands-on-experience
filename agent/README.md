@@ -1,8 +1,8 @@
 # Agent — 금융 AI 에이전트
 
 "김철수한테 5만원 보내줘" 같은 **자연어 요청을 받아, 안전장치를 거쳐, 실제로
-실행**하는 서비스입니다 (Fake Money 기반). FastAPI로 떠 있고(포트 8001),
-backend 게이트웨이가 채팅을 이쪽으로 넘겨줍니다.
+실행**하는 서비스입니다 (Fake Money 기반). FastAPI로 떠 있고(포트 8001), 현재는
+독립 검증 경로입니다. Backend 제품 채팅은 아직 `mock_agent_driver`를 사용합니다.
 
 이 문서는 agent 폴더를 처음 보는 팀원(프론트/백엔드)을 위한 전체 개요입니다.
 
@@ -94,16 +94,17 @@ state에 쌓입니다. 엔진용 고정 필드(응답 문장, 분기 키 등)와
 
 **④ 돈 데이터는 반드시 bank_client를 거친다.**
 계좌 조회·송금 실행 같은 원장 작업은 tool이 직접 하지 않고
-`bank_client.py`를 통합니다. 환경변수 하나로 내장 mock(`local`, 기본)과
-실제 원장 서비스 호출(`http` → mock-financial-service:8002)을 전환합니다.
+`bank_client.py`를 통합니다. 현재 지원되는 실행 경로는 내장 mock(`local`, 기본)입니다.
+`http` adapter는 legacy 계약용이며 현재 mock-financial-service `/api/v1`과 호환되지
+않으므로 URL만 바꿔 연결하면 안 됩니다.
 
 ## 4. 다른 서비스와의 접점 (내 파트는 뭘 보면 되나)
 
 | 담당 | 접점 | 봐야 할 것 |
 |---|---|---|
 | **프론트** | 채팅 응답의 `ui` 필드로 화면을 그린다 — 계좌 카드 목록, 승인 카드(버튼 라벨 포함) 등. 버튼 라벨("송금하기")을 **그대로 다음 메시지로 보내면** 에이전트가 인식 | `frontend/src/features/agent_chat/api/types.ts` (타입), [docs/README.md](docs/README.md) 3절 (ui 종류별 예시) |
-| **백엔드** | `/api/v1/agent/chat`이 이 서비스의 `/chat`으로 프록시. 요청/응답을 그대로 전달만 하면 됨 | `backend/src/backend/api/agent_api.py`, `backend/src/backend/services/agent_client.py` |
-| **원장(mock-financial-service)** | 에이전트가 http 모드에서 호출하는 계좌/송금 REST API | `mock-financial-service/README.md` (구현된 API와 에러 규칙) |
+| **백엔드** | 현재 제품 채팅은 `mock_agent_driver` 사용. Agent HTTP/SSE 중계 계약은 후속 구현 | `backend/src/backend/services/chat_service.py` |
+| **원장(mock-financial-service)** | Backend가 사용하는 Fake Money `/api/v1` 원장. Agent adapter 재설계 전에는 직접 연결하지 않음 | `mock-financial-service/README.md` |
 
 ## 5. 직접 실행해 보기
 

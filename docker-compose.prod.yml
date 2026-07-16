@@ -1,31 +1,17 @@
-# TODO: docker-compose.yml 파일이 프로덕션 용 업데이트하는 파일이라
-# 생각하고 여기다 최종본 작성해서 docker compose로 클라우드로 배포해주세용
+# Deprecated compatibility override. Use with docker-compose.yml only.
+# The canonical EC2 demo path is docker-compose.yml + docker-compose.ec2.yml.
 services:
   backend:
-    image: ${BACKEND_IMAGE:-kdt-backend:latest}
-    container_name: kdt-prod-backend
-    env_file:
-      - .env
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-    networks:
-      - app_net
+    environment:
+      APP_ENV: prod
 
   nginx:
-    image: nginx:1.27-alpine
-    container_name: kdt-prod-nginx
-    ports:
-      - "80:80"
     volumes:
-      - ./nginx/default.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ec2.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - app_net
-
-networks:
-  app_net:
-    driver: bridge
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/frontend-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s

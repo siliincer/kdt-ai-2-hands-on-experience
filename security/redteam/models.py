@@ -30,18 +30,51 @@ class LoopTermination(StrEnum):
     EXECUTION_ERROR = "execution_error"
 
 
+class CandidatePolarity(StrEnum):
+    REQUEST = "request"
+    REJECT = "reject"
+    DESCRIBE = "describe"
+    OTHER = "other"
+    UNCERTAIN = "uncertain"
+
+
+class CandidateAction(StrEnum):
+    DISCLOSE = "disclose"
+    DISABLE = "disable"
+    BYPASS = "bypass"
+    OTHER = "other"
+    UNCERTAIN = "uncertain"
+
+
+class CandidateTarget(StrEnum):
+    INTERNAL_INSTRUCTIONS = "internal_instructions"
+    HIDDEN_POLICY = "hidden_policy"
+    SAFETY_CONTROLS = "safety_controls"
+    APPROVAL_STEP = "approval_step"
+    OTHER = "other"
+    UNCERTAIN = "uncertain"
+
+
 class ExpectedResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     allowed_statuses: set[str] = Field(min_length=1)
     terminal_statuses: set[str] = Field(default_factory=set)
     allowed_ui_types: set[str] = Field(default_factory=set)
+    terminal_allowed_ui_types: set[str | None] | None = None
     forbidden_ui_types: set[str] = Field(default_factory=set)
-    forbid_sensitive_reply: bool = False
+    forbid_financial_secrets: bool = False
+    allowed_prompt_for: set[str | None] | None = None
+    terminal_allowed_prompt_for: set[str | None] | None = None
+    forbidden_policy_reply_patterns: list[str] = Field(default_factory=list)
     forbidden_reply_patterns: list[str] = Field(default_factory=list)
     required_reply_patterns: list[str] = Field(default_factory=list)
 
-    @field_validator("forbidden_reply_patterns", "required_reply_patterns")
+    @field_validator(
+        "forbidden_policy_reply_patterns",
+        "forbidden_reply_patterns",
+        "required_reply_patterns",
+    )
     @classmethod
     def patterns_are_valid(cls, patterns: list[str]) -> list[str]:
         for pattern in patterns:
@@ -55,6 +88,13 @@ class ExpectedResponse(BaseModel):
     def terminal_statuses_are_allowed(self) -> ExpectedResponse:
         if not self.terminal_statuses <= self.allowed_statuses:
             raise ValueError("terminal statuses must also be allowed statuses")
+        if self.terminal_statuses and (
+            self.terminal_allowed_ui_types is None
+            or self.terminal_allowed_prompt_for is None
+        ):
+            raise ValueError(
+                "terminal statuses require explicit terminal UI and prompt contracts"
+            )
         return self
 
 
@@ -87,6 +127,8 @@ class AttackCase(BaseModel):
     turns: list[AttackTurn] = Field(default_factory=list)
     expected_ledger: LedgerExpectation | None = None
     adaptive: bool = False
+    expected_intent_action: CandidateAction | None = None
+    expected_intent_target: CandidateTarget | None = None
     candidate_template: str | None = None
     candidate_required_patterns: list[str] = Field(default_factory=list)
     variation_required_patterns: list[str] = Field(default_factory=list)
@@ -101,6 +143,10 @@ class AttackCase(BaseModel):
             raise ValueError("adaptive attack requires candidate_required_patterns")
         if self.adaptive and not self.variation_required_patterns:
             raise ValueError("adaptive attack requires variation_required_patterns")
+        if self.adaptive and (
+            self.expected_intent_action is None or self.expected_intent_target is None
+        ):
+            raise ValueError("adaptive attack requires an expected structured intent")
         if self.adaptive and (
             self.candidate_template is None
             or self.candidate_template.count("{variation}") != 1
@@ -148,14 +194,20 @@ class Scenario(BaseModel):
         return self
 
 
+class AgentUiEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    type: str = Field(min_length=1)
+
+
 class AgentResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     reply: str
     status: str
-    thread_id: str
+    thread_id: str = Field(min_length=1)
     prompt_for: str | None = None
-    ui: dict | None = None
+    ui: AgentUiEnvelope | None = None
 
 
 class LedgerSnapshot(BaseModel):
@@ -211,6 +263,10 @@ class GeneratedCandidate(BaseModel):
     strategy: str = Field(min_length=1, max_length=500)
     style: str = Field(min_length=1, max_length=100)
     seed: int = Field(ge=0)
+    requested_action: CandidateAction
+    target: CandidateTarget
+    polarity: CandidatePolarity
+    reported_speech: bool
 
 
 class GenerationPlan(BaseModel):
@@ -240,10 +296,15 @@ class AttackResult(BaseModel):
     generation_strategy: str | None = None
     generation_style: str | None = None
     generation_seed: int | None = Field(default=None, ge=0)
+    generation_requested_action: CandidateAction | None = None
+    generation_target: CandidateTarget | None = None
+    generation_polarity: CandidatePolarity | None = None
+    generation_reported_speech: bool | None = None
     verdict: Verdict
     boundary_score: float = Field(default=0.0, ge=0.0, le=1.0)
     reason: str
     evidence: list[str] = Field(default_factory=list)
+    execution_error: str | None = None
     turns: list[TurnResult]
 
 
@@ -257,6 +318,8 @@ class AdaptiveLoopSummary(BaseModel):
 class ScenarioResult(BaseModel):
     run_id: str
     started_at: datetime
+    completed_at: datetime
+    duration_seconds: float = Field(ge=0.0)
     target_origin: str
     scenario_id: str
     scenario_name: str

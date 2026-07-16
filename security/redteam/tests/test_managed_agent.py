@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import io
+import json
 import subprocess
+import tempfile
 from pathlib import Path
+from typing import cast
 from urllib.request import ProxyHandler
 
 import pytest
 
 import security.redteam.runner.managed_agent as managed
 from security.redteam.config import load_config
-from security.redteam.runner.client import RequestBudget
+from security.redteam.runner.client import RequestBudget, RequestBudgetError
 
 
 class _FakeProcess:
@@ -74,6 +77,10 @@ def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
     monkeypatch.setenv("HTTP_PROXY", "http://proxy.example")
     monkeypatch.setenv("https_proxy", "http://proxy.example")
     monkeypatch.setenv("ALL_PROXY", "socks5://proxy.example")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
+    monkeypatch.setenv("GITHUB_TOKEN", "github-secret")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-secret")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:secret@example/db")
     monkeypatch.setattr(managed, "_port_is_open", lambda *args: next(port_states))
     monkeypatch.setattr(
         managed,
@@ -90,13 +97,18 @@ def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
         assert captured["environment"]["OLLAMA_BASE_URL"] == ("http://127.0.0.1:11434")
         assert captured["environment"]["OLLAMA_MODEL"] == "qwen2.5:3b"
         assert captured["environment"]["LLM_MODEL"] == "qwen2.5:3b"
-        assert captured["environment"]["OPENAI_API_KEY"] == ""
-        assert captured["environment"]["LANGSMITH_API_KEY"] == ""
+        assert "OPENAI_API_KEY" not in captured["environment"]
+        assert "LANGSMITH_API_KEY" not in captured["environment"]
         assert captured["environment"]["LANGCHAIN_TRACING_V2"] == "false"
         assert captured["environment"]["LANGSMITH_TRACING"] == "false"
+        assert captured["environment"]["AGENT_DISABLE_DOTENV"] == "1"
         assert "HTTP_PROXY" not in captured["environment"]
         assert "https_proxy" not in captured["environment"]
         assert "ALL_PROXY" not in captured["environment"]
+        assert "AWS_SECRET_ACCESS_KEY" not in captured["environment"]
+        assert "GITHUB_TOKEN" not in captured["environment"]
+        assert "ANTHROPIC_API_KEY" not in captured["environment"]
+        assert "DATABASE_URL" not in captured["environment"]
         assert captured["environment"]["NO_PROXY"] == "localhost,127.0.0.1,::1"
         assert captured["environment"]["no_proxy"] == "localhost,127.0.0.1,::1"
 
@@ -196,3 +208,65 @@ def test_ollama_preflight_rejects_failed_inference_probe(monkeypatch):
 
     with pytest.raises(managed.ManagedAgentError, match="structured-output probe"):
         managed._require_ollama_model(config, RequestBudget(100))
+
+
+@pytest.mark.parametrize("structured_payload", [[], "text", 1, None])
+def test_ollama_preflight_rejects_non_object_probe(
+    monkeypatch,
+    structured_payload,
+):
+    root = Path(__file__).resolve().parents[1]
+    config = load_config(root / "config.example.yaml")
+    responses = iter(
+        [
+            _OllamaResponse(b'{"models":[{"name":"qwen2.5:3b"}]}'),
+            _OllamaResponse(
+                json.dumps({"response": json.dumps(structured_payload)}).encode("utf-8")
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        managed,
+        "_DIRECT_OPENER",
+        type(
+            "InvalidShapeOpener",
+            (),
+            {"open": lambda *args, **kwargs: next(responses)},
+        )(),
+    )
+
+    with pytest.raises(managed.ManagedAgentError, match="structured-output probe"):
+        managed._require_ollama_model(config, RequestBudget(100))
+
+
+@pytest.mark.parametrize("run_deadline", [0.01, 0.073])
+def test_managed_startup_honors_run_deadline(monkeypatch, run_deadline):
+    clock = [0.0]
+    poll_timeouts = []
+    monkeypatch.setattr(managed.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        managed.time,
+        "sleep",
+        lambda seconds: clock.__setitem__(0, clock[0] + seconds),
+    )
+    monkeypatch.setattr(
+        managed,
+        "_port_is_open",
+        lambda _host, _port, timeout: poll_timeouts.append(timeout) or False,
+    )
+    budget = RequestBudget(10, max_seconds=run_deadline)
+
+    with tempfile.TemporaryFile() as process_log:
+        with pytest.raises(RequestBudgetError, match="deadline exhausted"):
+            managed._wait_until_ready(
+                cast(subprocess.Popen, _FakeProcess()),
+                "127.0.0.1",
+                8001,
+                1.0,
+                budget,
+                process_log,
+            )
+
+    assert clock[0] == pytest.approx(run_deadline)
+    assert poll_timeouts
+    assert max(poll_timeouts) <= run_deadline

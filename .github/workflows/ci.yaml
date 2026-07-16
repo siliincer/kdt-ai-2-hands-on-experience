@@ -16,7 +16,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          version: "latest"
+          version: "0.11.6"
       - name: Set up Python
         run: uv python install 3.11
       - name: Sync dependencies
@@ -27,26 +27,10 @@ jobs:
         run: uv run ruff check .
       - name: Ruff format check
         run: uv run ruff format --check .
-      - name: Backend tests or import check
-        run: |
-          if find backend -path "*/tests/test_*.py" -print -quit | grep -q .; then
-            uv run pytest backend
-          else
-            uv run python -c "import backend; print('backend import ok')"
-          fi
-      - name: Agent tests or import check
-        run: |
-          if find agent -path "*/tests/test_*.py" -print -quit | grep -q .; then
-            uv run pytest agent
-          else
-            uv run python -c "import agent; print('agent import ok')"
-          fi
-
-      - name: Local red-team tests
-        run: uv run pytest security/redteam/tests
-
-      - name: EC2 environment validator tests
-        run: uv run pytest scripts/test_validate_ec2_env.py
+      - name: Pyright checks for DevSecOps scope
+        run: uv run pyright security scripts agent/src/agent/llm.py
+      - name: Monorepo tests
+        run: uv run pytest
 
       - name: Validate env example
         run: |
@@ -62,6 +46,8 @@ jobs:
             LLM_PROVIDER
             BACKEND_BASE_URL
             VITE_API_BASE_URL
+            COMPOSE_FINANCIAL_CLIENT
+            COMPOSE_MOCK_FINANCIAL_SERVICE_URL
           )
 
           for key in "${required_keys[@]}"; do
@@ -77,31 +63,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - name: Set up Node.js
-        if: hashFiles('frontend/package.json') != ''
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: "24"
-      - name: Build frontend or skip
+      - name: Build frontend
         run: |
-          if [ ! -f frontend/package.json ]; then
-            echo "frontend/package.json not found; skipping frontend build"
-            exit 0
-          fi
-          cd frontend
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-          npm run lint
-          npm run build
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD/frontend:/app" --tmpfs /app/node_modules:rw,exec,mode=1777 -w /app \
+            node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd \
+            sh -c "npm ci && npm run lint && npm run build"
+      - name: Upload frontend build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 1
   docker-check:
     name: Docker checks
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Download frontend build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Validate frontend build artifact
+        run: test -s frontend/dist/index.html
       - name: Prepare Docker Compose env
         run: cp .env.example .env
       - name: Prepare EC2 validation env
@@ -119,25 +107,188 @@ jobs:
         run: |
           docker compose --env-file .env.example -f docker-compose.yml config --quiet
           docker compose --env-file .env.example -f docker-compose.dev.yml config --quiet
-          docker compose --env-file .env.example -f docker-compose.prod.yml config --quiet
+          docker compose --env-file .env.example \
+            -f docker-compose.yml -f docker-compose.prod.yml config --quiet
           docker compose --env-file .env.ec2-ci --profile agent \
             -f docker-compose.yml -f docker-compose.ec2.yml config --quiet
+      - name: Validate EC2 public port exposure
+        run: |
+          docker compose --env-file .env.ec2-ci --profile agent \
+            -f docker-compose.yml -f docker-compose.ec2.yml config --format json \
+            | python3 scripts/validate_compose_exposure.py
+      - name: Validate deployment Compose contracts
+        run: |
+          docker compose --env-file .env.ec2-ci --profile agent \
+            -f docker-compose.yml -f docker-compose.ec2.yml config --format json \
+            | python3 scripts/validate_compose_contract.py
+          docker compose --env-file .env.example --profile agent \
+            -f docker-compose.yml -f docker-compose.prod.yml config --format json \
+            | python3 scripts/validate_compose_contract.py
+      - name: Build hardened Nginx image
+        run: docker compose --env-file .env.example build nginx
       - name: Nginx syntax check
         run: |
           docker run --rm --add-host backend:127.0.0.1 \
             -v "$PWD/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
-            nginx:1.27-alpine nginx -t
+            kdt-team3/nginx:local nginx -t
           docker run --rm --add-host backend:127.0.0.1 \
             -v "$PWD/nginx/ec2.conf:/etc/nginx/conf.d/default.conf:ro" \
-            nginx:1.27-alpine nginx -t
-      - name: Docker image build or skip
+            kdt-team3/nginx:local nginx -t
+      - name: Nginx frontend smoke test
         run: |
-          dockerfiles=$(find . -path "*/Dockerfile" -type f)
-          if [ -z "${dockerfiles}" ]; then
-            echo "No Dockerfile found; skipping Docker image build"
-            exit 0
-          fi
-          for dockerfile in ${dockerfiles}; do
-            image_name=$(dirname "${dockerfile}" | sed 's#^\./##; s#[^a-zA-Z0-9_.-]#-#g')
-            docker build -t "ci-${image_name}:latest" -f "${dockerfile}" .
+          docker run --rm --add-host backend:127.0.0.1 \
+            -v "$PWD/nginx/ec2.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/frontend/dist:/usr/share/nginx/html:ro" \
+            kdt-team3/nginx:local \
+            sh -c "nginx && wget -q -O /dev/null http://127.0.0.1:8080/"
+      - name: Build deployable Compose images
+        run: docker compose --env-file .env.example --profile agent build
+      - name: Verify runtime image hardening
+        run: |
+          for image in \
+            kdt-team3/backend:local \
+            kdt-team3/agent:local \
+            kdt-team3/mock-financial-service:local; do
+            user="$(docker image inspect "${image}" --format '{{.Config.User}}')"
+            if [ "${user}" != "10001:10001" ]; then
+              echo "Unexpected runtime user for ${image}: ${user}"
+              exit 1
+            fi
+            if docker run --rm "${image}" sh -c 'command -v uv'; then
+              echo "Build tool uv must not exist in runtime image: ${image}"
+              exit 1
+            fi
           done
+          nginx_user="$(docker image inspect kdt-team3/nginx:local --format '{{.Config.User}}')"
+          test "${nginx_user}" = "nginx"
+      - name: Test legacy financial volume migration
+        run: |
+          volume_name="ci-legacy_financial-data"
+          cleanup() {
+            docker rm -f ci-legacy-seed ci-legacy-runtime >/dev/null 2>&1 || true
+            docker compose -p ci-legacy --profile maintenance down \
+              >/dev/null 2>&1 || true
+            docker volume rm -f "${volume_name}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker volume create "${volume_name}"
+          docker run -d --name ci-legacy-seed --user 0:0 \
+            -v "${volume_name}:/data" \
+            -w /data kdt-team3/mock-financial-service:local
+          for attempt in {1..30}; do
+            if docker exec ci-legacy-seed /app/.venv/bin/python -c \
+              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/openapi.json', timeout=2)"; then
+              break
+            fi
+            test "${attempt}" -lt 30
+            sleep 1
+          done
+          docker rm -f ci-legacy-seed
+          docker compose -p ci-legacy --env-file .env.example \
+            --profile maintenance run --rm financial-volume-migrate
+
+          owner="$(docker run --rm --user 0:0 \
+            -v "${volume_name}:/data" \
+            kdt-team3/mock-financial-service:local \
+            stat -c '%u:%g' /data/financial.db)"
+          test "${owner}" = "10001:10001"
+          docker run -d --name ci-legacy-runtime --user 10001:10001 \
+            -v "${volume_name}:/data" \
+            -w /data kdt-team3/mock-financial-service:local
+          for attempt in {1..30}; do
+            if docker exec ci-legacy-runtime /app/.venv/bin/python -c \
+              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/openapi.json', timeout=2)"; then
+              break
+            fi
+            test "${attempt}" -lt 30
+            sleep 1
+          done
+          docker exec ci-legacy-runtime /app/.venv/bin/python -c \
+            "import json, urllib.request; body=json.dumps({'owner':'CI migration','initial_balance':1000}).encode(); request=urllib.request.Request('http://127.0.0.1:8002/api/v1/accounts', data=body, headers={'Content-Type':'application/json'}, method='POST'); response=urllib.request.urlopen(request, timeout=3); assert response.status == 201"
+      - name: Run EC2 product and standalone Agent smoke tests
+        run: |
+          cleanup() {
+            docker compose -p ci-ec2 --env-file .env.ec2-ci --profile agent \
+              -f docker-compose.yml -f docker-compose.ec2.yml down -v \
+              >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker compose -p ci-ec2 --env-file .env.ec2-ci --profile agent \
+            -f docker-compose.yml -f docker-compose.ec2.yml \
+            up -d --wait --wait-timeout 180
+          curl --fail --silent --show-error http://127.0.0.1:8080/frontend-health \
+            >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8080/backendApi/health \
+            >/dev/null
+          python3 scripts/smoke_product_path.py --base-url http://127.0.0.1:8080
+          curl --fail --silent --show-error http://127.0.0.1:8001/health \
+            >/dev/null
+          agent_response="$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d '{"message":"생활비 통장 잔액 얼마야?"}' \
+            http://127.0.0.1:8001/chat)"
+          AGENT_RESPONSE="${agent_response}" python3 -c \
+            "import json, os; data=json.loads(os.environ['AGENT_RESPONSE']); assert data['status'] == 'completed' and data['reply']"
+      - name: Scan Backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: kdt-team3/backend:local
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+      - name: Scan Agent image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: kdt-team3/agent:local
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+      - name: Scan mock financial service image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: kdt-team3/mock-financial-service:local
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+      - name: Scan PostgreSQL image with narrow upstream exceptions
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          trivyignores: .trivyignore.yaml
+      - name: Scan Redis image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+      - name: Scan Nginx image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: kdt-team3/nginx:local
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH

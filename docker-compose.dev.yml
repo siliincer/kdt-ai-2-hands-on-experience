@@ -1,16 +1,22 @@
 # 개발 환경에서 필요한 db를 띄우는 역할
 # 실행 방법: docker compose -f docker-compose.dev.yml up --build -d
 
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
-    image: postgres:16-alpine
-    container_name: kdt-postgres
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-financial_agent}
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
@@ -21,10 +27,10 @@ services:
       retries: 5
 
   redis_cache:
-    image: redis:7-alpine
-    container_name: kdt-redis-cache
+    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    logging: *default-logging
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -32,10 +38,10 @@ services:
       retries: 5
 
   redis_stream:
-    image: redis:7-alpine
-    container_name: kdt-redis-stream
+    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    logging: *default-logging
     ports:
-      - "6380:6379" # 호스트의 6380 포트 매핑
+      - "127.0.0.1:6380:6379" # 호스트의 6380 포트 매핑
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s

@@ -4,25 +4,62 @@ from __future__ import annotations
 
 import json
 import re
+from html import escape
 from pathlib import Path
 
 from security.redteam.models import ScenarioResult
 
 _REDACTED = "[REDACTED]"
+_SENSITIVE_KEYS = frozenset(
+    {
+        "access_token",
+        "api-key",
+        "api_key",
+        "authorization",
+        "client-secret",
+        "client_secret",
+        "cookie",
+        "id_token",
+        "password",
+        "refresh_token",
+        "secret",
+        "set-cookie",
+        "token",
+    }
+)
+_SENSITIVE_KEY_PATTERN = "|".join(
+    re.escape(key) for key in sorted(_SENSITIVE_KEYS, key=len, reverse=True)
+)
 _LONG_NUMBER = re.compile(r"\b\d{10,16}\b")
 _HYPHENATED_NUMBER = re.compile(r"\b\d{2,6}(?:-\d{2,6}){1,3}\b")
 _BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 _AUTH_VALUE = re.compile(
-    r"(?i)\b(authorization\s*[:=]\s*)(?:(?:bearer|basic|digest)\s+)?"
-    r"[A-Za-z0-9._~+/=-]+"
+    r"(?im)\b(authorization\s*[:=]\s*).*?"
+    r"(?=\s+(?:token|api[_-]?key|secret|password|(?:set-)?cookie|authorization)"
+    r"\s*[:=]|$)"
 )
 _COOKIE_VALUE = re.compile(
     r"(?i)\b((?:set-)?cookie\s*[:=]\s*)[^,\s;]+(?:\s*;\s*[^,\s;]+)*"
 )
 _SECRET_VALUE = re.compile(
-    r"(?i)\b((?:token|api[_-]?key|secret|password)\s*[:=]\s*)"
-    r"(?:['\"])?[^'\"\s,;]+(?:['\"])?"
+    rf"(?i)\b((?:{_SENSITIVE_KEY_PATTERN})[\"']?\s*[:=]\s*)"
+    r"(?:\"[^\"]*\"|'[^']*'|[^\s,;&]+)"
 )
+_COMMONMARK_PUNCTUATION = re.compile(r"""([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])""")
+
+
+def _markdown_safe(value: object) -> str:
+    escaped = _COMMONMARK_PUNCTUATION.sub(r"\\\1", str(value))
+    return escaped.replace("\r", "\\r").replace("\n", "\\n")
+
+
+def _markdown_code(value: object) -> str:
+    return (
+        escape(str(value), quote=True)
+        .replace("`", "&#96;")
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
+    )
 
 
 def _redact_hyphenated_number(match: re.Match[str]) -> str:
@@ -31,11 +68,11 @@ def _redact_hyphenated_number(match: re.Match[str]) -> str:
 
 
 def redact(value: object, fields: set[str]) -> object:
-    normalized_fields = {field.lower() for field in fields}
+    normalized_fields = {field.casefold() for field in fields} | _SENSITIVE_KEYS
     if isinstance(value, dict):
         return {
             key: _REDACTED
-            if key.lower() in normalized_fields
+            if isinstance(key, str) and key.casefold() in normalized_fields
             else redact(item, normalized_fields)
             for key, item in value.items()
         }
@@ -53,28 +90,33 @@ def redact(value: object, fields: set[str]) -> object:
 
 def _markdown_report(data: dict) -> str:
     lines = [
-        f"# Red Team Report: {data['scenario_name']}",
+        f"# Red Team Report: {_markdown_safe(data['scenario_name'])}",
         "",
-        f"- Run ID: `{data['run_id']}`",
-        f"- Started: `{data['started_at']}`",
-        f"- Target: `{data['target_origin']}`",
-        f"- Severity: `{data['severity']}`",
-        f"- Execution mode: `{data['execution_mode']}`",
-        f"- Execution reason: {data.get('execution_reason') or 'n/a'}",
-        f"- Verdict: `{data['verdict']}`",
+        f"- Run ID: `{_markdown_code(data['run_id'])}`",
+        f"- Started: `{_markdown_code(data['started_at'])}`",
+        f"- Completed: `{_markdown_code(data['completed_at'])}`",
+        f"- Duration seconds: `{data['duration_seconds']:.3f}`",
+        f"- Target: `{_markdown_code(data['target_origin'])}`",
+        f"- Severity: `{_markdown_code(data['severity'])}`",
+        f"- Execution mode: `{_markdown_code(data['execution_mode'])}`",
+        (
+            "- Execution reason: "
+            f"{_markdown_safe(data.get('execution_reason') or 'n/a')}"
+        ),
+        f"- Verdict: `{_markdown_code(data['verdict'])}`",
         "",
     ]
     telemetry = data.get("llm_telemetry")
     if telemetry:
-        lines[8:8] = [
+        lines[10:10] = [
             f"- LLM attempts: `{telemetry['attempts']}`",
             f"- LLM successes: `{telemetry['successes']}`",
             f"- LLM failures: `{telemetry['failures']}`",
         ]
     attacker_telemetry = data.get("attacker_telemetry")
     if attacker_telemetry:
-        lines[8:8] = [
-            f"- Attacker model: `{attacker_telemetry['model']}`",
+        lines[10:10] = [
+            f"- Attacker model: `{_markdown_code(attacker_telemetry['model'])}`",
             f"- Attacker requests: `{attacker_telemetry['requests']}`",
             f"- Attacker generations: `{attacker_telemetry['attempts']}`",
             f"- Attacker successes: `{attacker_telemetry['successes']}`",
@@ -89,54 +131,83 @@ def _markdown_report(data: dict) -> str:
             ),
             (
                 "- Attacker rejection reasons: "
-                f"`{attacker_telemetry.get('rejection_reasons', {})}`"
+                f"`{_markdown_code(attacker_telemetry.get('rejection_reasons', {}))}`"
             ),
         ]
     if data.get("loop_summaries"):
         lines.extend(["## Loop Summary", ""])
         for summary in data["loop_summaries"]:
             lines.append(
-                f"- `{summary['attack_id']}`: "
+                f"- `{_markdown_code(summary['attack_id'])}`: "
                 f"{summary['iterations_completed']} iterations, "
                 f"best score `{summary['best_score']:.3f}`, "
-                f"`{summary['termination']}`"
+                f"`{_markdown_code(summary['termination'])}`"
             )
         lines.append("")
     lines.extend(["## Results", ""])
     for result in data["results"]:
         generation_seed = result.get("generation_seed")
+        generation_strategy = _markdown_safe(result.get("generation_strategy") or "n/a")
+        generation_style = _markdown_safe(result.get("generation_style") or "n/a")
+        result_evidence = _markdown_safe(", ".join(result["evidence"]) or "none")
+        execution_error = _markdown_safe(result.get("execution_error") or "none")
         generation_seed_text = (
             "n/a" if generation_seed is None else str(generation_seed)
+        )
+        generation_action = _markdown_safe(
+            result.get("generation_requested_action") or "n/a"
+        )
+        generation_target = _markdown_safe(result.get("generation_target") or "n/a")
+        generation_polarity = _markdown_safe(result.get("generation_polarity") or "n/a")
+        generation_reported = result.get("generation_reported_speech")
+        generation_reported_text = (
+            "n/a" if generation_reported is None else str(generation_reported)
         )
         lines.extend(
             [
                 (
-                    f"### {result['attack_id']} / iteration "
-                    f"{result['iteration']}: {result['verdict']}"
+                    f"### {_markdown_safe(result['attack_id'])} / iteration "
+                    f"{result['iteration']}: {_markdown_safe(result['verdict'])}"
                 ),
                 "",
                 f"- LLM generated: `{result['generated_by_llm']}`",
-                f"- Generation strategy: {result.get('generation_strategy') or 'n/a'}",
-                f"- Generation style: {result.get('generation_style') or 'n/a'}",
+                f"- Generation strategy: {generation_strategy}",
+                f"- Generation style: {generation_style}",
                 f"- Generation seed: {generation_seed_text}",
+                f"- Generation action: {generation_action}",
+                f"- Generation target: {generation_target}",
+                f"- Generation polarity: {generation_polarity}",
+                f"- Generation reported speech: {generation_reported_text}",
                 f"- Boundary score: `{result['boundary_score']:.3f}`",
-                f"- Reason: {result['reason']}",
-                f"- Evidence: {', '.join(result['evidence']) or 'none'}",
+                f"- Reason: {_markdown_safe(result['reason'])}",
+                f"- Execution error: {execution_error}",
+                f"- Evidence: {result_evidence}",
                 "",
             ]
         )
         for turn in result["turns"]:
             response = turn.get("response") or {}
+            turn_evidence = _markdown_safe(", ".join(turn["evidence"]) or "none")
+            response_status = _markdown_safe(response.get("status", "n/a"))
+            response_reply = _markdown_safe(response.get("reply", "n/a"))
+            response_prompt_for = _markdown_safe(response.get("prompt_for") or "none")
+            response_thread_id = _markdown_safe(response.get("thread_id", "n/a"))
+            response_ui_type = _markdown_safe(
+                (response.get("ui") or {}).get("type", "none")
+            )
             lines.extend(
                 [
-                    f"#### Turn {turn['turn']}: {turn['verdict']}",
+                    f"#### Turn {turn['turn']}: {_markdown_safe(turn['verdict'])}",
                     "",
                     f"- Boundary score: `{turn['boundary_score']:.3f}`",
-                    f"- Reason: {turn['reason']}",
-                    f"- Evidence: {', '.join(turn['evidence']) or 'none'}",
-                    f"- Message: {turn['message']}",
-                    f"- Agent status: {response.get('status', 'n/a')}",
-                    f"- UI type: {(response.get('ui') or {}).get('type', 'none')}",
+                    f"- Reason: {_markdown_safe(turn['reason'])}",
+                    f"- Evidence: {turn_evidence}",
+                    f"- Message: {_markdown_safe(turn['message'])}",
+                    f"- Agent status: {response_status}",
+                    f"- Agent reply: {response_reply}",
+                    f"- Prompt state: {response_prompt_for}",
+                    f"- Thread ID: {response_thread_id}",
+                    f"- UI type: {response_ui_type}",
                     "",
                 ]
             )

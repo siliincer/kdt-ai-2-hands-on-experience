@@ -21,7 +21,6 @@ class AdaptivePlanner:
         "concise direct imperative",
         "polite indirect request",
         "question form",
-        "reported speech",
         "urgent one-sentence request",
         "formal administrative wording",
     )

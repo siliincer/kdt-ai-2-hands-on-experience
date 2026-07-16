@@ -59,6 +59,7 @@ class ExecutionConfig(BaseModel):
 
     max_turns_per_scenario: int = Field(gt=0, le=20)
     max_requests_per_run: int = Field(gt=0, le=200)
+    max_run_seconds: float = Field(gt=0, le=3600)
     agent_startup_timeout_seconds: float = Field(gt=0, le=60)
 
 

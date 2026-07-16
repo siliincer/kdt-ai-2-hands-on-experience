@@ -25,6 +25,18 @@ class ManagedAgentError(RuntimeError):
 
 
 _DIRECT_OPENER = build_opener(ProxyHandler({}))
+_INHERITED_ENV_KEYS = {
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "PATH",
+    "PYTHONIOENCODING",
+    "PYTHONUTF8",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "TZ",
+}
 
 
 def _log_tail(process_log) -> str:
@@ -42,9 +54,9 @@ def _connection_target(config: RedTeamConfig) -> tuple[str, int]:
     return host, parsed.port or 80
 
 
-def _port_is_open(host: str, port: int) -> bool:
+def _port_is_open(host: str, port: int, timeout: float = 0.1) -> bool:
     try:
-        with socket.create_connection((host, port), timeout=0.1):
+        with socket.create_connection((host, port), timeout=timeout):
             return True
     except OSError:
         return False
@@ -55,9 +67,9 @@ def _read_ollama_json(
     timeout: float,
     request_budget: RequestBudget,
 ) -> dict:
-    request_budget.consume()
+    bounded_timeout = request_budget.consume(timeout)
     try:
-        with _DIRECT_OPENER.open(request, timeout=timeout) as response:
+        with _DIRECT_OPENER.open(request, timeout=bounded_timeout) as response:
             payload = json.load(response)
     except (OSError, TimeoutError, URLError, json.JSONDecodeError) as exc:
         raise ManagedAgentError(
@@ -118,6 +130,8 @@ def _require_ollama_model(
             structured_response = json.loads(probe.get("response", ""))
         except (TypeError, json.JSONDecodeError) as exc:
             raise ManagedAgentError("Ollama structured-output probe failed") from exc
+        if not isinstance(structured_response, dict):
+            raise ManagedAgentError("Ollama structured-output probe failed")
         if structured_response.get("ok") is not True:
             raise ManagedAgentError("Ollama structured-output probe failed")
 
@@ -127,18 +141,46 @@ def _wait_until_ready(
     host: str,
     port: int,
     timeout_seconds: float,
+    request_budget: RequestBudget,
     process_log,
 ) -> None:
-    deadline = time.monotonic() + timeout_seconds
+    request_budget.check_deadline()
+    remaining_seconds = request_budget.remaining_seconds
+    bounded_timeout = (
+        min(timeout_seconds, remaining_seconds)
+        if remaining_seconds is not None
+        else timeout_seconds
+    )
+    deadline = time.monotonic() + bounded_timeout
     while time.monotonic() < deadline:
+        request_budget.check_deadline()
         if process.poll() is not None:
             raise ManagedAgentError(
                 f"managed Agent exited during startup: {process.returncode}\n"
                 f"{_log_tail(process_log)}"
             )
-        if _port_is_open(host, port):
+        startup_remaining = max(0.0, deadline - time.monotonic())
+        run_remaining = request_budget.remaining_seconds
+        poll_timeout = min(
+            0.1,
+            startup_remaining,
+            run_remaining if run_remaining is not None else startup_remaining,
+        )
+        if poll_timeout <= 0:
+            break
+        if _port_is_open(host, port, poll_timeout):
             return
-        time.sleep(0.05)
+        startup_remaining = max(0.0, deadline - time.monotonic())
+        run_remaining = request_budget.remaining_seconds
+        sleep_seconds = min(
+            0.05,
+            startup_remaining,
+            run_remaining if run_remaining is not None else startup_remaining,
+        )
+        if sleep_seconds <= 0:
+            break
+        time.sleep(sleep_seconds)
+    request_budget.check_deadline()
     raise ManagedAgentError(
         f"managed Agent startup timed out\n{_log_tail(process_log)}"
     )
@@ -151,16 +193,21 @@ def managed_agent(
 ) -> Iterator[None]:
     """Run a fresh Agent with the in-memory bank for this invocation only."""
     host, port = _connection_target(config)
-    if _port_is_open(host, port):
+    request_budget.check_deadline()
+    run_remaining = request_budget.remaining_seconds
+    port_probe_timeout = min(
+        0.1,
+        run_remaining if run_remaining is not None else 0.1,
+    )
+    if _port_is_open(host, port, port_probe_timeout):
         raise ManagedAgentError(
             f"refusing to reuse an existing process on {host}:{port}"
         )
     _require_ollama_model(config, request_budget)
 
-    environment = os.environ.copy()
-    for key in tuple(environment):
-        if key.lower().endswith("_proxy"):
-            environment.pop(key)
+    environment = {
+        key: value for key, value in os.environ.items() if key in _INHERITED_ENV_KEYS
+    }
     environment["NO_PROXY"] = "localhost,127.0.0.1,::1"
     environment["no_proxy"] = "localhost,127.0.0.1,::1"
     environment["BANK_CLIENT"] = config.safety.required_bank_client
@@ -168,15 +215,7 @@ def managed_agent(
     environment["OLLAMA_BASE_URL"] = config.safety.required_ollama_base_url
     environment["OLLAMA_MODEL"] = config.safety.required_ollama_model
     environment["LLM_MODEL"] = config.safety.required_ollama_model
-    environment.pop("MOCK_FINANCIAL_SERVICE_URL", None)
-    for key in (
-        "OPENAI_API_KEY",
-        "GOOGLE_API_KEY",
-        "GOOGLE_APPLICATION_CREDENTIALS",
-        "LANGCHAIN_API_KEY",
-        "LANGSMITH_API_KEY",
-    ):
-        environment[key] = ""
+    environment["AGENT_DISABLE_DOTENV"] = "1"
     environment["LANGCHAIN_TRACING_V2"] = "false"
     environment["LANGSMITH_TRACING"] = "false"
     command = [
@@ -202,6 +241,7 @@ def managed_agent(
                 host,
                 port,
                 config.execution.agent_startup_timeout_seconds,
+                request_budget,
                 process_log,
             )
             yield

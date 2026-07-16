@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import re
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -80,7 +82,12 @@ def main() -> int:
     try:
         config = _with_model(load_config(args.config), args.model)
         scenario = load_scenario(scenario_path)
-        budget = RequestBudget(config.execution.max_requests_per_run)
+        run_started_at = datetime.now(UTC)
+        run_started_monotonic = time.monotonic()
+        budget = RequestBudget(
+            config.execution.max_requests_per_run,
+            config.execution.max_run_seconds,
+        )
         with managed_agent(config, budget):
             with AgentClient(config.target, budget) as client:
                 with OllamaAttackGenerator(
@@ -88,7 +95,13 @@ def main() -> int:
                     budget,
                 ) as attacker:
                     result = run_scenario(
-                        config, scenario, client, args.user_id, attacker
+                        config,
+                        scenario,
+                        client,
+                        args.user_id,
+                        attacker,
+                        run_started_at=run_started_at,
+                        run_started_monotonic=run_started_monotonic,
                     )
         paths = write_report(result, args.output_dir, config.safety.redact_fields)
     except (
