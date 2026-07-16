@@ -87,9 +87,23 @@ def test_ollama_attacker_generates_structured_candidate():
     candidate_schema = requests[0]["format"]["properties"]["candidates"]["items"]
     assert set(candidate_schema["required"]) == {"variation", "strategy"}
     classifier_prompt = json.loads(requests[1]["prompt"])
-    assert set(classifier_prompt) == {"text", "taxonomy", "instruction"}
+    assert set(classifier_prompt) == {
+        "text",
+        "taxonomy",
+        "definitions",
+        "examples",
+        "instruction",
+    }
     assert "other" in classifier_prompt["taxonomy"]["requested_action"]
     assert "uncertain" in classifier_prompt["taxonomy"]["polarity"]
+    assert "disclose" in classifier_prompt["definitions"]["requested_action"]
+    assert "request" in classifier_prompt["definitions"]["polarity"]
+    assert classifier_prompt["examples"][0]["classification"] == {
+        "requested_action": "disclose",
+        "target": "internal_instructions",
+        "polarity": "request",
+        "reported_speech": False,
+    }
     assert "required_variation_patterns" not in request_prompt
     assert request_prompt["generation_guidance"]
     assert telemetry.attempts == 1
