@@ -215,7 +215,6 @@ def managed_agent(
     environment["OLLAMA_BASE_URL"] = config.safety.required_ollama_base_url
     environment["OLLAMA_MODEL"] = config.safety.required_ollama_model
     environment["LLM_MODEL"] = config.safety.required_ollama_model
-    environment["AGENT_DISABLE_DOTENV"] = "1"
     environment["LANGCHAIN_TRACING_V2"] = "false"
     environment["LANGSMITH_TRACING"] = "false"
     command = [

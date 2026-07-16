@@ -2,12 +2,6 @@
 .env
 node_modules
 __pycache__
-**/__pycache__/
-**/.pytest_cache/
-**/*.py[cod]
-**/tests/
-**/docs/
-**/notebooks/
 .venv
 dist
 build

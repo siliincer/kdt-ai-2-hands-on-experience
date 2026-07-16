@@ -2,17 +2,31 @@
 
 from __future__ import annotations
 
+import importlib
 from threading import Lock
 
-import agent.llm
-import agent.tools.bank_tools
-import agent.workflow_matcher
-from agent.data.mock_bank import AUDIT_LOG, MOCK_ACCOUNTS
-from agent.main import app
+import dotenv
+
+
+def _ignore_project_dotenv(*args, **kwargs) -> bool:
+    """Keep the managed test process isolated from developer credentials."""
+    return False
+
+
+dotenv.load_dotenv = _ignore_project_dotenv
+
+agent_llm = importlib.import_module("agent.llm")
+bank_tools = importlib.import_module("agent.tools.bank_tools")
+workflow_matcher = importlib.import_module("agent.workflow_matcher")
+mock_bank = importlib.import_module("agent.data.mock_bank")
+app = importlib.import_module("agent.main").app
+
+AUDIT_LOG = mock_bank.AUDIT_LOG
+MOCK_ACCOUNTS = mock_bank.MOCK_ACCOUNTS
 
 _LLM_TELEMETRY = {"attempts": 0, "successes": 0, "failures": 0}
 _LLM_TELEMETRY_LOCK = Lock()
-_ORIGINAL_GET_LLM = agent.llm.get_llm
+_ORIGINAL_GET_LLM = agent_llm.get_llm
 
 
 def _record_llm_result(success: bool) -> None:
@@ -56,8 +70,8 @@ def _tracked_get_llm(*args, **kwargs):
     return _TrackedRunnable(runnable)
 
 
-agent.workflow_matcher.get_llm = _tracked_get_llm
-agent.tools.bank_tools.get_llm = _tracked_get_llm
+workflow_matcher.get_llm = _tracked_get_llm
+bank_tools.get_llm = _tracked_get_llm
 
 
 @app.get("/__local_test__/ledger", include_in_schema=False)

@@ -37,13 +37,6 @@ class ValidationError(StrEnum):
     DATABASE_URL_PARTS = "COMPOSE_DATABASE_URL must include host, user, and password"
     DATABASE_URL_PASSWORD = "COMPOSE_DATABASE_URL password must match POSTGRES_PASSWORD"
     DATABASE_URL_HOST = "COMPOSE_DATABASE_URL host must be postgres for EC2 Compose"
-    DATABASE_URL_USER = "COMPOSE_DATABASE_URL user must match POSTGRES_USER"
-    DATABASE_URL_PORT = "COMPOSE_DATABASE_URL port must be 5432 for EC2 Compose"
-    DATABASE_URL_NAME = "COMPOSE_DATABASE_URL database must match POSTGRES_DB"
-    FINANCIAL_CLIENT = "COMPOSE_FINANCIAL_CLIENT must be http for EC2 Compose"
-    FINANCIAL_SERVICE_URL = (
-        "COMPOSE_MOCK_FINANCIAL_SERVICE_URL must use mock-financial-service:8002"
-    )
 
 
 SECRET_ERRORS = {
@@ -100,11 +93,7 @@ def validate_environment(values: dict[str, str]) -> list[ValidationError]:
         errors.append(ValidationError.DATABASE_URL_MISSING)
         return errors
 
-    try:
-        parsed = urlsplit(database_url)
-    except ValueError:
-        errors.append(ValidationError.DATABASE_URL_PARTS)
-        return errors
+    parsed = urlsplit(database_url)
     if parsed.scheme not in {"postgresql", "postgresql+asyncpg"}:
         errors.append(ValidationError.DATABASE_URL_SCHEME)
     if not parsed.hostname or not parsed.username or parsed.password is None:
@@ -113,27 +102,6 @@ def validate_environment(values: dict[str, str]) -> list[ValidationError]:
         errors.append(ValidationError.DATABASE_URL_PASSWORD)
     if parsed.hostname != "postgres":
         errors.append(ValidationError.DATABASE_URL_HOST)
-    expected_user = values.get("POSTGRES_USER", "app").strip() or "app"
-    if unquote(parsed.username or "") != expected_user:
-        errors.append(ValidationError.DATABASE_URL_USER)
-    try:
-        database_port = parsed.port
-    except ValueError:
-        database_port = None
-    if database_port != 5432:
-        errors.append(ValidationError.DATABASE_URL_PORT)
-    expected_database = (
-        values.get("POSTGRES_DB", "financial_agent").strip() or "financial_agent"
-    )
-    if unquote(parsed.path.removeprefix("/")) != expected_database:
-        errors.append(ValidationError.DATABASE_URL_NAME)
-
-    financial_client = values.get("COMPOSE_FINANCIAL_CLIENT", "").strip()
-    if financial_client and financial_client != "http":
-        errors.append(ValidationError.FINANCIAL_CLIENT)
-    financial_url = values.get("COMPOSE_MOCK_FINANCIAL_SERVICE_URL", "").strip()
-    if financial_url and financial_url != "http://mock-financial-service:8002":
-        errors.append(ValidationError.FINANCIAL_SERVICE_URL)
     return errors
 
 

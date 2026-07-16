@@ -101,7 +101,6 @@ def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
         assert "LANGSMITH_API_KEY" not in captured["environment"]
         assert captured["environment"]["LANGCHAIN_TRACING_V2"] == "false"
         assert captured["environment"]["LANGSMITH_TRACING"] == "false"
-        assert captured["environment"]["AGENT_DISABLE_DOTENV"] == "1"
         assert "HTTP_PROXY" not in captured["environment"]
         assert "https_proxy" not in captured["environment"]
         assert "ALL_PROXY" not in captured["environment"]

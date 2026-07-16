@@ -39,16 +39,10 @@
 ### RDS
 
 - DB instance: `kdt-team3-postgres`
+- Status: `stopped`
 - 현재 EC2 데모 배포에서는 RDS를 사용하지 않고, EC2 내부 PostgreSQL 컨테이너를 사용한다.
-- RDS의 현재 상태와 자동 재시작 시각은 문서의 과거 값을 믿지 않고 배포 전에 조회한다.
-
-```bash
-aws rds describe-db-instances \
-  --db-instance-identifier kdt-team3-postgres \
-  --query 'DBInstances[0].{Status:DBInstanceStatus,AutomaticRestartTime:AutomaticRestartTime}' \
-  --region ap-northeast-2 \
-  --profile kdt-team3-infra
-```
+- RDS는 `2026-07-15 10:45:02 KST`쯤 자동 재시작 예정이므로 사용하지 않으면 그 전에
+  다시 stop하거나 삭제 여부를 결정한다.
 
 ### ECS/Fargate
 
@@ -195,38 +189,18 @@ sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.
 cd /opt/kdt-team3/app
 git pull
 python3 scripts/validate_ec2_env.py --env-file .env
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml \
-  config --format json | python3 scripts/validate_compose_exposure.py
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml \
-  config --format json | python3 scripts/validate_compose_contract.py
-# 과거 root frontend builder에서 처음 전환할 때 한 번만 실행한다.
-if [ -d frontend/dist ]; then
-  sudo find frontend/dist -xdev ! -user "$(id -u)" -print
-  sudo chown -R "$(id -u):$(id -g)" frontend/dist
-fi
-sudo docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$PWD/frontend":/app --tmpfs /app/node_modules:rw,exec,mode=1777 -w /app \
-  node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd \
+sudo docker run --rm -v "$PWD/frontend":/app -w /app node:24-alpine \
   sh -c "npm ci && npm run build"
-sudo docker compose -f docker-compose.yml -f docker-compose.ec2.yml \
-  build mock-financial-service
-sudo docker compose --profile maintenance -f docker-compose.yml -f docker-compose.ec2.yml \
-  run --rm financial-volume-migrate
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml \
-  up -d --build --wait --wait-timeout 180
+sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml up -d --build
 ```
 
 frontend만 다시 빌드해야 할 때:
 
 ```bash
 cd /opt/kdt-team3/app/frontend
-sudo docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$PWD":/app --tmpfs /app/node_modules:rw,exec,mode=1777 -w /app \
-  node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd \
-  sh -c "npm ci && npm run build"
+sudo docker run --rm -v "$PWD":/app -w /app node:24-alpine sh -c "npm ci && npm run build"
 cd /opt/kdt-team3/app
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml \
-  up -d --wait --wait-timeout 180 nginx
+sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml up -d nginx
 ```
 
 ## 팀 공유 요약

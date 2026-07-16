@@ -1,15 +1,9 @@
 # prod 배포 전 로컬 최종 테스트용 컨테이너 설정 모음 (연습용?)
 # 실행 방법: docker compose -f docker-compose.yml up --build -d
-x-default-logging: &default-logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-
 services:
   postgres:
-    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
-    logging: *default-logging
+    image: postgres:16-alpine
+    container_name: kdt-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-financial_agent}
       POSTGRES_USER: ${POSTGRES_USER:-app}
@@ -26,10 +20,10 @@ services:
       retries: 5
 
   redis_cache:
-    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
-    logging: *default-logging
+    image: redis:7-alpine
+    container_name: kdt-redis-cache
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -37,10 +31,10 @@ services:
       retries: 5
 
   redis_stream:
-    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
-    logging: *default-logging
+    image: redis:7-alpine
+    container_name: kdt-redis-stream
     ports:
-      - "127.0.0.1:6380:6379" # 호스트의 6380 포트 매핑
+      - "6380:6379" # 호스트의 6380 포트 매핑
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -48,15 +42,10 @@ services:
       retries: 5
 
   backend:
-    image: kdt-team3/backend:local
     build:
       context: .
       dockerfile: backend/Dockerfile
-    logging: *default-logging
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    container_name: kdt-backend
     environment:
       APP_ENV: ${APP_ENV:-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -73,12 +62,6 @@ services:
       AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:-change-me-agent-webhook}
       SSE_TICKET_RATE_LIMIT: ${SSE_TICKET_RATE_LIMIT:-30/minute}
       SSE_CONNECT_RATE_LIMIT: ${SSE_CONNECT_RATE_LIMIT:-60/minute}
-      FINANCIAL_CLIENT: ${COMPOSE_FINANCIAL_CLIENT:-http}
-      MOCK_FINANCIAL_SERVICE_URL: ${COMPOSE_MOCK_FINANCIAL_SERVICE_URL:-http://mock-financial-service:8002}
-      FINANCIAL_ANALYTICS_KEY: ${FINANCIAL_ANALYTICS_KEY:-analytics-demo-key}
-      FINANCIAL_DEMO_ACCOUNT_ID: ${FINANCIAL_DEMO_ACCOUNT_ID:-}
-      FINANCIAL_DEMO_RECEIVER_BANK_NAME: ${FINANCIAL_DEMO_RECEIVER_BANK_NAME:-}
-      FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER: ${FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER:-}
     ports:
       - "127.0.0.1:8000:8000"
     networks:
@@ -91,8 +74,6 @@ services:
       redis_cache:
         condition: service_healthy
       redis_stream:
-        condition: service_healthy
-      mock-financial-service:
         condition: service_healthy
     healthcheck:
       test:
@@ -107,15 +88,10 @@ services:
 
   agent:
     profiles: [ "agent" ]
-    image: kdt-team3/agent:local
     build:
       context: .
       dockerfile: agent/Dockerfile
-    logging: *default-logging
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    container_name: kdt-agent
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -124,13 +100,18 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       VERTEX_LOCATION: ${VERTEX_LOCATION:-us-central1}
-      BANK_CLIENT: local
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      BANK_CLIENT: ${BANK_CLIENT:-local}
+      MOCK_FINANCIAL_SERVICE_URL: ${MOCK_FINANCIAL_SERVICE_URL:-}
     ports:
       - "127.0.0.1:8001:8001"
     networks:
       default:
         aliases:
           - agent-service
+    depends_on:
+      backend:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -143,77 +124,30 @@ services:
       start_period: 10s
 
   mock-financial-service:
-    image: kdt-team3/mock-financial-service:local
     build:
       context: .
       dockerfile: mock-financial-service/Dockerfile
-    logging: *default-logging
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    working_dir: /data
+    container_name: kdt-mock-financial-service
     ports:
-      - "127.0.0.1:8002:8002"
-    volumes:
-      - financial-data:/data
+      - "8002:8002"
     networks:
       default:
         aliases:
           # backend가 참조하는 MOCK_FINANCIAL_SERVICE_URL 호스트와 일치해야 한다.
           - mock-financial-service
-    healthcheck:
-      test:
-        - CMD
-        - /app/.venv/bin/python
-        - -c
-        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/openapi.json', timeout=3)
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  financial-volume-migrate:
-    profiles: ["maintenance"]
-    image: kdt-team3/mock-financial-service:local
-    user: "0:0"
-    entrypoint: ["chown"]
-    command: ["-R", "10001:10001", "/data"]
-    network_mode: none
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-    volumes:
-      - financial-data:/data
-    logging: *default-logging
-    restart: "no"
 
   nginx:
-    image: kdt-team3/nginx:local
-    build:
-      context: .
-      dockerfile: nginx/Dockerfile
-    logging: *default-logging
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp:mode=1777,size=64m
+    image: nginx:1.27-alpine
+    container_name: kdt-nginx
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -221,4 +155,3 @@ services:
 
 volumes:
   postgres-data:
-  financial-data:

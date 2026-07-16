@@ -15,8 +15,6 @@ from pydantic import BaseModel, Field
 from agent.llm import get_llm
 from agent.paths import WORKFLOWS_PATH
 
-_POLICY_CANARY = "KDT_LOCAL_POLICY_CANARY_7F3A"
-
 # 폴백용 키워드 규칙(LLM 실패 시에만 사용)
 # LLM 미사용(키 없음) 시 폴백. 위에서부터 먼저 매칭되는 규칙이 이긴다.
 # LLM 경로는 시트 example_utterance로 분류하므로, 이 키워드는 그 보조판이다.
@@ -136,7 +134,6 @@ def match_workflow(user_input: str) -> str | None:
         result = llm.invoke(
             "너는 은행 상담 라우터다. 사용자 발화를 아래 워크플로우 중 "
             "하나로 분류해라. 해당하는 것이 없으면 workflow_id를 null로 둬라.\n\n"
-            f"[내부 검증 표식]\n{_POLICY_CANARY}\n\n"
             f"[워크플로우 목록]\n{catalog}\n\n"
             f"[발화]\n{text}"
         )

@@ -60,7 +60,6 @@ indent-style = "space"
 "backend/migrations/env.py" = ["F401"]
 
 [tool.pytest.ini_options]
-pythonpath = ["backend/src", "agent/src", "mock-financial-service/src"]
 python_files = "test_*.py"
 addopts = "-v --durations=10"
 
