@@ -46,6 +46,10 @@ def app():
             details={"idempotency_key": "k-1"},
         )
 
+    @app.get("/raise-in-progress")
+    def _in_progress():
+        raise AgentToolError.idempotency_request_in_progress()
+
     return app
 
 
@@ -95,6 +99,16 @@ def test_details_are_passed_through(client):
     assert response.status_code == 409
     error = response.json()["error"]
     assert error["details"] == {"idempotency_key": "k-1"}
+
+
+def test_in_progress_emits_retry_after_header(client):
+    """처리 중 409 는 Retry-After 헤더를 함께 반환한다(계약 24.4)."""
+    response = client.get("/raise-in-progress")
+    assert response.status_code == 409
+    assert response.headers["retry-after"] == "1"
+    error = response.json()["error"]
+    assert error["code"] == "IDEMPOTENCY_REQUEST_IN_PROGRESS"
+    assert error["retryable"] is True
 
 
 def test_error_builder_omits_details_when_none():

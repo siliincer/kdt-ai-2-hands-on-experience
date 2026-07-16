@@ -36,6 +36,7 @@ class AgentToolError(Exception):
         message: str,
         retryable: bool = False,
         details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
@@ -44,6 +45,7 @@ class AgentToolError(Exception):
         self.message = message
         self.retryable = retryable
         self.details = details
+        self.headers = headers
 
     # ── 자주 쓰는 오류 팩토리 ────────────────────────────────────────────────
 
@@ -114,6 +116,78 @@ class AgentToolError(Exception):
             category=AgentErrorCategory.REQUEST_ERROR,
             code="INVALID_REQUEST",
             message=message,
+            retryable=False,
+        )
+
+    # ── Confirmation 생명주기 (계약 6.1) ─────────────────────────────────────
+
+    @classmethod
+    def confirmation_required(cls) -> AgentToolError:
+        """승인 대기 중이거나 승인되지 않은 Confirmation 으로 Execute 를 시도."""
+        return cls(
+            status_code=409,
+            category=AgentErrorCategory.STATE_ERROR,
+            code="CONFIRMATION_REQUIRED",
+            message="사용자 승인이 필요합니다.",
+            retryable=False,
+        )
+
+    @classmethod
+    def confirmation_expired(cls) -> AgentToolError:
+        return cls(
+            status_code=410,
+            category=AgentErrorCategory.STATE_ERROR,
+            code="CONFIRMATION_EXPIRED",
+            message="승인 요청이 만료되었습니다.",
+            retryable=False,
+        )
+
+    @classmethod
+    def confirmation_mismatch(cls) -> AgentToolError:
+        """대상·사용자·목적 불일치이거나 이미 소비된 Confirmation."""
+        return cls(
+            status_code=409,
+            category=AgentErrorCategory.STATE_ERROR,
+            code="CONFIRMATION_MISMATCH",
+            message="승인 정보가 현재 요청과 일치하지 않습니다.",
+            retryable=False,
+        )
+
+    # ── 멱등성 (계약 24.4) ───────────────────────────────────────────────────
+
+    @classmethod
+    def idempotency_key_conflict(cls) -> AgentToolError:
+        """같은 멱등성 키에 다른 요청 Body 를 사용."""
+        return cls(
+            status_code=409,
+            category=AgentErrorCategory.REQUEST_ERROR,
+            code="IDEMPOTENCY_KEY_CONFLICT",
+            message="같은 멱등성 키에 다른 요청을 사용할 수 없습니다.",
+            retryable=False,
+        )
+
+    @classmethod
+    def idempotency_request_in_progress(
+        cls, retry_after_seconds: int = 1
+    ) -> AgentToolError:
+        """같은 키의 요청이 처리 중. Retry-After 후 같은 키·Body 로 재호출."""
+        return cls(
+            status_code=409,
+            category=AgentErrorCategory.REQUEST_ERROR,
+            code="IDEMPOTENCY_REQUEST_IN_PROGRESS",
+            message="같은 요청을 처리하고 있습니다.",
+            retryable=True,
+            headers={"Retry-After": str(retry_after_seconds)},
+        )
+
+    @classmethod
+    def missing_idempotency_key(cls) -> AgentToolError:
+        """상태 변경 API 에 Idempotency-Key 헤더가 없음(계약 4.2)."""
+        return cls(
+            status_code=400,
+            category=AgentErrorCategory.REQUEST_ERROR,
+            code="INVALID_REQUEST",
+            message="Idempotency-Key 헤더가 필요합니다.",
             retryable=False,
         )
 

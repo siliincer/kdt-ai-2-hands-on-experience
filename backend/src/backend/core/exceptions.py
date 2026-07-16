@@ -81,6 +81,7 @@ async def agent_tool_error_handler(request: Request, exc: AgentToolError):
         message=exc.message,
         retryable=exc.retryable,
         details=exc.details,
+        headers=exc.headers,
     )
 
 

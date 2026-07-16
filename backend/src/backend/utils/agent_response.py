@@ -25,11 +25,12 @@ def agent_error_response(
     message: str,
     retryable: bool = False,
     details: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     """Agent Tool API 오류 envelope(JSONResponse) 을 생성한다.
 
     사용자에게 공개 가능한 문장만 포함한다. DB 오류, Stack Trace, 내부 URL, Secret 은
-    담지 않는다(계약 6장).
+    담지 않는다(계약 6장). headers 는 `Retry-After` 처럼 계약이 요구하는 응답 헤더용.
     """
     error: dict[str, Any] = {
         "category": category,
@@ -42,6 +43,7 @@ def agent_error_response(
     return JSONResponse(
         status_code=status_code,
         content={"success": False, "error": error},
+        headers=headers,
     )
 
 
