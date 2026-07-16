@@ -101,6 +101,8 @@ def test_ollama_provider_builds_chat_ollama(monkeypatch):
     assert captured["model"] == "llama3.2:3b"
     assert captured["base_url"] == "http://host.docker.internal:11434"
     assert captured["temperature"] == 0.0
+    assert captured["client_kwargs"] == {"trust_env": False}
+    assert captured["async_client_kwargs"] == {"trust_env": False}
 
 
 def test_ollama_explicit_model_overrides_env(monkeypatch):

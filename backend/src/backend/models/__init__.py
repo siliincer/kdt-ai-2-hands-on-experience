@@ -9,6 +9,7 @@ from .chat_message import ChatMessage
 from .chat_session import ChatSession
 from .execution_context import ExecutionContext, ExecutionContextStatus
 from .transaction import Transaction
+from .transaction_query_context import TransactionQueryContext
 from .user import User
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "ExecutionContext",
     "ExecutionContextStatus",
     "Transaction",
+    "TransactionQueryContext",
     "User",
 ]

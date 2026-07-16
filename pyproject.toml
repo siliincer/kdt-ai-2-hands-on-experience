@@ -49,6 +49,7 @@ target-version = "py311"
 # migration scripts (autogenerate's own formatting conventions apply there).
 extend-exclude = ["*.ipynb", "mock-financial-service/alembic_migrations/versions"]
 
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 

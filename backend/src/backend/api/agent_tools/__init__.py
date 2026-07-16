@@ -7,8 +7,10 @@
 from fastapi import APIRouter
 
 from .account_api import account_router
+from .transaction_api import transaction_router
 
 agent_tools_router = APIRouter(prefix="/agent-tools")
 agent_tools_router.include_router(account_router)
+agent_tools_router.include_router(transaction_router)
 
 __all__ = ["agent_tools_router"]
