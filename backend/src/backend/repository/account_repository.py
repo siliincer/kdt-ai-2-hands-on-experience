@@ -8,7 +8,7 @@ Phase 2 에서 회원가입 시 프로비저닝으로 이 컬럼을 채운다.
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.load_environment_var import settings
@@ -76,6 +76,70 @@ async def get_owned_accounts_by_ids(
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def get_owned_account(
+    session: AsyncSession, user_id: UUID, account_id: UUID
+) -> Account | None:
+    """user 소유의 단일 계좌를 조회한다(설정 변경 대상 검증용). 없으면 None."""
+    stmt = select(Account).where(
+        Account.user_id == user_id,
+        Account.id == account_id,
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def get_default_account(session: AsyncSession, user_id: UUID) -> Account | None:
+    """user 의 현재 기본 출금 계좌. 아직 없으면 None."""
+    stmt = select(Account).where(
+        Account.user_id == user_id,
+        Account.is_default.is_(True),
+    )
+    result = await session.execute(stmt)
+    return result.scalars().first()
+
+
+async def set_default_account(
+    session: AsyncSession, user_id: UUID, account: Account
+) -> Account:
+    """기존 기본계좌를 해제하고 대상 계좌를 기본으로 설정한다(한 트랜잭션).
+
+    사용자당 기본계좌가 동시에 하나만 존재하도록 보장한다(계약 20.5). 해제를 먼저
+    수행해야 부분 유니크 인덱스(ux_accounts_user_default) 와 충돌하지 않는다.
+    """
+    await session.execute(
+        update(Account)
+        .where(Account.user_id == user_id, Account.is_default.is_(True))
+        .values(is_default=False)
+    )
+    account.is_default = True
+    await session.commit()
+    await session.refresh(account)
+    return account
+
+
+async def set_account_alias(
+    session: AsyncSession, account: Account, alias: str
+) -> Account:
+    """계좌 별칭을 변경한다(로컬이 정본, D4)."""
+    account.alias = alias
+    await session.commit()
+    await session.refresh(account)
+    return account
+
+
+async def alias_exists_for_user(
+    session: AsyncSession, user_id: UUID, alias: str, exclude_account_id: UUID
+) -> bool:
+    """같은 사용자의 다른 계좌가 이미 같은 별칭을 쓰는지(중복 정책)."""
+    stmt = select(Account.id).where(
+        Account.user_id == user_id,
+        Account.alias == alias,
+        Account.id != exclude_account_id,
+    )
+    result = await session.execute(stmt)
+    return result.first() is not None
 
 
 async def has_mapped_account(session: AsyncSession, user_id: UUID) -> bool:
