@@ -29,6 +29,8 @@ RUN python -m pip uninstall --yes pip setuptools wheel \
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --from=builder --chown=app:app /app/mock-financial-service/src /app/mock-financial-service/src
+COPY --chown=app:app mock-financial-service/alembic.ini /app/mock-financial-service/alembic.ini
+COPY --chown=app:app mock-financial-service/alembic_migrations /app/mock-financial-service/alembic_migrations
 
 USER 10001:10001
 
