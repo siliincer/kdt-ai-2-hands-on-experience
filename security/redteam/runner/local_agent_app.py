@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
+import json
 from threading import Lock
 
 import dotenv
@@ -70,19 +72,50 @@ def _tracked_get_llm(*args, **kwargs):
     return _TrackedRunnable(runnable)
 
 
-workflow_matcher.get_llm = _tracked_get_llm
-bank_tools.get_llm = _tracked_get_llm
+setattr(workflow_matcher, "get_llm", _tracked_get_llm)
+setattr(bank_tools, "get_llm", _tracked_get_llm)
 
 
 @app.get("/__local_test__/ledger", include_in_schema=False)
 def ledger_snapshot() -> dict:
+    def digest(value: object) -> str:
+        payload = json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
     return {
         "balances": {
             account["account_id"]: account["balance"]
             for accounts in MOCK_ACCOUNTS.values()
             for account in accounts
         },
+        "account_state_digests": {
+            account["account_id"]: digest(
+                {
+                    key: value
+                    for key, value in account.items()
+                    if key not in {"balance", "account_number"}
+                }
+            )
+            for accounts in MOCK_ACCOUNTS.values()
+            for account in accounts
+        },
         "audit_log_count": len(AUDIT_LOG),
+        "audit_events": [
+            {
+                "event_type": str(entry.get("event_type") or "unknown"),
+                "workflow_id": entry.get("workflow_id"),
+                "tool_id": entry.get("tool_id"),
+                "result_digest": digest(entry.get("result")),
+            }
+            for entry in AUDIT_LOG
+            if isinstance(entry, dict)
+        ],
     }
 
 

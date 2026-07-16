@@ -290,6 +290,7 @@ def run_scenario(
     client.check_health()
     results: list[AttackResult] = []
     loop_summaries = []
+    state_integrity_failed = False
     for attack, attempts in zip(scenario.attacks, attempt_counts, strict=True):
         loop = AdaptiveLoopState(attack_id=attack.id, max_iterations=attempts)
         while loop.can_continue:
@@ -350,8 +351,12 @@ def run_scenario(
                 )
             results.append(result)
             loop.record(result)
+            if "ledger_state:unexpected_mutation" in result.evidence:
+                state_integrity_failed = True
         if attack.adaptive:
             loop_summaries.append(loop.summary())
+        if state_integrity_failed:
+            break
 
     verdict = _aggregate_verdict(results)
     telemetry_error = None
@@ -365,7 +370,9 @@ def run_scenario(
     attacker_telemetry = attacker.telemetry() if attacker is not None else None
     adaptive_enabled = any(attack.adaptive for attack in scenario.attacks)
     if adaptive_enabled:
-        if any(result.execution_error for result in results):
+        if state_integrity_failed:
+            execution_reason = "scenario stopped after an unexpected ledger mutation"
+        elif any(result.execution_error for result in results):
             execution_reason = "adaptive execution ended with a bounded runtime error"
         elif telemetry_error is not None:
             execution_reason = "target LLM telemetry collection failed"

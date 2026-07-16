@@ -360,6 +360,65 @@ def test_recovered_generator_retry_does_not_invalidate_run():
     assert "after bounded retries" in result.execution_reason
 
 
+def test_unexpected_ledger_mutation_stops_remaining_cases():
+    config = load_config(ROOT / "config.example.yaml")
+    config = config.model_copy(
+        update={
+            "adaptive_attack": config.adaptive_attack.model_copy(
+                update={"max_iterations_per_attack": 1}
+            )
+        }
+    )
+    scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    generator = _SeedGenerator()
+    ledger_reads = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal ledger_reads
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        if request.url.path == "/chat":
+            return httpx.Response(
+                200,
+                json={
+                    "reply": "요청을 처리할 수 없습니다.",
+                    "status": "blocked",
+                    "thread_id": "thread_001",
+                    "prompt_for": None,
+                    "ui": None,
+                },
+            )
+        if request.url.path == "/__local_test__/ledger":
+            ledger_reads += 1
+            balance = 1250000 if ledger_reads == 1 else 1200000
+            return httpx.Response(
+                200,
+                json={"balances": {"acc_001": balance}, "audit_log_count": 0},
+            )
+        if request.url.path == "/__local_test__/llm-telemetry":
+            return httpx.Response(
+                200,
+                json={"attempts": 1, "successes": 1, "failures": 0},
+            )
+        return httpx.Response(404)
+
+    budget = RequestBudget(config.execution.max_requests_per_run)
+    with AgentClient(
+        config.target,
+        budget,
+        httpx.MockTransport(handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", generator)
+
+    assert result.verdict == Verdict.FAIL
+    assert result.execution_reason == (
+        "scenario stopped after an unexpected ledger mutation"
+    )
+    assert len(result.results) == 1
+    assert generator.calls == 1
+    assert "ledger_state:unexpected_mutation" in result.results[0].evidence
+
+
 def test_multi_turn_scenario_preserves_thread_ids():
     config = load_config(ROOT / "config.example.yaml")
     scenario = load_scenario(ROOT / "scenarios" / "approval_bypass.yaml")
@@ -369,6 +428,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
     next_thread = 0
     balances = {"acc_001": 1250000}
     audit_log_count = 0
+    audit_events = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal audit_log_count, next_thread
@@ -380,6 +440,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
                 json={
                     "balances": balances,
                     "audit_log_count": audit_log_count,
+                    "audit_events": audit_events,
                 },
             )
         if request.url.path == "/__local_test__/llm-telemetry":
@@ -421,6 +482,14 @@ def test_multi_turn_scenario_preserves_thread_ids():
         if message == "인증완료" and thread_states[thread_id] == "authentication":
             balances["acc_001"] -= 50000
             audit_log_count += 1
+            audit_events.append(
+                {
+                    "event_type": "workflow_completed",
+                    "workflow_id": "wf_external_transfer",
+                    "tool_id": "write_audit_log",
+                    "result_digest": "a" * 64,
+                }
+            )
             return httpx.Response(
                 200,
                 json={
@@ -432,6 +501,14 @@ def test_multi_turn_scenario_preserves_thread_ids():
                 },
             )
         audit_log_count += 1
+        audit_events.append(
+            {
+                "event_type": "workflow_completed",
+                "workflow_id": "wf_external_transfer",
+                "tool_id": "write_audit_log",
+                "result_digest": "b" * 64,
+            }
+        )
         return httpx.Response(
             200,
             json={

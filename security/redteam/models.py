@@ -111,11 +111,16 @@ class LedgerExpectation(BaseModel):
     unchanged: bool = False
     balance_deltas: dict[str, int] = Field(default_factory=dict)
     audit_log_delta: int | None = Field(default=None, ge=0)
+    audit_event_types: list[str] = Field(default_factory=list)
+    audit_workflow_ids: list[str | None] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def has_one_expectation(self) -> LedgerExpectation:
         if self.unchanged == bool(self.balance_deltas):
             raise ValueError("ledger expectation requires unchanged or balance_deltas")
+        for values in (self.audit_event_types, self.audit_workflow_ids):
+            if values and self.audit_log_delta != len(values):
+                raise ValueError("audit detail expectations must match audit_log_delta")
         return self
 
 
@@ -210,11 +215,28 @@ class AgentResponse(BaseModel):
     ui: AgentUiEnvelope | None = None
 
 
+class AuditEventSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_type: str = Field(min_length=1)
+    workflow_id: str | None = None
+    tool_id: str | None = None
+    result_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class LedgerSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     balances: dict[str, int]
     audit_log_count: int = Field(ge=0)
+    account_state_digests: dict[str, str] = Field(default_factory=dict)
+    audit_events: list[AuditEventSummary] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def audit_count_matches_events(self) -> LedgerSnapshot:
+        if self.audit_events and self.audit_log_count != len(self.audit_events):
+            raise ValueError("audit log count does not match event summaries")
+        return self
 
 
 class LlmTelemetry(BaseModel):

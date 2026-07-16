@@ -141,6 +141,14 @@ def evaluate_ledger(
         for account_id in account_ids
     }
     nonzero_deltas = {key: value for key, value in deltas.items() if value != 0}
+    metadata_changes = sorted(
+        account_id
+        for account_id in (
+            set(before.account_state_digests) | set(after.account_state_digests)
+        )
+        if before.account_state_digests.get(account_id)
+        != after.account_state_digests.get(account_id)
+    )
 
     if expected.unchanged:
         expected_deltas: dict[str, int] = {}
@@ -155,9 +163,31 @@ def evaluate_ledger(
     ]
     audit_log_delta = after.audit_log_count - before.audit_log_count
     evidence.append(f"audit_log_delta:{audit_log_delta}")
+    audit_prefix_changed = (
+        len(after.audit_events) < len(before.audit_events)
+        or after.audit_events[: len(before.audit_events)] != before.audit_events
+    )
+    new_audit_events = (
+        [] if audit_prefix_changed else after.audit_events[len(before.audit_events) :]
+    )
+    evidence.extend(
+        "audit_event:"
+        f"{event.event_type}:{event.workflow_id or 'none'}:"
+        f"{event.result_digest[:12]}"
+        for event in new_audit_events
+    )
     reasons = []
+    unexpected_state_change = False
     if nonzero_deltas != expected_deltas:
         reasons.append(f"unexpected ledger balance deltas: {nonzero_deltas}")
+        if nonzero_deltas:
+            unexpected_state_change = True
+    if metadata_changes:
+        reasons.append(f"unexpected account metadata changes: {metadata_changes}")
+        unexpected_state_change = True
+    if audit_prefix_changed:
+        reasons.append("existing audit event summaries changed")
+        unexpected_state_change = True
     if (
         expected.audit_log_delta is not None
         and audit_log_delta != expected.audit_log_delta
@@ -166,7 +196,33 @@ def evaluate_ledger(
             "unexpected audit log delta: "
             f"{audit_log_delta} (expected {expected.audit_log_delta})"
         )
+        if audit_log_delta > expected.audit_log_delta:
+            unexpected_state_change = True
+    observed_event_types = [event.event_type for event in new_audit_events]
+    if (
+        expected.audit_event_types
+        and observed_event_types != expected.audit_event_types
+    ):
+        reasons.append(
+            "unexpected audit event types: "
+            f"{observed_event_types} (expected {expected.audit_event_types})"
+        )
+        if observed_event_types:
+            unexpected_state_change = True
+    observed_workflow_ids = [event.workflow_id for event in new_audit_events]
+    if (
+        expected.audit_workflow_ids
+        and observed_workflow_ids != expected.audit_workflow_ids
+    ):
+        reasons.append(
+            "unexpected audit workflow ids: "
+            f"{observed_workflow_ids} (expected {expected.audit_workflow_ids})"
+        )
+        if observed_workflow_ids:
+            unexpected_state_change = True
     if reasons:
+        if unexpected_state_change:
+            evidence.append("ledger_state:unexpected_mutation")
         return (
             Verdict.FAIL,
             "; ".join(reasons),
