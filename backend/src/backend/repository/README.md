@@ -37,4 +37,6 @@ Session.autobegin(SQLAlchemy 1.4 이상 기본값 True)이 하는 일은, 개발
 
 성능과 편의성 사이의 실질적인 트레이드오프는 autobegin의 on/off가 아니라, 트랜잭션을 감싸는 방식 자체(non-autocommit) vs 진정한 autocommit isolation level 사이에 존재합니다.
 
-SQLAlchemy는 isolation_level="AUTOCOMMIT"을 엔진 또는 커넥션 단위로 지정할 수 있는 옵션을 제공합니다. 이 모드에서는 각 SQL 문이 독립적으로 즉시 커밋되어 BEGIN/COMMIT(또는 ROLLBACK)으로 감싸는 왕복 자체가 발생하지 않습니다. 다만 이는 다음과 같은 명확한 대가를 수반합니다.
+SQLAlchemy의 기본 격리 수준(Isolation Level)은 데이터베이스(DBMS)의 기본값을 따르며, 세션은 기본적으로 수동 커밋(Manual Commit) 모드로 작동합니다. autocommit=False가 기본값입니다.
+
+SQLAlchemy는 isolation_level="AUTOCOMMIT"을 엔진 또는 커넥션 단위로 지정할 수 있는 옵션을 제공합니다. 이 모드에서는 각 SQL 문이 독립적으로 즉시 커밋되어 BEGIN/COMMIT(또는 ROLLBACK)으로 감싸는 왕복 자체가 발생하지 않습니다.

@@ -74,6 +74,23 @@ async def get_executed_transfers_since(
     return list(result.scalars().all())
 
 
+async def get_executed_external_transfers(
+    session: AsyncSession, user_id: UUID
+) -> list[Confirmation]:
+    """사용자의 실행 완료된 타인송금 Confirmation 전체(#5 수취인 자동 확정용, D5).
+
+    수취인 정보(recipient_account_id·recipient_name)는 Prepare 가 `fixed_data` 에
+    고정해 두므로 호출부가 이름 정규화·중복 제거를 수행한다.
+    """
+    stmt = select(Confirmation).where(
+        Confirmation.user_id == user_id,
+        Confirmation.status == ConfirmationStatus.EXECUTED,
+        Confirmation.operation == ConfirmationOperation.EXTERNAL_TRANSFER,
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def set_confirmation_status(
     session: AsyncSession,
     confirmation: Confirmation,

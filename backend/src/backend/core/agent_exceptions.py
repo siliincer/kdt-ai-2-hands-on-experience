@@ -154,6 +154,28 @@ class AgentToolError(Exception):
         )
 
     @classmethod
+    def recipient_not_found(cls) -> AgentToolError:
+        """수취인 참조가 없거나 본인 거래 이력에 없는 계좌. 수취인 선택부터 재진행."""
+        return cls(
+            status_code=404,
+            category=AgentErrorCategory.REQUEST_ERROR,
+            code="RECIPIENT_NOT_FOUND",
+            message="수취인을 찾을 수 없습니다.",
+            retryable=False,
+        )
+
+    @classmethod
+    def recipient_candidate_expired(cls) -> AgentToolError:
+        """신규 수취 계좌 후보가 만료·소비됨. 신규 계좌 재검증 필요."""
+        return cls(
+            status_code=410,
+            category=AgentErrorCategory.STATE_ERROR,
+            code="RECIPIENT_CANDIDATE_EXPIRED",
+            message="수취 계좌 검증이 만료되었습니다. 다시 검증해 주세요.",
+            retryable=False,
+        )
+
+    @classmethod
     def auth_required(cls) -> AgentToolError:
         """추가 인증이 없거나 유효하지 않음. Agent 는 Auth Context 생성으로 이동."""
         return cls(

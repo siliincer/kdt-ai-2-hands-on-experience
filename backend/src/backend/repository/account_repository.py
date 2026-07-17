@@ -90,6 +90,32 @@ async def get_owned_account(
     return result.scalar_one_or_none()
 
 
+async def get_account_by_id(session: AsyncSession, account_id: UUID) -> Account | None:
+    """소유권 필터 없이 계좌를 조회한다.
+
+    **타인송금 수취인 검증 전용.** 수취 계좌는 다른 사용자 소유이므로 user_id 필터를
+    걸 수 없다. 호출부는 반드시 참조 출처(본인의 실행 이력 또는 검증된 후보)를 먼저
+    확인해 임의 계좌 열거에 쓰이지 않게 해야 한다.
+    """
+    stmt = select(Account).where(Account.id == account_id)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def get_account_by_number(
+    session: AsyncSession, account_number: str
+) -> Account | None:
+    """계좌번호로 계좌를 조회한다(신규 수취 계좌 검증 전용, D5).
+
+    Frontend 검증 API 에서만 사용한다. 검증 성공 시 원문 대신
+    recipient_candidate_id 를 발급하므로 원문이 Agent 로 전달되지 않는다.
+    TODO(계정계): 계좌번호 기반 조회 API 가 생기면 계정계 검증으로 위임한다.
+    """
+    stmt = select(Account).where(Account.account_number == account_number)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def get_default_account(session: AsyncSession, user_id: UUID) -> Account | None:
     """user 의 현재 기본 출금 계좌. 아직 없으면 None."""
     stmt = select(Account).where(
