@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from agent.internal_execution_api import router as internal_execution_router
 from agent.schemas import ChatRequest, ChatResponse
 from agent.service import run_chat
 
 app = FastAPI(title="RealFinancial Agent", version="0.1.0")
+app.include_router(internal_execution_router)
 
 
 @app.get("/health")
