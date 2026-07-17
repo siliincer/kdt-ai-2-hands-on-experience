@@ -111,4 +111,4 @@ class Settings(BaseSettings):
 # 전역 설정 객체 생성
 settings = Settings()
 
-print("환경 변수 로드 완료")  # TODO: loguru 로거로 교체
+print("환경 변수 로드 완료")  # TODO(BE): loguru 로거로 교체

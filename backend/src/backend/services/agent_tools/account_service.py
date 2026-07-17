@@ -14,7 +14,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.agent_exceptions import AgentToolError
-from ...core.load_environment_var import settings
 from ...models.account import Account
 from ...repository.account_repository import (
     get_mapped_accounts,
@@ -29,10 +28,7 @@ from ...schemas.agent_tools.account import (
 )
 from ...schemas.execution_context import ResolvedExecutionContext
 from ...utils.masking import mask_account_number
-
-
-def _use_http() -> bool:
-    return settings.FINANCIAL_CLIENT.strip().lower() == "http"
+from .balance_reader import read_balance
 
 
 def _matches_hint(account: Account, hint: str) -> bool:
@@ -91,9 +87,7 @@ def _parse_account_ids(raw_ids: list[str]) -> list[UUID]:
 
 async def _resolve_balance(account: Account) -> int:
     """계좌 잔액. 모드 분기와 계정계 404 처리는 balance_reader 가 담당한다."""
-    # TODO: claude 작업 중 오류 나서 다시 구현 시작 예정
-    # return await read_balance(account)
-    return 0  # TODO: 위를 구현해야 됨
+    return await read_balance(account)
 
 
 async def query_balances(

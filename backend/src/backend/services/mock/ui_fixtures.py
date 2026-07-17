@@ -1,6 +1,6 @@
 """UI Data API 목 픽스처 (mock 분리 원칙, BE_Coding).
 
-TODO: 향후 ui_service 가 실제 데이터 소스 조회로 교체될 때 이 파일을 제거한다.
+TODO(BE): 향후 ui_service 가 실제 데이터 소스 조회로 교체될 때 이 파일을 제거한다.
 값은 backend/docs/agent_ui_event_spec.md §4b 스키마와 일치한다.
 """
 

@@ -19,6 +19,6 @@ from .policy_constants import DEFAULT_BANK_NAME
 def resolve_owned_account_bank(account: Account) -> str:
     """소유 계좌의 은행명. 매핑에 값이 없으면 계정계 단일 은행명으로 대체한다.
 
-    TODO(D6): 다은행 도입 시 fallback 을 제거하고 계좌별 은행명을 필수로 만든다.
+    TODO(계정계, D6): 다은행 도입 시 fallback 을 제거하고 계좌별 은행명을 필수로 만든다.
     """
     return account.bank_name or DEFAULT_BANK_NAME

@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,6 +34,7 @@ from ...schemas.agent_tools.transaction import (
     TransactionType,
 )
 from ...schemas.execution_context import ResolvedExecutionContext
+from ...utils.timezone import resolve_tz
 from ..financial import get_financial_client
 
 # 계정계 원장에 기간 필터가 없어 계좌별로 넉넉히 가져와 메모리 필터한다.
@@ -45,14 +46,6 @@ _QUERY_CONTEXT_TTL_SECONDS = 900
 
 def _use_http() -> bool:
     return settings.FINANCIAL_CLIENT.strip().lower() == "http"
-
-
-def _resolve_tz(name: str) -> ZoneInfo | timezone:
-    """타임존 해석. tzdata 미설치 환경 등 실패 시 UTC 로 안전 대체."""
-    try:
-        return ZoneInfo(name)
-    except (ZoneInfoNotFoundError, ValueError):
-        return timezone.utc
 
 
 def _parse_dt(value: str) -> datetime:
@@ -140,7 +133,7 @@ async def query_transactions(
     """거래내역 첫 페이지를 조회하고 이후 페이지용 Query Context 를 저장한다."""
     owned = await _load_owned(session, context, req.account_ids)
     rows = await _load_ledger_rows(owned)
-    tz = _resolve_tz(context.timezone)
+    tz = resolve_tz(context.timezone)
 
     filtered = [
         r
@@ -202,7 +195,7 @@ async def summarize_transactions(
     """기간 내 지출/수입 합계를 집계한다. 조건에 맞는 거래가 없으면 0 을 반환."""
     owned = await _load_owned(session, context, req.account_ids)
     rows = await _load_ledger_rows(owned)
-    tz = _resolve_tz(context.timezone)
+    tz = resolve_tz(context.timezone)
 
     in_period = [
         r

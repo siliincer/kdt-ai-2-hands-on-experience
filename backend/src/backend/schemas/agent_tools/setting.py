@@ -94,7 +94,8 @@ class CorrectionView(BaseModel):
 
 
 # ── 응답 data ────────────────────────────────────────────────────────────────
-# TODO: 정책 차단 조건(금융거래 제한 등)을 도입하면 blocked/blocked_view 를 추가한다.
+# TODO(계정계?): 정책 차단 조건(금융거래 제한 등)을 도입하면
+# blocked/blocked_view 를 추가한다.
 # 현재 샌드박스에는 설정 변경을 차단할 정책 상태가 없어 blocked 를 반환하지 않는다.
 
 

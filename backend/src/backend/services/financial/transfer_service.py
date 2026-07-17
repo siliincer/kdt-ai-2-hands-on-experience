@@ -39,7 +39,7 @@ async def execute_external_transfer(
         return None
 
     sender = await get_primary_mapped_account(session, user_id)
-    # TODO: 이건 모킹이고, 데모 수취처(은행명+계좌번호)로 이체를
+    # TODO(BE): 이건 모킹이고, 데모 수취처(은행명+계좌번호)로 이체를
     # 실제 계좌 확인으로 수행할 것, agent를 위한 api 제공?
     receiver_bank = settings.FINANCIAL_DEMO_RECEIVER_BANK_NAME.strip()
     receiver_number = settings.FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER.strip()

@@ -14,7 +14,7 @@ CORS_OPTIONS = {
         "http://localhost:5199",
         "http://localhost:8001",
         "http://localhost:8002",
-        # TODO: <차기 AWS EC2 클라우드 배포 주소>
+        # TODO(BE): <차기 AWS EC2 클라우드 배포 주소> 추가
         "http://15.164.26.234",
         "https://15.164.26.234",
     ],

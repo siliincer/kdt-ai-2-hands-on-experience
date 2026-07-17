@@ -21,7 +21,7 @@ from .services.financial import close_financial_client
 async def lifespan(app: FastAPI):
     # Perform startup tasks here (e.g., connect to database, initialize resources)
     run_migrations()
-    # TODO: 시간되면 print문은 loguru같은 전문 로거로 변경
+    # TODO(BE): 시간되면 print문은 loguru같은 전문 로거로 변경
     print("마이그레이션 적용 완료")
     yield  # 제어권 넘기는 제너레이터
     # 종료 시: Redis 커넥션 풀 + 계정계 HTTP 클라이언트 graceful shutdown

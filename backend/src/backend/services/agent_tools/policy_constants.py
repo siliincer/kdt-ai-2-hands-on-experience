@@ -3,7 +3,7 @@
 Prepare/Execute 의 `correction_required`·`blocked` 판정 근거가 되는 값을 한곳에 모은다.
 계정계에는 한도·수수료·hold 개념이 없으므로 판정은 Backend 책임이다.
 
-TODO: 계정계에 추가로 한도·수수료·hold 개념을 반영?
+TODO(계정계): 계정계에 추가로 한도·수수료·hold 개념을 반영?
 
 값은 데모 기준의 임시값이며 조정 가능하다. 사용자·계좌별로 달라져야 하면 policy 테이블로
 승격한다(현재 범위 아님).
