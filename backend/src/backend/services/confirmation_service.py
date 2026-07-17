@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +28,7 @@ from ..repository.confirmation_repository import (
     set_confirmation_status,
 )
 from ..schemas.execution_context import ResolvedExecutionContext
+from ..utils.parsing import parse_uuid
 from .agent_tools.policy_constants import CONFIRMATION_TTL_SECONDS
 
 
@@ -49,14 +49,6 @@ async def create_pending(
         fixed_data=fixed_data,
         expires_at=expires_at,
     )
-
-
-def _parse_id(raw: str) -> UUID:
-    try:
-        return UUID(raw)
-    except (ValueError, AttributeError) as exc:
-        # 형식 오류는 존재 여부를 노출하지 않도록 불일치로 취급한다.
-        raise AgentToolError.confirmation_mismatch() from exc
 
 
 # 추가 인증을 요구하는 Operation. 설정 변경은 추가 인증 대상이 아니다(계약 19.3).
@@ -80,7 +72,9 @@ async def _load_approved(
     - 만료: `CONFIRMATION_EXPIRED` (410)
     - 아직 미승인(PENDING): `CONFIRMATION_REQUIRED` (409)
     """
-    confirmation = await get_confirmation_by_id(session, _parse_id(confirmation_id))
+    confirmation = await get_confirmation_by_id(
+        session, parse_uuid(confirmation_id, AgentToolError.confirmation_mismatch)
+    )
     if confirmation is None:
         raise AgentToolError.confirmation_mismatch()
     # 다른 사용자의 Confirmation 은 존재 자체를 알리지 않고 불일치로 처리한다.

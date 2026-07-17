@@ -33,14 +33,13 @@ from ...repository.account_repository import (
     set_account_alias,
     set_default_account,
 )
+from ...schemas.agent_tools.common import AccountDisplayRef, CorrectionView
 from ...schemas.agent_tools.setting import (
     AccountAliasConfirmationView,
     AccountAliasExecuteData,
     AccountAliasPrepareData,
     AccountAliasPrepareRequest,
-    AccountRef,
     AliasAccountRef,
-    CorrectionView,
     DefaultAccountConfirmationView,
     DefaultAccountExecuteData,
     DefaultAccountPrepareData,
@@ -51,6 +50,7 @@ from ...schemas.agent_tools.setting import (
 )
 from ...schemas.execution_context import ResolvedExecutionContext
 from ...utils.masking import mask_account_number
+from ...utils.parsing import parse_uuid
 from .. import confirmation_service, financial_audit_service
 from .policy_constants import (
     ALIAS_MAX_LENGTH,
@@ -70,27 +70,24 @@ _OP_ALIAS_PREPARE = "account_alias_prepare"
 _OP_ALIAS_EXECUTE = "account_alias_execute"
 
 
-def _parse_id(raw: str) -> UUID:
-    try:
-        return UUID(raw)
-    except (ValueError, AttributeError) as exc:
-        raise AgentToolError.invalid_request(
-            "account_id 형식이 올바르지 않습니다."
-        ) from exc
+def _invalid_account_id() -> AgentToolError:
+    return AgentToolError.invalid_request("account_id 형식이 올바르지 않습니다.")
 
 
 async def _load_owned_account(
     session: AsyncSession, context: ResolvedExecutionContext, account_id: str
 ) -> Account:
     """대상 계좌 소유권 검증. 소유가 아니면 존재 여부를 노출하지 않고 거부한다."""
-    account = await get_owned_account(session, context.user_id, _parse_id(account_id))
+    account = await get_owned_account(
+        session, context.user_id, parse_uuid(account_id, _invalid_account_id)
+    )
     if account is None:
         raise AgentToolError.account_access_denied()
     return account
 
 
-def _account_ref(account: Account) -> AccountRef:
-    return AccountRef(
+def _account_ref(account: Account) -> AccountDisplayRef:
+    return AccountDisplayRef(
         account_id=str(account.id),
         bank_name=account.bank_name,
         account_alias=account.alias,

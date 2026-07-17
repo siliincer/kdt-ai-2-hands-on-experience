@@ -375,7 +375,7 @@ async def test_execute_completed_moves_ledger(monkeypatch):
         monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
     )
     fake = _FakeLedger()
-    monkeypatch.setattr(transfer_service.settings, "FINANCIAL_CLIENT", "http")
+    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: fake)
 
     data = await transfer_service.execute_internal_transfer(
@@ -481,7 +481,7 @@ async def test_execute_ledger_outage_is_technical_error(monkeypatch):
     marks = _patch_execute_stack(
         monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
     )
-    monkeypatch.setattr(transfer_service.settings, "FINANCIAL_CLIENT", "http")
+    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
     monkeypatch.setattr(
         transfer_service, "get_financial_client", lambda: _FakeLedger(error=True)
     )
@@ -507,7 +507,7 @@ async def test_execute_mock_mode_is_technical_error(monkeypatch):
     _patch_execute_stack(
         monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
     )
-    monkeypatch.setattr(transfer_service.settings, "FINANCIAL_CLIENT", "mock")
+    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: False)
 
     with pytest.raises(AgentToolError) as exc:
         await transfer_service.execute_internal_transfer(

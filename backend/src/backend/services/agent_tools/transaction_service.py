@@ -12,13 +12,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.agent_exceptions import AgentToolError
-from ...core.load_environment_var import settings
 from ...models.account import Account
 from ...repository.account_repository import get_owned_accounts_by_ids
 from ...repository.transaction_query_repository import (
@@ -34,26 +32,16 @@ from ...schemas.agent_tools.transaction import (
     TransactionType,
 )
 from ...schemas.execution_context import ResolvedExecutionContext
+from ...utils.datetime_parse import parse_iso_utc
+from ...utils.parsing import parse_uuid_list
 from ...utils.timezone import resolve_tz
-from ..financial import get_financial_client
+from ..financial import get_financial_client, is_financial_http_mode
 
 # 계정계 원장에 기간 필터가 없어 계좌별로 넉넉히 가져와 메모리 필터한다.
 # TODO(계정계): /ledger 에 start_date·end_date 파라미터가 생기면 하향 위임.
 _LEDGER_FETCH_CAP = 200
 # 거래내역 Query Context 유효시간(초). 이후 페이지를 Frontend 가 재조회하는 창.
 _QUERY_CONTEXT_TTL_SECONDS = 900
-
-
-def _use_http() -> bool:
-    return settings.FINANCIAL_CLIENT.strip().lower() == "http"
-
-
-def _parse_dt(value: str) -> datetime:
-    """계정계 ISO8601(Z 포함 가능) 파싱. tz 없으면 UTC 로 간주."""
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
 
 
 def _entry_to_txn_type(entry_type: str) -> str:
@@ -70,13 +58,8 @@ class _LedgerRow:
     amount: int
 
 
-def _parse_account_ids(raw_ids: list[str]) -> list[UUID]:
-    try:
-        return [UUID(raw) for raw in raw_ids]
-    except (ValueError, AttributeError) as exc:
-        raise AgentToolError.invalid_request(
-            "account_ids 형식이 올바르지 않습니다."
-        ) from exc
+def _invalid_account_ids() -> AgentToolError:
+    return AgentToolError.invalid_request("account_ids 형식이 올바르지 않습니다.")
 
 
 async def _load_owned(
@@ -85,7 +68,7 @@ async def _load_owned(
     account_ids: list[str],
 ) -> list[Account]:
     """소유권 검증. 한 계좌라도 소유·접근 실패면 전체 거절(계약 11.4)."""
-    parsed = _parse_account_ids(account_ids)
+    parsed = parse_uuid_list(account_ids, _invalid_account_ids)
     owned = await get_owned_accounts_by_ids(session, context.user_id, parsed)
     if len(owned) != len(parsed):
         raise AgentToolError.account_access_denied()
@@ -94,7 +77,7 @@ async def _load_owned(
 
 async def _load_ledger_rows(owned: list[Account]) -> list[_LedgerRow]:
     """소유 계좌들의 원장을 병합한다. http=계정계, mock=빈 목록."""
-    if not _use_http():
+    if not is_financial_http_mode():
         return []
     client = get_financial_client()
     rows: list[_LedgerRow] = []
@@ -109,7 +92,7 @@ async def _load_ledger_rows(owned: list[Account]) -> list[_LedgerRow]:
                 _LedgerRow(
                     account=account,
                     transaction_id=entry["transaction_id"],
-                    occurred_at=_parse_dt(entry["created_at"]),
+                    occurred_at=parse_iso_utc(entry["created_at"]),
                     entry_type=entry["entry_type"],
                     amount=int(entry["amount"]),
                 )

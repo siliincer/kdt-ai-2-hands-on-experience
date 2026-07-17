@@ -8,7 +8,6 @@ FINANCIAL_CLIENT=http: mock-financial-service(계정계)를 정보계(analytics)
 은행/카드 메타)는 기본값으로 대체한다(원장은 순수 이중기입 원장이라 표시용 메타 없음).
 """
 
-from datetime import datetime
 from typing import cast
 from uuid import UUID
 
@@ -37,6 +36,7 @@ from ..schemas.ui import (
     TransactionItem,
     TransactionsData,
 )
+from ..utils.datetime_parse import parse_iso_utc
 from .financial import get_financial_client
 from .mock.ui_fixtures import (
     ACCOUNT_DETAIL_FIXTURE,
@@ -62,11 +62,6 @@ _RECENT_LIMIT = 10
 
 def _use_http() -> bool:
     return settings.FINANCIAL_CLIENT.strip().lower() == "http"
-
-
-def _parse_dt(value: str) -> datetime:
-    """계정계 ISO8601(Z 포함) 문자열 파싱."""
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 async def _fetch_user_ledger(session: AsyncSession, user_id: UUID) -> list[dict]:
@@ -136,7 +131,7 @@ def _ledger_to_recent(entry: dict) -> RecentTxItem:
 
     B2 는 A2(거래내역)와 달리 amount 에 부호를 준다(출금 음수).
     """
-    created = _parse_dt(entry["created_at"])
+    created = parse_iso_utc(entry["created_at"])
     is_credit = entry["entry_type"] == "CREDIT"
     amount = entry["amount"] if is_credit else -entry["amount"]
     return RecentTxItem(
@@ -188,7 +183,7 @@ def _ledger_to_item(entry: dict, item_id: int) -> TransactionItem:
 
     원장에는 상호명/카테고리/이모지가 없어 CREDIT/DEBIT 기준 기본값을 채운다.
     """
-    created = _parse_dt(entry["created_at"])
+    created = parse_iso_utc(entry["created_at"])
     is_credit = entry["entry_type"] == "CREDIT"
     amount = entry["amount"] if is_credit else -entry["amount"]
     return TransactionItem(
@@ -238,7 +233,7 @@ def _spending_from_ledger(entries: list[dict]) -> SpendingData:
 
     monthly_map: dict[str, int] = {}
     for e in out:
-        key = _parse_dt(e["created_at"]).strftime("%Y-%m")
+        key = parse_iso_utc(e["created_at"]).strftime("%Y-%m")
         monthly_map[key] = monthly_map.get(key, 0) + e["amount"]
     monthly = [
         MonthlySpendDatum(month=f"{int(k[5:7])}월", amount=v)
@@ -262,7 +257,7 @@ def _spending_from_ledger(entries: list[dict]) -> SpendingData:
             _DEFAULT_CATEGORY: [
                 CatTxDatum(
                     name="출금",
-                    date=_parse_dt(e["created_at"]).strftime("%m.%d"),
+                    date=parse_iso_utc(e["created_at"]).strftime("%m.%d"),
                     amount=e["amount"],
                 )
                 for e in out[:_CATTX_LIMIT]

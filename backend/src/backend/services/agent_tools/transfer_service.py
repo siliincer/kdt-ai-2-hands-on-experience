@@ -19,7 +19,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.agent_exceptions import AgentToolError
-from ...core.load_environment_var import settings
 from ...models.account import Account
 from ...models.confirmation import Confirmation, ConfirmationOperation
 from ...models.financial_audit_log import (
@@ -36,9 +35,9 @@ from ...repository.recipient_candidate_repository import (
     get_recipient_candidate_by_id,
     mark_candidate_consumed,
 )
+from ...schemas.agent_tools.common import AccountDisplayRef, CorrectionView
 from ...schemas.agent_tools.transfer import (
     WARNING_NEW_RECIPIENT,
-    CorrectionView,
     ExternalTransferConfirmationView,
     ExternalTransferPrepareData,
     ExternalTransferPrepareRequest,
@@ -46,7 +45,6 @@ from ...schemas.agent_tools.transfer import (
     InternalTransferPrepareData,
     InternalTransferPrepareRequest,
     RecipientRef,
-    TransferAccountRef,
     TransferExecuteData,
     TransferExecuteRequest,
     TransferOutcome,
@@ -54,9 +52,14 @@ from ...schemas.agent_tools.transfer import (
 )
 from ...schemas.execution_context import ResolvedExecutionContext
 from ...utils.masking import mask_account_number, mask_person_name
+from ...utils.parsing import parse_uuid
 from ...utils.timezone import resolve_tz
 from .. import auth_context_service, confirmation_service, financial_audit_service
-from ..financial import FinancialServiceError, get_financial_client
+from ..financial import (
+    FinancialServiceError,
+    get_financial_client,
+    is_financial_http_mode,
+)
 from .balance_reader import read_available_balance
 from .bank_resolver import resolve_owned_account_bank
 from .policy_constants import (
@@ -71,18 +74,14 @@ _OP_INTERNAL_PREPARE = "internal_transfer_prepare"
 _OP_INTERNAL_EXECUTE = "internal_transfer_execute"
 
 
-def _use_http() -> bool:
-    return settings.FINANCIAL_CLIENT.strip().lower() == "http"
-
-
 def _correction(
     reason: str, targets: list[str], title: str
 ) -> tuple[str, CorrectionView]:
     return reason, CorrectionView(title=title, allowed_change_targets=targets)
 
 
-def _account_ref(account: Account) -> TransferAccountRef:
-    return TransferAccountRef(
+def _account_ref(account: Account) -> AccountDisplayRef:
+    return AccountDisplayRef(
         account_id=str(account.id),
         account_alias=account.alias,
         bank_name=account.bank_name,
@@ -90,19 +89,16 @@ def _account_ref(account: Account) -> TransferAccountRef:
     )
 
 
-def _parse_id(raw: str) -> UUID:
-    try:
-        return UUID(raw)
-    except (ValueError, AttributeError) as exc:
-        raise AgentToolError.invalid_request(
-            "account_id 형식이 올바르지 않습니다."
-        ) from exc
+def _invalid_account_id() -> AgentToolError:
+    return AgentToolError.invalid_request("account_id 형식이 올바르지 않습니다.")
 
 
 async def _load_owned(
     session: AsyncSession, context: ResolvedExecutionContext, account_id: str
 ) -> Account:
-    account = await get_owned_account(session, context.user_id, _parse_id(account_id))
+    account = await get_owned_account(
+        session, context.user_id, parse_uuid(account_id, _invalid_account_id)
+    )
     if account is None:
         # 소유하지 않은 계좌는 존재 여부를 노출하지 않고 거부한다.
         raise AgentToolError.account_access_denied()
@@ -250,7 +246,7 @@ async def _move_ledger(
     from_account: Account, to_account: Account, amount: int, idempotency_key: str
 ) -> str:
     """계정계 원장을 이동시키고 transaction_id 를 반환한다."""
-    if not _use_http():
+    if not is_financial_http_mode():
         # 실제 원장은 계정계에만 있다. mock 모드에서는 이체를 시뮬레이션하지 않는다
         # (잔액을 실제로 옮기지 않은 채 completed 로 보고하면 감사 기록이 거짓이 된다).
         raise AgentToolError.backend_temporary_error()
@@ -401,11 +397,9 @@ async def _resolve_existing_recipient(
     `to_recipient_id` 는 본인의 실행 완료된 타인송금 이력에 등장한 계좌만 허용한다
     (임의 계좌 열거 차단). 이력에 없으면 `RECIPIENT_NOT_FOUND`(404).
     """
-    try:
-        recipient_account_id = UUID(to_recipient_id)
-    except (ValueError, AttributeError) as exc:
-        raise AgentToolError.recipient_not_found() from exc
-
+    recipient_account_id = parse_uuid(
+        to_recipient_id, AgentToolError.recipient_not_found
+    )
     executed = await get_executed_external_transfers(session, context.user_id)
     name: str | None = None
     for confirmation in executed:
@@ -427,10 +421,9 @@ async def _resolve_candidate_recipient(
     to_recipient_candidate_id: str,
 ) -> tuple[Account, str, object]:
     """신규 검증 수취인 후보를 검증한다(계약 14.3). 반환: (계좌, 이름, 후보행)."""
-    try:
-        candidate_id = UUID(to_recipient_candidate_id)
-    except (ValueError, AttributeError) as exc:
-        raise AgentToolError.recipient_not_found() from exc
+    candidate_id = parse_uuid(
+        to_recipient_candidate_id, AgentToolError.recipient_not_found
+    )
 
     candidate = await get_recipient_candidate_by_id(session, candidate_id)
     if candidate is None or candidate.user_id != context.user_id:

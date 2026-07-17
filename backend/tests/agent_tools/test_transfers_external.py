@@ -482,7 +482,7 @@ async def test_execute_external_completed(monkeypatch):
         balance=1_000_000,
     )
     fake = _FakeLedger()
-    monkeypatch.setattr(transfer_service.settings, "FINANCIAL_CLIENT", "http")
+    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: fake)
 
     data = await transfer_service.execute_external_transfer(
@@ -595,7 +595,7 @@ async def test_execute_external_ledger_outage_is_technical_error(monkeypatch):
         any_accounts={recipient.id: recipient},
         balance=1_000_000,
     )
-    monkeypatch.setattr(transfer_service.settings, "FINANCIAL_CLIENT", "http")
+    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
     monkeypatch.setattr(
         transfer_service, "get_financial_client", lambda: _FakeLedger(error=True)
     )

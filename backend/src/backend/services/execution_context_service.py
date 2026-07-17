@@ -20,6 +20,7 @@ from ..repository.execution_context_repository import (
     get_execution_context_by_id,
 )
 from ..schemas.execution_context import ResolvedExecutionContext
+from ..utils.parsing import parse_uuid
 
 
 async def issue_context(
@@ -50,16 +51,6 @@ async def issue_context(
     )
 
 
-def _parse_context_id(raw: str | None) -> UUID:
-    """헤더 문자열을 UUID 로 파싱. 누락·형식오류는 INVALID_EXECUTION_CONTEXT."""
-    if not raw:
-        raise AgentToolError.invalid_execution_context()
-    try:
-        return UUID(raw)
-    except (ValueError, AttributeError) as exc:
-        raise AgentToolError.invalid_execution_context() from exc
-
-
 def _to_resolved(context: ExecutionContext) -> ResolvedExecutionContext:
     return ResolvedExecutionContext(
         execution_context_id=context.id,
@@ -80,7 +71,8 @@ async def resolve_context(
     - 만료(상태 EXPIRED 또는 expires_at 경과): `EXECUTION_CONTEXT_EXPIRED` (410)
     - 취소/종료: `INVALID_EXECUTION_CONTEXT` (401)
     """
-    context_id = _parse_context_id(raw_context_id)
+    # 누락·형식오류는 INVALID_EXECUTION_CONTEXT.
+    context_id = parse_uuid(raw_context_id, AgentToolError.invalid_execution_context)
     context = await get_execution_context_by_id(session, context_id)
     if context is None:
         raise AgentToolError.invalid_execution_context()

@@ -14,6 +14,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from .common import AccountDisplayRef, CorrectionView
+
 
 class TransferOutcome:
     """이체 API 의 `data.outcome` 값(계약 17·18장)."""
@@ -78,16 +80,9 @@ class TransferExecuteRequest(BaseModel):
     auth_context_id: str
 
 
-class TransferAccountRef(BaseModel):
-    account_id: str
-    account_alias: str | None
-    bank_name: str | None
-    masked_account_number: str
-
-
 class InternalTransferConfirmationView(BaseModel):
-    from_account: TransferAccountRef
-    to_account: TransferAccountRef
+    from_account: AccountDisplayRef
+    to_account: AccountDisplayRef
     amount: int
     fee: int
     total_debit: int
@@ -104,7 +99,7 @@ class RecipientRef(BaseModel):
 
 
 class ExternalTransferConfirmationView(BaseModel):
-    from_account: TransferAccountRef
+    from_account: AccountDisplayRef
     recipient: RecipientRef
     amount: int
     fee: int
@@ -114,12 +109,6 @@ class ExternalTransferConfirmationView(BaseModel):
     variant: str
     warning_codes: list[str]
     expires_at: datetime
-
-
-class CorrectionView(BaseModel):
-    title: str | None = None
-    # 허용 값: from_account, to_account, amount (계약 17.4)
-    allowed_change_targets: list[str]
 
 
 class BlockedView(BaseModel):

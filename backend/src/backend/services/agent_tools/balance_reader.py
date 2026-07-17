@@ -10,18 +10,13 @@ TODO(계정계): hold(출금 보류) 도입 시 available_balance 를 분리해�
 from __future__ import annotations
 
 from ...core.agent_exceptions import AgentToolError
-from ...core.load_environment_var import settings
 from ...models.account import Account
-from ..financial import get_financial_client
-
-
-def _use_http() -> bool:
-    return settings.FINANCIAL_CLIENT.strip().lower() == "http"
+from ..financial import get_financial_client, is_financial_http_mode
 
 
 async def read_balance(account: Account) -> int:
     """계좌 잔액을 조회한다. 계정계 404(계좌 없음)는 ACCOUNT_NOT_FOUND 로 번역한다."""
-    if not _use_http():
+    if not is_financial_http_mode():
         return account.balance
     if not account.external_account_id:
         raise AgentToolError.account_not_found()

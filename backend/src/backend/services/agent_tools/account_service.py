@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +27,7 @@ from ...schemas.agent_tools.account import (
 )
 from ...schemas.execution_context import ResolvedExecutionContext
 from ...utils.masking import mask_account_number
+from ...utils.parsing import parse_uuid_list
 from .balance_reader import read_balance
 
 
@@ -76,13 +76,8 @@ async def list_accounts(
     return AccountListData(accounts=[_to_list_item(a) for a in accounts])
 
 
-def _parse_account_ids(raw_ids: list[str]) -> list[UUID]:
-    try:
-        return [UUID(raw) for raw in raw_ids]
-    except (ValueError, AttributeError) as exc:
-        raise AgentToolError.invalid_request(
-            "account_ids 형식이 올바르지 않습니다."
-        ) from exc
+def _invalid_account_ids() -> AgentToolError:
+    return AgentToolError.invalid_request("account_ids 형식이 올바르지 않습니다.")
 
 
 async def _resolve_balance(account: Account) -> int:
@@ -96,7 +91,7 @@ async def query_balances(
     account_ids: list[str],
 ) -> BalanceQueryData:
     """복수 계좌 잔액을 조회한다. 소유권 검증 실패 시 전체 거절(계약 10.4)."""
-    parsed = _parse_account_ids(account_ids)
+    parsed = parse_uuid_list(account_ids, _invalid_account_ids)
     owned = await get_owned_accounts_by_ids(session, context.user_id, parsed)
 
     # 한 계좌라도 소유·접근 검증에 실패하면 부분 결과 없이 전체 거절.

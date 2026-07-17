@@ -14,6 +14,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from .common import AccountDisplayRef, CorrectionView
+
 
 class SettingOutcome:
     """설정 변경 API 의 `data.outcome` 값(계약 19·21장)."""
@@ -53,15 +55,6 @@ class ExecuteByConfirmationRequest(BaseModel):
 # ── 승인 화면(confirmation_view) 구성요소 ────────────────────────────────────
 
 
-class AccountRef(BaseModel):
-    """기본계좌 변경 화면의 계좌 표시 정보."""
-
-    account_id: str
-    bank_name: str | None
-    account_alias: str | None
-    masked_account_number: str
-
-
 class AliasAccountRef(BaseModel):
     """별칭 변경 화면의 계좌 표시 정보.
 
@@ -76,8 +69,8 @@ class AliasAccountRef(BaseModel):
 
 class DefaultAccountConfirmationView(BaseModel):
     # 사용자에게 기본계좌가 아직 없으면 None.
-    current_default_account: AccountRef | None
-    new_default_account: AccountRef
+    current_default_account: AccountDisplayRef | None
+    new_default_account: AccountDisplayRef
     expires_at: datetime
 
 
@@ -85,12 +78,6 @@ class AccountAliasConfirmationView(BaseModel):
     account: AliasAccountRef
     alias: str
     expires_at: datetime
-
-
-class CorrectionView(BaseModel):
-    title: str | None = None
-    # Agent 는 reason 으로 추측하지 않고 이 목록만 수정 UI 로 제공한다(계약 14.5).
-    allowed_change_targets: list[str]
 
 
 # ── 응답 data ────────────────────────────────────────────────────────────────

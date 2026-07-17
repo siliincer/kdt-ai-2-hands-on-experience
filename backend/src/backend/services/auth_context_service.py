@@ -11,7 +11,6 @@ Agent 는 인증 상태를 폴링하지 않고, Backend 가 검증한 재개 값
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +24,7 @@ from ..repository.auth_context_repository import (
     set_auth_context_status,
 )
 from ..schemas.execution_context import ResolvedExecutionContext
+from ..utils.parsing import parse_uuid
 from .agent_tools.policy_constants import (
     AUTH_AVAILABLE_METHODS,
     AUTH_CONTEXT_TTL_SECONDS,
@@ -55,14 +55,6 @@ async def create_for_confirmation(
     )
 
 
-def _parse_id(raw: str) -> UUID:
-    try:
-        return UUID(raw)
-    except (ValueError, AttributeError) as exc:
-        # 존재 여부를 노출하지 않고 인증 재요청으로 유도한다.
-        raise AgentToolError.auth_required() from exc
-
-
 async def load_verified(
     session: AsyncSession,
     context: ResolvedExecutionContext,
@@ -79,7 +71,10 @@ async def load_verified(
     미존재·다른 사용자·다른 Confirmation·미검증(PENDING/FAILED/CANCELLED)은
     `AUTH_REQUIRED`(409) 로 던진다.
     """
-    auth_context = await get_auth_context_by_id(session, _parse_id(auth_context_id))
+    # 존재 여부를 노출하지 않고 인증 재요청으로 유도한다.
+    auth_context = await get_auth_context_by_id(
+        session, parse_uuid(auth_context_id, AgentToolError.auth_required)
+    )
     if auth_context is None:
         raise AgentToolError.auth_required()
     if auth_context.user_id != context.user_id:
