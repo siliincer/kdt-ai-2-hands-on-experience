@@ -35,3 +35,20 @@ def mask_account_number(number: str | None) -> str:
     head = number[:_HEAD_KEEP]
     tail = number[-_TAIL_KEEP:]
     return f"{head}{'*' * (len(number) - _HEAD_KEEP - _TAIL_KEEP)}{tail}"
+
+
+def mask_person_name(name: str | None) -> str:
+    """예금주명 마스킹: 첫 글자와 마지막 글자만 남긴다(계약 14.4 예시 "홍*동").
+
+    - 3자 이상: 가운데를 * 로 ("홍길동" → "홍*동", "남궁민수" → "남**수")
+    - 2자: 뒷글자를 * 로 ("홍길" → "홍*")
+    - 1자 이하·없음: 그대로/빈 문자열(마스킹할 가운데가 없음)
+    """
+    if not name:
+        return ""
+    trimmed = name.strip()
+    if len(trimmed) <= 1:
+        return trimmed
+    if len(trimmed) == 2:
+        return f"{trimmed[0]}*"
+    return f"{trimmed[0]}{'*' * (len(trimmed) - 2)}{trimmed[-1]}"

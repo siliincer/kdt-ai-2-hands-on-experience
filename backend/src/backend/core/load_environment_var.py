@@ -35,18 +35,8 @@ class Settings(BaseSettings):
         default=SecretStr("analytics-demo-key"),
         description="정보계(analytics) 읽기 API 키 (X-Analytics-Key 헤더)",
     )
-    FINANCIAL_DEMO_ACCOUNT_ID: str = Field(
-        default="",
-        description="Phase 1 데모 시드: 매핑된 Account 없을 때 fallback account_id",
-    )
-    FINANCIAL_DEMO_RECEIVER_BANK_NAME: str = Field(
-        default="",
-        description="Phase 2 데모 송금 수취 은행명(계정계 단일 은행, 예: KDT은행)",
-    )
-    FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER: str = Field(
-        default="",
-        description="Phase 2 데모 송금 수취 계좌번호. 은행명과 함께 비면 실이체 미실행",
-    )
+    # (D5) FINANCIAL_DEMO_* 3종(fallback account_id·데모 수취처) 삭제 —
+    # 수취인은 recipient_candidates / 실행 이력 참조로 대체됨.
 
     # Auth Configuration
     JWT_SECRET_KEY: SecretStr = SecretStr("change-me-in-local")

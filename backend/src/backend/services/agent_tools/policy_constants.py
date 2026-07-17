@@ -19,6 +19,10 @@ CONFIRMATION_TTL_SECONDS = 300
 # 멱등성 결과 보존 기간. 계약 24.3 예시가 생성 후 약 24시간.
 IDEMPOTENCY_TTL_SECONDS = 86_400
 
+# ── 신규 수취 계좌 후보 (D5) ─────────────────────────────────────────────────
+# 검증된 후보의 유효시간. 계약 부록 예시(expires_at)가 검증 후 약 10분.
+RECIPIENT_CANDIDATE_TTL_SECONDS = 600
+
 # ── 추가 인증 (API-AUTH-CONTEXT-CREATE) ──────────────────────────────────────
 # 인증 대기 시간. 계약 15.3 예시가 Confirmation 만료보다 조금 뒤(약 3분).
 AUTH_CONTEXT_TTL_SECONDS = 180

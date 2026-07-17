@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TransferOutcome:
@@ -32,9 +32,15 @@ class TransferReason:
     LIMIT_EXCEEDED = "limit_exceeded"
     ACCOUNT_INACTIVE = "account_inactive"
     AUTH_CONTEXT_EXPIRED = "auth_context_expired"
+    # 수취인이 현재 사용 불가(비활성·소실·본인 계좌). 수취 계좌 재입력으로 해결.
+    RECIPIENT_NOT_VERIFIED = "recipient_not_verified"
     # 계약 6.2 예시 목록에는 없으나 본인이체 고유 판정이라 추가한다(계약 17.6:
     # "두 계좌가 서로 다른지" 검증). 사용자가 입금 계좌를 바꾸면 해결된다.
     SAME_ACCOUNT = "same_account"
+
+
+# 타인송금 승인 화면 위험 표시(계약 14.4 warning_codes).
+WARNING_NEW_RECIPIENT = "NEW_RECIPIENT"
 
 
 class InternalTransferPrepareRequest(BaseModel):
@@ -44,6 +50,25 @@ class InternalTransferPrepareRequest(BaseModel):
     amount: int = Field(gt=0)
     # 현재 범위에서는 KRW 만 지원한다. 다른 값은 계약에 정의되지 않은 조합(422).
     currency: Literal["KRW"]
+
+
+class ExternalTransferPrepareRequest(BaseModel):
+    """#6. to_recipient_id 와 to_recipient_candidate_id 중 정확히 하나(계약 14.3)."""
+
+    from_account_id: str
+    to_recipient_id: str | None = None
+    to_recipient_candidate_id: str | None = None
+    amount: int = Field(gt=0)
+    currency: Literal["KRW"]
+
+    @model_validator(mode="after")
+    def _exactly_one_recipient(self) -> "ExternalTransferPrepareRequest":
+        provided = [self.to_recipient_id, self.to_recipient_candidate_id]
+        if sum(value is not None for value in provided) != 1:
+            raise ValueError(
+                "to_recipient_id 와 to_recipient_candidate_id 중 하나만 보내야 합니다."
+            )
+        return self
 
 
 class TransferExecuteRequest(BaseModel):
@@ -70,6 +95,27 @@ class InternalTransferConfirmationView(BaseModel):
     expires_at: datetime
 
 
+class RecipientRef(BaseModel):
+    """타인송금 승인 화면의 수취인 표시 정보. 이름은 마스킹("홍*동"), 번호도 마스킹."""
+
+    name: str
+    bank_name: str | None
+    masked_account_number: str
+
+
+class ExternalTransferConfirmationView(BaseModel):
+    from_account: TransferAccountRef
+    recipient: RecipientRef
+    amount: int
+    fee: int
+    total_debit: int
+    currency: str
+    # "default" | "warning" — 신규 수취인 등 위험 표시가 있으면 warning(계약 14.4).
+    variant: str
+    warning_codes: list[str]
+    expires_at: datetime
+
+
 class CorrectionView(BaseModel):
     title: str | None = None
     # 허용 값: from_account, to_account, amount (계약 17.4)
@@ -85,6 +131,15 @@ class InternalTransferPrepareData(BaseModel):
     outcome: str
     confirmation_id: str | None = None
     confirmation_view: InternalTransferConfirmationView | None = None
+    reason: str | None = None
+    correction_view: CorrectionView | None = None
+    blocked_view: BlockedView | None = None
+
+
+class ExternalTransferPrepareData(BaseModel):
+    outcome: str
+    confirmation_id: str | None = None
+    confirmation_view: ExternalTransferConfirmationView | None = None
     reason: str | None = None
     correction_view: CorrectionView | None = None
     blocked_view: BlockedView | None = None

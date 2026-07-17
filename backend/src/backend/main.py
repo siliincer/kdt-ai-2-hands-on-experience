@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api.agent_tools import agent_tools_router
 from .api.chat_api import chat_router
 from .api.check_db_conn import health_router
+from .api.recipient_candidate_api import recipient_candidate_router
 from .api.sse_api import sse_router
 from .api.ui_api import ui_router
 from .api.user_api import user_router
@@ -43,6 +44,7 @@ app.include_router(sse_router, prefix="/api/v1")
 app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(ui_router, prefix="/api/v1")
+app.include_router(recipient_candidate_router, prefix="/api/v1")
 app.include_router(agent_tools_router, prefix="/api/v1")
 
 configure_app(app)  # 일괄적인 설정값 주입
