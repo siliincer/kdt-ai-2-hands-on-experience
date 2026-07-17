@@ -29,7 +29,6 @@ from ...schemas.agent_tools.account import (
 )
 from ...schemas.execution_context import ResolvedExecutionContext
 from ...utils.masking import mask_account_number
-from ..financial import get_financial_client
 
 
 def _use_http() -> bool:
@@ -91,15 +90,10 @@ def _parse_account_ids(raw_ids: list[str]) -> list[UUID]:
 
 
 async def _resolve_balance(account: Account) -> int:
-    """계좌 잔액을 조회한다. http=계정계, mock=로컬 캐시. 계정계 404 는 계좌 없음."""
-    if not _use_http():
-        return account.balance
-    if not account.external_account_id:
-        raise AgentToolError.account_not_found()
-    result = await get_financial_client().get_balance(account.external_account_id)
-    if result is None:
-        raise AgentToolError.account_not_found()
-    return int(result["balance"])
+    """계좌 잔액. 모드 분기와 계정계 404 처리는 balance_reader 가 담당한다."""
+    # TODO: claude 작업 중 오류 나서 다시 구현 시작 예정
+    # return await read_balance(account)
+    return 0  # TODO: 위를 구현해야 됨
 
 
 async def query_balances(

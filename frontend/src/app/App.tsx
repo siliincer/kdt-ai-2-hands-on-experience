@@ -22,7 +22,12 @@ export default function App() {
   }, [login]);
 
   // 401(토큰 만료) 발생 시 자동 로그아웃 → 로그인 화면으로 리다이렉트
-  useEffect(() => onUnauthorized(() => logout()), [logout]);
+  useEffect(() => {
+    return onUnauthorized(() => {
+      alert('세션이 만료되었습니다. 다시 로그인해 주세요.');
+      logout();
+    });
+  }, [logout]);
 
   if (isLoggedIn) {
     return (

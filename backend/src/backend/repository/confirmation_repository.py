@@ -51,6 +51,29 @@ async def get_confirmation_by_id(
     return result.scalar_one_or_none()
 
 
+_TRANSFER_OPERATIONS = (
+    ConfirmationOperation.INTERNAL_TRANSFER,
+    ConfirmationOperation.EXTERNAL_TRANSFER,
+)
+
+
+async def get_executed_transfers_since(
+    session: AsyncSession, user_id: UUID, since: datetime
+) -> list[Confirmation]:
+    """기준 시각 이후 실행 완료된 이체 Confirmation 목록(일일 한도 산정용).
+
+    금액은 Prepare 가 `fixed_data.amount` 에 고정해 두므로 호출부가 합산한다.
+    """
+    stmt = select(Confirmation).where(
+        Confirmation.user_id == user_id,
+        Confirmation.status == ConfirmationStatus.EXECUTED,
+        Confirmation.operation.in_(_TRANSFER_OPERATIONS),
+        Confirmation.executed_at >= since,
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def set_confirmation_status(
     session: AsyncSession,
     confirmation: Confirmation,

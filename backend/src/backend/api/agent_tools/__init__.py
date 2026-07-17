@@ -10,11 +10,13 @@ from .account_api import account_router
 from .auth_context_api import auth_context_router
 from .setting_api import setting_router
 from .transaction_api import transaction_router
+from .transfer_api import transfer_router
 
 agent_tools_router = APIRouter(prefix="/agent-tools")
 agent_tools_router.include_router(account_router)
 agent_tools_router.include_router(transaction_router)
 agent_tools_router.include_router(setting_router)
 agent_tools_router.include_router(auth_context_router)
+agent_tools_router.include_router(transfer_router)
 
 __all__ = ["agent_tools_router"]
