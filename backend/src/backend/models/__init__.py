@@ -5,6 +5,7 @@ from .account import Account
 from .agent_audit_log import AuditLog
 from .agent_execution import AgentExecution
 from .approval import Approval
+from .auth_context import AuthContext, AuthContextStatus
 from .chat_message import ChatMessage
 from .chat_session import ChatSession
 from .confirmation import Confirmation, ConfirmationOperation, ConfirmationStatus
@@ -20,6 +21,8 @@ __all__ = [
     "Approval",
     "AgentExecution",
     "AuditLog",
+    "AuthContext",
+    "AuthContextStatus",
     "ChatMessage",
     "ChatSession",
     "Confirmation",

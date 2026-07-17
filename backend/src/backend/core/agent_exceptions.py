@@ -153,6 +153,17 @@ class AgentToolError(Exception):
             retryable=False,
         )
 
+    @classmethod
+    def auth_required(cls) -> AgentToolError:
+        """추가 인증이 없거나 유효하지 않음. Agent 는 Auth Context 생성으로 이동."""
+        return cls(
+            status_code=409,
+            category=AgentErrorCategory.STATE_ERROR,
+            code="AUTH_REQUIRED",
+            message="추가 인증이 필요합니다.",
+            retryable=False,
+        )
+
     # ── 멱등성 (계약 24.4) ───────────────────────────────────────────────────
 
     @classmethod

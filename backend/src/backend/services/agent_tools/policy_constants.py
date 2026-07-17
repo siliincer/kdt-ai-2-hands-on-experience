@@ -3,6 +3,8 @@
 Prepare/Execute 의 `correction_required`·`blocked` 판정 근거가 되는 값을 한곳에 모은다.
 계정계에는 한도·수수료·hold 개념이 없으므로 판정은 Backend 책임이다.
 
+TODO: 계정계에 추가로 한도·수수료·hold 개념을 반영?
+
 값은 데모 기준의 임시값이며 조정 가능하다. 사용자·계좌별로 달라져야 하면 policy 테이블로
 승격한다(현재 범위 아님).
 """
@@ -16,6 +18,12 @@ CONFIRMATION_TTL_SECONDS = 300
 # ── 멱등성 ───────────────────────────────────────────────────────────────────
 # 멱등성 결과 보존 기간. 계약 24.3 예시가 생성 후 약 24시간.
 IDEMPOTENCY_TTL_SECONDS = 86_400
+
+# ── 추가 인증 (API-AUTH-CONTEXT-CREATE) ──────────────────────────────────────
+# 인증 대기 시간. 계약 15.3 예시가 Confirmation 만료보다 조금 뒤(약 3분).
+AUTH_CONTEXT_TTL_SECONDS = 180
+# Frontend 인증 UI 가 제시할 수단. 인증 원문은 Backend 인증 API 까지만 전달된다.
+AUTH_AVAILABLE_METHODS: tuple[str, ...] = ("biometric", "password")
 
 # ── 계좌 별칭 정책 (API-ACCOUNT-ALIAS-*) ─────────────────────────────────────
 ALIAS_MIN_LENGTH = 1
