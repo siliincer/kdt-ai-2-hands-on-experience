@@ -96,7 +96,7 @@ def _extract_transfer_args(message: str) -> dict[str, str]:
     args = dict(_SAMPLE_ARGS)
 
     # 금액: "30,000원" / "3만원" 대략 처리 → 숫자만
-    amount_match = re.search(r"([\d,]+)\s*원", message)
+    amount_match = re.search(r"([\d,]{1,20})\s*원", message)
     if amount_match:
         args["amount"] = amount_match.group(1).replace(",", "")
 
@@ -112,7 +112,7 @@ def _extract_autotransfer_args(message: str) -> dict[str, str]:
     """메시지에서 자동이체 파라미터를 가볍게 파싱(목). 실패 필드는 샘플로 채운다."""
     args = dict(_AUTOTRANSFER_SAMPLE_ARGS)
 
-    amount_match = re.search(r"([\d,]+)\s*원", message)
+    amount_match = re.search(r"([\d,]{1,20})\s*원", message)
     if amount_match:
         args["amount"] = amount_match.group(1).replace(",", "")
 
