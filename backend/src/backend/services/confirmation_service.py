@@ -59,13 +59,22 @@ def _parse_id(raw: str) -> UUID:
         raise AgentToolError.confirmation_mismatch() from exc
 
 
-async def load_for_execute(
+# 추가 인증을 요구하는 Operation. 설정 변경은 추가 인증 대상이 아니다(계약 19.3).
+_AUTH_ELIGIBLE_OPERATIONS = frozenset(
+    {
+        ConfirmationOperation.INTERNAL_TRANSFER,
+        ConfirmationOperation.EXTERNAL_TRANSFER,
+    }
+)
+
+
+async def _load_approved(
     session: AsyncSession,
     context: ResolvedExecutionContext,
     confirmation_id: str,
-    expected_operation: ConfirmationOperation,
+    allowed_operations: frozenset[ConfirmationOperation],
 ) -> Confirmation:
-    """Execute 직전 재검증을 수행하고 승인된 Confirmation 을 반환한다.
+    """승인·만료·미실행 상태를 검증하고 Confirmation 을 반환하는 공통 로직.
 
     - 미존재/사용자·목적 불일치/이미 소비됨: `CONFIRMATION_MISMATCH` (409)
     - 만료: `CONFIRMATION_EXPIRED` (410)
@@ -77,7 +86,7 @@ async def load_for_execute(
     # 다른 사용자의 Confirmation 은 존재 자체를 알리지 않고 불일치로 처리한다.
     if confirmation.user_id != context.user_id:
         raise AgentToolError.confirmation_mismatch()
-    if confirmation.operation is not expected_operation:
+    if confirmation.operation not in allowed_operations:
         raise AgentToolError.confirmation_mismatch()
 
     if confirmation.status is ConfirmationStatus.EXPIRED:
@@ -92,6 +101,34 @@ async def load_for_execute(
         raise AgentToolError.confirmation_mismatch()
 
     return confirmation
+
+
+async def load_for_execute(
+    session: AsyncSession,
+    context: ResolvedExecutionContext,
+    confirmation_id: str,
+    expected_operation: ConfirmationOperation,
+) -> Confirmation:
+    """Execute 직전 재검증. 요청한 Operation 과 일치하는 승인 건만 통과시킨다."""
+    return await _load_approved(
+        session, context, confirmation_id, frozenset({expected_operation})
+    )
+
+
+async def load_for_auth(
+    session: AsyncSession,
+    context: ResolvedExecutionContext,
+    confirmation_id: str,
+) -> Confirmation:
+    """추가 인증 Context 생성 대상 Confirmation 을 검증한다(계약 15.4).
+
+    이 시점에는 이체 유형(내부/외부)이 Confirmation 에 이미 고정되어 있으므로 Agent 가
+    유형을 알려주지 않는다. 설정 변경 Confirmation 으로 인증을 만들려 하면 불일치로
+    거부한다(설정 변경은 추가 인증을 요구하지 않음, 계약 19.3).
+    """
+    return await _load_approved(
+        session, context, confirmation_id, _AUTH_ELIGIBLE_OPERATIONS
+    )
 
 
 async def approve(session: AsyncSession, confirmation: Confirmation) -> Confirmation:

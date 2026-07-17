@@ -1,3 +1,8 @@
+# 공지사항
+
+프로젝트 디자인 초안이므로 deprecated되었지만 archive용으로 남김
+frontend 폴더가 정본입니다.
+
 # Upload Markdown file
 
 This is a code bundle for Upload Markdown file. The original project is available at https://www.figma.com/design/xPH8GmElgsr2M67iMc8CYh/Upload-Markdown-file.

@@ -11,10 +11,7 @@
 Execution Context + settings:write 스코프를 요구한다.
 """
 
-from collections.abc import Awaitable, Callable
-
-from fastapi import APIRouter, Depends, Header, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.postgres import get_db
@@ -30,44 +27,13 @@ from ...schemas.agent_tools.setting import (
 from ...schemas.execution_context import ResolvedExecutionContext
 from ...schemas.response import CommonResponse
 from ...security.execution_context import require_scope
-from ...services import idempotency_service
 from ...services.agent_tools import setting_service
-from ...utils.agent_response import agent_success_response
 from ...utils.constants import SCOPE_SETTINGS_WRITE
+from .idempotent_runner import run_idempotent
 
 setting_router = APIRouter(tags=["Agent Tools - Setting"])
 
 _IdempotencyHeader = Header(default=None, alias="Idempotency-Key")
-
-
-async def _idempotent(
-    session: AsyncSession,
-    context: ResolvedExecutionContext,
-    operation: str,
-    raw_key: str | None,
-    payload: BaseModel,
-    message: str,
-    handler: Callable[[], Awaitable[BaseModel]],
-) -> Response | CommonResponse:
-    """멱등성 선점 → 처리 → 결과 저장(계약 24.5의 실행 경계).
-
-    같은 키로 이미 완료된 요청이면 실제 처리를 건너뛰고 최초 응답을 그대로 복원한다.
-    """
-    key = idempotency_service.require_key(raw_key)
-    request_hash = idempotency_service.compute_request_hash(
-        payload.model_dump(mode="json")
-    )
-    replay = await idempotency_service.begin(
-        session, context, operation, key, request_hash
-    )
-    if replay is not None:
-        return replay.to_response()
-
-    data = await handler()
-    response = agent_success_response(message=message, data=data)
-    body = response.model_dump(mode="json", exclude_none=True)
-    await idempotency_service.complete(session, context, operation, key, 200, body)
-    return response
 
 
 @setting_router.post(
@@ -82,7 +48,7 @@ async def prepare_default_account_endpoint(
     session: AsyncSession = Depends(get_db),
 ):
     """기본 출금 계좌 변경 조건을 평가한다(ready/unchanged/correction)."""
-    return await _idempotent(
+    return await run_idempotent(
         session,
         context,
         "default_account_prepare",
@@ -105,7 +71,7 @@ async def execute_default_account_endpoint(
     session: AsyncSession = Depends(get_db),
 ):
     """승인된 Confirmation 으로 기본 출금 계좌를 변경한다."""
-    return await _idempotent(
+    return await run_idempotent(
         session,
         context,
         "default_account_execute",
@@ -128,7 +94,7 @@ async def prepare_account_alias_endpoint(
     session: AsyncSession = Depends(get_db),
 ):
     """계좌 별칭 변경 조건을 평가한다(ready_for_confirmation/unchanged/correction)."""
-    return await _idempotent(
+    return await run_idempotent(
         session,
         context,
         "account_alias_prepare",
@@ -151,7 +117,7 @@ async def execute_account_alias_endpoint(
     session: AsyncSession = Depends(get_db),
 ):
     """승인된 Confirmation 에 고정된 별칭을 반영한다."""
-    return await _idempotent(
+    return await run_idempotent(
         session,
         context,
         "account_alias_execute",
