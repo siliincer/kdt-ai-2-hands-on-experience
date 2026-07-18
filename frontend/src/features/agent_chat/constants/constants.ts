@@ -2,6 +2,7 @@
 
 export const CHAT_URL = '/backendApi/api/v1/chat';
 export const APPROVE_URL = '/backendApi/api/v1/agent/approve';
+export const AGENT_INPUT_URL = '/backendApi/api/v1/agent/input';
 
 // UI Data API (BFF) — component 시그널 이후 카드 데이터 조회(ADR-002)
 export const UI_BALANCE_URL = '/backendApi/api/v1/ui/balance';
@@ -11,6 +12,7 @@ export const UI_BUDGET_URL = '/backendApi/api/v1/ui/budget';
 export const UI_CARDS_URL = '/backendApi/api/v1/ui/cards';
 
 // 빠른 프롬프트 pill(기존 네비게이션 링크 대체) — 클릭 시 자연어 메시지 전송
+// TODO(FE): agent workflow 기능 추가에 따라 추가
 export const QUICK_PROMPTS: { label: string; prompt: string }[] = [
   { label: '송금하기', prompt: '송금하고 싶어' },
   { label: '잔액 확인', prompt: '내 잔액 알려줘' },

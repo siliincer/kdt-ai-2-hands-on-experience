@@ -20,6 +20,10 @@ export interface ChatToolPart {
   args?: Record<string, unknown>;
   /** need_approval 이벤트에서 온 승인 대기 id (confirm 카드 HITL) */
   approvalId?: string;
+  /** need_input 이벤트에서 온 일반 입력 대기 id (UI-HITL 계약 1.3) */
+  inputRequestId?: string;
+  /** authentication_required 이벤트에서 온 추가 인증 대기 id */
+  authContextId?: string;
 }
 export type ChatPart = ChatTextPart | ChatReasoningPart | ChatToolPart;
 
@@ -67,5 +71,13 @@ export interface ChatRuntime {
     decision: ApprovalDecision,
     args?: Record<string, unknown>,
     component?: string,
+  ) => Promise<void>;
+  /**
+   * 일반 입력·선택 대기(need_input) UI 에서 제출 시 호출(UI-HITL 계약 1.5).
+   * `value` 는 UI 계약별 `*_outcome` 필드를 포함한다(예: account_selection_outcome).
+   */
+  submitInput: (
+    inputRequestId: string,
+    value: Record<string, unknown>,
   ) => Promise<void>;
 }

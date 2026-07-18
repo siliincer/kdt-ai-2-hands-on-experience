@@ -3,10 +3,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.postgres import get_db
 from ..models.user import User
-from ..schemas.chat import ApproveRequest, ChatRequest, ChatResponse
+from ..schemas.chat import (
+    AgentInputRequest,
+    ApproveRequest,
+    ChatRequest,
+    ChatResponse,
+)
 from ..schemas.response import CommonResponse
 from ..security.jwt import get_current_user
-from ..services.chat_service import resume_after_approval, start_chat_turn
+from ..services.chat_service import (
+    resume_after_approval,
+    resume_after_input,
+    start_chat_turn,
+)
 from ..utils.build_response import success_response
 
 chat_router = APIRouter(tags=["Chat"])
@@ -47,4 +56,24 @@ async def approve_agent_action(
     return success_response(
         message="승인 결과가 접수되었습니다.",
         data={"decision": payload.decision.value},
+    )
+
+
+@chat_router.post("/agent/input", response_model=CommonResponse[dict])
+async def submit_agent_input(
+    payload: AgentInputRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """일반 입력·선택 대기(HITL) 회신 → 에이전트 후속 턴을 재개한다(계약 1.5)."""
+    await resume_after_input(
+        session,
+        current_user.id,
+        payload.chat_session_id,
+        payload.input_request_id,
+        payload.value,
+    )
+    return success_response(
+        message="입력이 접수되었습니다.",
+        data={"input_request_id": payload.input_request_id},
     )

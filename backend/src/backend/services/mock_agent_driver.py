@@ -261,6 +261,35 @@ async def run_initial_turn(chat_session_id: UUID, message: str) -> None:
         await redis_stream.aclose()
 
 
+async def run_after_input(
+    chat_session_id: UUID,
+    ui_contract_id: str,
+    value: dict,
+) -> None:
+    """일반 입력·선택 대기 회신 이후의 후속 턴을 발행한다(UI-HITL 계약 1.5).
+
+    Slice 0 은 브리지 배선만 검증하는 플레이스홀더다. Slice 1 이후 `ui_contract_id`
+    별로 워크플로우를 이어가도록(예: 계좌 선택 → 잔액 결과) 교체한다.
+    """
+    redis_stream = aioredis.Redis(connection_pool=stream_pool)
+    try:
+        await _emit(
+            redis_stream,
+            chat_session_id,
+            AgentStreamEventType.STATUS,
+            "입력을 확인했어요...",
+            delay=False,
+        )
+        await _emit(
+            redis_stream,
+            chat_session_id,
+            AgentStreamEventType.DONE,
+            "입력을 반영했어요.",
+        )
+    finally:
+        await redis_stream.aclose()
+
+
 async def run_after_approval(
     chat_session_id: UUID,
     approval_id: str,

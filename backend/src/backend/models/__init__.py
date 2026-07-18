@@ -12,6 +12,7 @@ from .confirmation import Confirmation, ConfirmationOperation, ConfirmationStatu
 from .execution_context import ExecutionContext, ExecutionContextStatus
 from .financial_audit_log import FinancialAuditLog
 from .idempotency_key import IdempotencyKey, IdempotencyStatus
+from .pending_input import PendingInput
 from .recipient_candidate import RecipientCandidate
 from .transaction import Transaction
 from .transaction_query_context import TransactionQueryContext
@@ -34,6 +35,7 @@ __all__ = [
     "FinancialAuditLog",
     "IdempotencyKey",
     "IdempotencyStatus",
+    "PendingInput",
     "RecipientCandidate",
     "Transaction",
     "TransactionQueryContext",

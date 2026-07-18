@@ -108,3 +108,64 @@ def test_approve_requires_auth(client: TestClient):
         },
     )
     assert response.status_code == 401
+
+
+def test_agent_input_requires_auth(client: TestClient):
+    response = client.post(
+        "/api/v1/agent/input",
+        json={
+            "chat_session_id": str(uuid4()),
+            "input_request_id": "input_1",
+            "value": {"account_selection_outcome": "selected", "account_ids": ["a"]},
+        },
+    )
+    assert response.status_code == 401
+
+
+# --- need_input Webhook → pending_input 등록 헬퍼 -----------------------------
+
+
+@pytest.mark.asyncio
+async def test_register_from_event_extracts_metadata():
+    from backend.services import pending_input_service
+
+    captured = {}
+
+    async def _register(session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(**kwargs)
+
+    with patch.object(pending_input_service, "register_pending_input", _register):
+        result = await pending_input_service.register_pending_input_from_event(
+            AsyncMock(),
+            chat_session_id=uuid4(),
+            metadata={
+                "input_request_id": "input_amount_1",
+                "ui_contract_id": "UI-TRANSFER-AMOUNT-INPUT",
+                "ui": {"type": "number_input", "payload": {"currency": "KRW"}},
+            },
+        )
+    assert result is not None
+    assert captured["input_request_id"] == "input_amount_1"
+    assert captured["ui_contract_id"] == "UI-TRANSFER-AMOUNT-INPUT"
+    assert captured["ui_type"] == "number_input"
+
+
+@pytest.mark.asyncio
+async def test_register_from_event_skips_when_incomplete():
+    """input_request_id·ui_contract_id·ui.type 중 하나라도 없으면 등록하지 않는다."""
+    from backend.services import pending_input_service
+
+    called = {"n": 0}
+
+    async def _register(session, **kwargs):
+        called["n"] += 1
+
+    with patch.object(pending_input_service, "register_pending_input", _register):
+        result = await pending_input_service.register_pending_input_from_event(
+            AsyncMock(),
+            chat_session_id=uuid4(),
+            metadata={"input_request_id": "input_1"},  # ui_contract_id/ui 없음
+        )
+    assert result is None
+    assert called["n"] == 0

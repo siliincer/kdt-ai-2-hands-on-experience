@@ -39,3 +39,17 @@ class ApproveRequest(BaseModel):
         default=None,
         description="어떤 confirm 인지(transfer/autotransfer). 후속 턴 분기에 사용.",
     )
+
+
+class AgentInputRequest(BaseModel):
+    """POST /api/v1/agent/input — 일반 입력·선택 대기 회신(UI-HITL 계약 1.5).
+
+    승인(approve)과 구분되는 입력 제출이다. `input_request_id` 로 대기 행을 매칭하고
+    `value` 는 UI 계약별 `*_outcome` 필드를 포함한다(예: account_selection_outcome).
+    """
+
+    chat_session_id: UUID
+    input_request_id: str = Field(
+        min_length=1, description="Agent 가 발급한 입력 요청 id"
+    )
+    value: dict = Field(description="UI 계약별 제출값(outcome 필드 포함)")
