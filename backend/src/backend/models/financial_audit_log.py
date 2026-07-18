@@ -59,7 +59,8 @@ class FinancialAuditLog(Base):
     reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     policy_codes: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
-    user: Mapped["User"] = relationship(lazy="selectin")
+    # append-only insert 전용 — user 관계는 자동 로딩하지 않는다(R4, refresh +1 제거).
+    user: Mapped["User"] = relationship(lazy="raise")
 
     def __repr__(self) -> str:  # pragma: no cover - 디버깅 편의용
         return (

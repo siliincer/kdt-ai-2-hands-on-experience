@@ -76,5 +76,6 @@ class Confirmation(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    user: Mapped["User"] = relationship(lazy="selectin")
-    execution_context: Mapped["ExecutionContext"] = relationship(lazy="selectin")
+    # 서비스는 컬럼(user_id 등)만 사용 → 자동 로딩 안 함(R4, silent N+1 방지).
+    user: Mapped["User"] = relationship(lazy="raise")
+    execution_context: Mapped["ExecutionContext"] = relationship(lazy="raise")

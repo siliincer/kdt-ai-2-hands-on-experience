@@ -64,5 +64,6 @@ class AuthContext(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    user: Mapped["User"] = relationship(lazy="selectin")
-    confirmation: Mapped["Confirmation"] = relationship(lazy="selectin")
+    # 서비스는 컬럼(user_id/confirmation_id)만 사용 → 자동 로딩 안 함(R4).
+    user: Mapped["User"] = relationship(lazy="raise")
+    confirmation: Mapped["Confirmation"] = relationship(lazy="raise")

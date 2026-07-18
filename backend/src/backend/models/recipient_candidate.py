@@ -55,4 +55,5 @@ class RecipientCandidate(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship(lazy="selectin")
+    # 서비스는 user_id 컬럼만 사용 → 자동 로딩 안 함(R4).
+    user: Mapped["User"] = relationship(lazy="raise")

@@ -60,5 +60,8 @@ class ExecutionContext(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship(lazy="selectin")
-    chat_session: Mapped["ChatSession"] = relationship(lazy="selectin")
+    # 서비스는 user_id/chat_session_id 컬럼만 쓰므로 관계를 자동 로딩하지 않는다(R4).
+    # 매 Agent Tool 호출의 resolve_context 에서 불필요한 +2 SELECT 를 제거하고, 실수로
+    # 접근하면 명시적으로 에러난다(silent N+1 방지). 필요 시 selectinload 로 명시.
+    user: Mapped["User"] = relationship(lazy="raise")
+    chat_session: Mapped["ChatSession"] = relationship(lazy="raise")
