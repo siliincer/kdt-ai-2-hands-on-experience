@@ -15,9 +15,16 @@ from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
 
+from ..db.postgres import AsyncSessionLocal
 from ..db.redis import stream_pool
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 from .agent_stream_producer import publish_agent_event
+from .mock.hitl_fixtures import (
+    BALANCE_ACCOUNTS,
+    UI_BALANCE_ACCOUNT_SELECTION,
+    build_balance_result,
+)
+from .pending_input_service import register_pending_input
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +153,40 @@ async def _emit(
     )
 
 
-async def run_initial_turn(chat_session_id: UUID, message: str) -> None:
+async def _register_pending_input(
+    chat_session_id: UUID,
+    input_request_id: str,
+    ui_contract_id: str,
+    ui_type: str,
+    execution_context_id: UUID | None,
+    agent_thread_id: str | None,
+) -> None:
+    """need_input 발행 전에 대기 행을 DB 에 영속한다(계약 1.4·1.5).
+
+    실 Agent 는 Webhook 경로로 영속되지만, in-process mock 은 자체 세션으로 등록한다.
+    """
+    async with AsyncSessionLocal() as session:
+        await register_pending_input(
+            session,
+            chat_session_id=chat_session_id,
+            input_request_id=input_request_id,
+            ui_contract_id=ui_contract_id,
+            ui_type=ui_type,
+            execution_context_id=execution_context_id,
+            agent_thread_id=agent_thread_id,
+        )
+
+
+async def run_initial_turn(
+    chat_session_id: UUID,
+    message: str,
+    execution_context_id: UUID | None = None,
+    agent_thread_id: str | None = None,
+) -> None:
     """사용자 메시지에 대한 첫 턴을 스트림에 발행한다.
 
     송금 의도면 need_approval(confirm 카드)까지 발행하고 멈춘다(승인 대기).
+    잔액 의도면 need_input(계좌 선택)까지 발행하고 멈춘다(wf_balance_inquiry 입력 대기).
     그 외에는 간단한 답변 후 done.
     """
     redis_stream = aioredis.Redis(connection_pool=stream_pool)
@@ -205,6 +242,13 @@ async def run_initial_turn(chat_session_id: UUID, message: str) -> None:
             return
 
         component = _match_component(message)
+        if component == "balance":
+            # 잔액 조회는 계약 wf_balance_inquiry: 계좌 선택(need_input) → 잔액 결과.
+            await _run_balance_account_selection(
+                redis_stream, chat_session_id, execution_context_id, agent_thread_id
+            )
+            return
+
         if component is not None:
             # 읽기전용 카드: 데이터는 싣지 않고 렌더 시그널만(ADR-002).
             # FE 가 UI Data API 로 데이터를 별도 fetch 한다.
@@ -261,6 +305,51 @@ async def run_initial_turn(chat_session_id: UUID, message: str) -> None:
         await redis_stream.aclose()
 
 
+async def _run_balance_account_selection(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    execution_context_id: UUID | None,
+    agent_thread_id: str | None,
+) -> None:
+    """wf_balance_inquiry: 잔액 조회 계좌 선택을 need_input 으로 요청한다(계약 5.3)."""
+    input_request_id = f"input_balance_{uuid4().hex[:12]}"
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "잔액을 조회할 계좌를 확인하고 있어요...",
+        delay=False,
+    )
+    # need_input 발행 전에 대기 행을 먼저 만든다(FE 즉시 제출 대비, 계약 1.5).
+    await _register_pending_input(
+        chat_session_id,
+        input_request_id,
+        UI_BALANCE_ACCOUNT_SELECTION,
+        "account_card_list",
+        execution_context_id,
+        agent_thread_id,
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.NEED_INPUT,
+        "잔액을 조회할 계좌를 선택해 주세요.",
+        metadata={
+            "input_request_id": input_request_id,
+            "ui_contract_id": UI_BALANCE_ACCOUNT_SELECTION,
+            "ui": {
+                "type": "account_card_list",
+                "payload": {
+                    "title": "잔액을 조회할 계좌를 선택해 주세요.",
+                    "accounts": BALANCE_ACCOUNTS,
+                    "actions": ["select", "cancel"],
+                },
+            },
+        },
+    )
+    # 입력 대기 — done 을 보내지 않고 종료(스트림은 열린 채 유지)
+
+
 async def run_after_input(
     chat_session_id: UUID,
     ui_contract_id: str,
@@ -268,26 +357,65 @@ async def run_after_input(
 ) -> None:
     """일반 입력·선택 대기 회신 이후의 후속 턴을 발행한다(UI-HITL 계약 1.5).
 
-    Slice 0 은 브리지 배선만 검증하는 플레이스홀더다. Slice 1 이후 `ui_contract_id`
-    별로 워크플로우를 이어가도록(예: 계좌 선택 → 잔액 결과) 교체한다.
+    `ui_contract_id` 로 어떤 워크플로우를 이어갈지 분기한다.
     """
     redis_stream = aioredis.Redis(connection_pool=stream_pool)
     try:
-        await _emit(
-            redis_stream,
-            chat_session_id,
-            AgentStreamEventType.STATUS,
-            "입력을 확인했어요...",
-            delay=False,
-        )
+        if ui_contract_id == UI_BALANCE_ACCOUNT_SELECTION:
+            await _run_balance_result(redis_stream, chat_session_id, value)
+        else:
+            # 아직 워크플로우가 없는 계약: 브리지 확인용 플레이스홀더(다음 Slice 교체).
+            await _emit(
+                redis_stream,
+                chat_session_id,
+                AgentStreamEventType.DONE,
+                "입력을 반영했어요.",
+                delay=False,
+            )
+    finally:
+        await redis_stream.aclose()
+
+
+async def _run_balance_result(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+) -> None:
+    """선택된 계좌의 잔액 결과(balance_result)를 발행한다(계약 4.2)."""
+    if value.get("account_selection_outcome") != "selected":
         await _emit(
             redis_stream,
             chat_session_id,
             AgentStreamEventType.DONE,
-            "입력을 반영했어요.",
+            "잔액 조회를 취소했어요.",
+            delay=False,
         )
-    finally:
-        await redis_stream.aclose()
+        return
+
+    account_ids = value.get("account_ids") or []
+    payload = build_balance_result([str(account_id) for account_id in account_ids])
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "잔액을 조회하고 있어요...",
+        delay=False,
+    )
+    # 결과 UI 는 inline payload(ADR C3): component 이벤트 params 에 표시 데이터를 싣고
+    # FE 가 fetch 없이 즉시 렌더한다(마스킹된 소용량 카드라 SSE 전송에 문제 없음).
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.COMPONENT,
+        "잔액을 불러왔어요.",
+        metadata={"component": "balance_result", "params": payload},
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.DONE,
+        "다른 도움이 필요하시면 말씀해 주세요.",
+    )
 
 
 async def run_after_approval(

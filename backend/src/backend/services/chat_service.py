@@ -43,7 +43,7 @@ async def start_chat_turn(
     # Stage 7 기반: 이 턴의 실행 Context 를 발급해 사용자·세션·thread 를 연결한다.
     # TODO(BE): 세션당 활성 Context 재사용(현재는 턴마다 발급). 실 Agent 연동 시 정리.
     agent_thread_id = uuid4().hex
-    await issue_context(
+    context = await issue_context(
         session,
         user_id=user_id,
         chat_session_id=resolved_id,
@@ -51,8 +51,17 @@ async def start_chat_turn(
         agent_thread_id=agent_thread_id,
     )
 
-    # TODO(BE): 실제 Agent 연동 시 Agent API 호출로 교체
-    asyncio.create_task(run_initial_turn(resolved_id, message))
+    # TODO(BE): 실제 Agent 연동 시 Agent API 호출로 교체.
+    # execution_context_id·agent_thread_id 를 넘겨 need_input 대기 행이 이 턴의
+    # 실행 Context 에 연결되게 한다(계약 1.3).
+    asyncio.create_task(
+        run_initial_turn(
+            resolved_id,
+            message,
+            execution_context_id=context.id,
+            agent_thread_id=agent_thread_id,
+        )
+    )
     return resolved_id
 
 
