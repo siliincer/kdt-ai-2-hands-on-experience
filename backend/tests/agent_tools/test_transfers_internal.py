@@ -396,6 +396,43 @@ async def test_execute_completed_moves_ledger(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_execute_lost_confirmation_race_skips_audit(monkeypatch):
+    """C2: mark_executed 가 False(동시 실행에서 진 요청)면 원장은 옮겨졌으므로
+    completed 이되 중복 Audit 은 남기지 않는다."""
+    ctx = _ctx()
+    from_acct = _acct()
+    to_acct = _acct(account_number="3333-99-7654321")
+    conf = _confirmation(_fixed(from_acct, to_acct))
+    auth = _auth(conf.id)
+    _patch_execute_stack(
+        monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
+    )
+    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
+    monkeypatch.setattr(transfer_service, "get_financial_client", lambda: _FakeLedger())
+
+    # 이 요청은 조건부 전이에서 진다.
+    async def _lost(session, confirmation):
+        return False
+
+    monkeypatch.setattr(transfer_service.confirmation_service, "mark_executed", _lost)
+
+    audit_calls = []
+
+    async def _record(session, context, **kwargs):
+        audit_calls.append(kwargs)
+
+    monkeypatch.setattr(transfer_service.financial_audit_service, "record", _record)
+
+    data = await transfer_service.execute_internal_transfer(
+        _NO_SESSION, ctx, _exec_req(conf, auth)
+    )
+
+    assert data.outcome == "completed"  # 원장은 이미 이동(계정계 safe replay)
+    assert data.transaction_id == "txn_123"
+    assert audit_calls == []  # 진 요청은 Audit 미기록
+
+
+@pytest.mark.asyncio
 async def test_execute_expired_auth_requires_reauth(monkeypatch):
     """인증만 만료 → reauthentication_required. Confirmation 은 살려 둔다(계약 18.5)."""
     ctx = _ctx()

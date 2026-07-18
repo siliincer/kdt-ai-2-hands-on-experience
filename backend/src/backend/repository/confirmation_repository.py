@@ -6,10 +6,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.confirmation import (
@@ -107,3 +107,29 @@ async def set_confirmation_status(
     await session.commit()
     await session.refresh(confirmation)
     return confirmation
+
+
+async def mark_executed_if_approved(
+    session: AsyncSession, confirmation: Confirmation
+) -> bool:
+    """APPROVED→EXECUTED 를 원자적으로 전이한다(C2 동시성).
+
+    조건부 UPDATE 로 한 번만 성공한다. 동시 실행에서 이미 다른 요청이 실행했으면
+    rowcount 0 → False 를 반환한다. 하나의 Confirmation 은 한 번만 실행될 수 있다.
+    """
+    result = cast(
+        "CursorResult[Any]",
+        await session.execute(
+            update(Confirmation)
+            .where(
+                Confirmation.id == confirmation.id,
+                Confirmation.status == ConfirmationStatus.APPROVED,
+            )
+            .values(status=ConfirmationStatus.EXECUTED, executed_at=func.now())
+        ),
+    )
+    await session.commit()
+    if result.rowcount:
+        await session.refresh(confirmation)
+        return True
+    return False

@@ -193,17 +193,18 @@ async def execute_default_account(
         )
 
     await set_default_account(session, context.user_id, account)
-    await confirmation_service.mark_executed(session, confirmation)
+    won = await confirmation_service.mark_executed(session, confirmation)
     completed_at = datetime.now(timezone.utc)
-    await financial_audit_service.record(
-        session,
-        context,
-        event_type=EVENT_SETTING_CHANGE_COMPLETED,
-        operation=_OP_DEFAULT_EXECUTE,
-        outcome=SettingOutcome.COMPLETED,
-        contract_id=_CONTRACT_DEFAULT_EXECUTE,
-        confirmation_id=confirmation.id,
-    )
+    if won:  # C2: 동시 실행에서 진 요청은 중복 Audit 을 남기지 않는다.
+        await financial_audit_service.record(
+            session,
+            context,
+            event_type=EVENT_SETTING_CHANGE_COMPLETED,
+            operation=_OP_DEFAULT_EXECUTE,
+            outcome=SettingOutcome.COMPLETED,
+            contract_id=_CONTRACT_DEFAULT_EXECUTE,
+            confirmation_id=confirmation.id,
+        )
     return DefaultAccountExecuteData(
         outcome=SettingOutcome.COMPLETED,
         account_id=str(account.id),
@@ -319,17 +320,18 @@ async def execute_account_alias(
         )
 
     await set_account_alias(session, account, alias)
-    await confirmation_service.mark_executed(session, confirmation)
+    won = await confirmation_service.mark_executed(session, confirmation)
     completed_at = datetime.now(timezone.utc)
-    await financial_audit_service.record(
-        session,
-        context,
-        event_type=EVENT_SETTING_CHANGE_COMPLETED,
-        operation=_OP_ALIAS_EXECUTE,
-        outcome=SettingOutcome.COMPLETED,
-        contract_id=_CONTRACT_ALIAS_EXECUTE,
-        confirmation_id=confirmation.id,
-    )
+    if won:  # C2: 동시 실행에서 진 요청은 중복 Audit 을 남기지 않는다.
+        await financial_audit_service.record(
+            session,
+            context,
+            event_type=EVENT_SETTING_CHANGE_COMPLETED,
+            operation=_OP_ALIAS_EXECUTE,
+            outcome=SettingOutcome.COMPLETED,
+            contract_id=_CONTRACT_ALIAS_EXECUTE,
+            confirmation_id=confirmation.id,
+        )
     return AccountAliasExecuteData(
         outcome=SettingOutcome.COMPLETED,
         account_id=str(account.id),

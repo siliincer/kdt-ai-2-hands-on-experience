@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.agent_exceptions import AgentToolError
@@ -87,14 +88,20 @@ async def begin(
         raise AgentToolError.idempotency_request_in_progress()
 
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=IDEMPOTENCY_TTL_SECONDS)
-    await create_in_progress(
-        session,
-        execution_context_id=context.execution_context_id,
-        operation=operation,
-        idempotency_key=idempotency_key,
-        request_hash=request_hash,
-        expires_at=expires_at,
-    )
+    try:
+        await create_in_progress(
+            session,
+            execution_context_id=context.execution_context_id,
+            operation=operation,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            expires_at=expires_at,
+        )
+    except IntegrityError as exc:
+        # C1(동시성): 같은 순간 다른 요청이 같은 키를 방금 선점(유니크 제약 위반).
+        # 500 대신 '처리 중'으로 번역해 Retry-After 후 재호출하게 한다.
+        # 실패한 트랜잭션은 상위 get_db 예외 경로에서 rollback 된다.
+        raise AgentToolError.idempotency_request_in_progress() from exc
     return None
 
 

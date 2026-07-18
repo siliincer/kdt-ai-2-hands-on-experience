@@ -317,23 +317,26 @@ async def execute_internal_transfer(
             correction_view=correction_view,
         )
 
+    # 원장 이동은 계정계 결정적 멱등키로 safe replay 된다. Confirmation 전이는 조건부
+    # UPDATE 로 원자화(C2): 동시 실행에서 진 요청은 중복 Audit 을 남기지 않는다.
     transaction_id = await _move_ledger(
         from_account, to_account, amount, _ledger_idempotency_key(confirmation)
     )
-    await confirmation_service.mark_executed(session, confirmation)
+    won = await confirmation_service.mark_executed(session, confirmation)
     completed_at = datetime.now(timezone.utc)
-    await financial_audit_service.record(
-        session,
-        context,
-        event_type=EVENT_FINANCIAL_EXECUTION_COMPLETED,
-        operation=_OP_INTERNAL_EXECUTE,
-        outcome=TransferOutcome.COMPLETED,
-        contract_id=_CONTRACT_INTERNAL_EXECUTE,
-        confirmation_id=confirmation.id,
-        auth_context_id=auth_context.id,
-        transaction_id=transaction_id,
-        idempotency_key=_ledger_idempotency_key(confirmation),
-    )
+    if won:
+        await financial_audit_service.record(
+            session,
+            context,
+            event_type=EVENT_FINANCIAL_EXECUTION_COMPLETED,
+            operation=_OP_INTERNAL_EXECUTE,
+            outcome=TransferOutcome.COMPLETED,
+            contract_id=_CONTRACT_INTERNAL_EXECUTE,
+            confirmation_id=confirmation.id,
+            auth_context_id=auth_context.id,
+            transaction_id=transaction_id,
+            idempotency_key=_ledger_idempotency_key(confirmation),
+        )
     return TransferExecuteData(
         outcome=TransferOutcome.COMPLETED,
         transaction_id=transaction_id,
@@ -485,6 +488,13 @@ async def prepare_external_transfer(
         )
 
     is_new_recipient = candidate is not None
+    if candidate is not None:
+        # C6(동시성): 후보는 1회용 참조다. Confirmation 생성 전에 원자적으로 소비를
+        # 선점한다. 동시 Prepare 가 방금 소비했으면 재검증하도록 유도한다.
+        claimed = await mark_candidate_consumed(session, candidate)  # type: ignore[arg-type]
+        if not claimed:
+            raise AgentToolError.recipient_candidate_expired()
+
     confirmation = await confirmation_service.create_pending(
         session,
         context,
@@ -498,9 +508,6 @@ async def prepare_external_transfer(
             "currency": req.currency,
         },
     )
-    if candidate is not None:
-        # 후보는 1회용 참조 — Confirmation 에 고정됐으므로 소비 처리한다.
-        await mark_candidate_consumed(session, candidate)  # type: ignore[arg-type]
 
     warning_codes = [WARNING_NEW_RECIPIENT] if is_new_recipient else []
     await financial_audit_service.record(
@@ -612,24 +619,26 @@ async def execute_external_transfer(
             correction_view=correction_view,
         )
 
+    # C2: 원장은 계정계 멱등키로, Confirmation 전이는 조건부 UPDATE 로 이중 실행 방지.
     ledger_key = f"{_OP_EXTERNAL_EXECUTE}:{confirmation.id}"
     transaction_id = await _move_ledger(
         from_account, recipient_account, amount, ledger_key
     )
-    await confirmation_service.mark_executed(session, confirmation)
+    won = await confirmation_service.mark_executed(session, confirmation)
     completed_at = datetime.now(timezone.utc)
-    await financial_audit_service.record(
-        session,
-        context,
-        event_type=EVENT_FINANCIAL_EXECUTION_COMPLETED,
-        operation=_OP_EXTERNAL_EXECUTE,
-        outcome=TransferOutcome.COMPLETED,
-        contract_id=_CONTRACT_EXTERNAL_EXECUTE,
-        confirmation_id=confirmation.id,
-        auth_context_id=auth_context.id,
-        transaction_id=transaction_id,
-        idempotency_key=ledger_key,
-    )
+    if won:
+        await financial_audit_service.record(
+            session,
+            context,
+            event_type=EVENT_FINANCIAL_EXECUTION_COMPLETED,
+            operation=_OP_EXTERNAL_EXECUTE,
+            outcome=TransferOutcome.COMPLETED,
+            contract_id=_CONTRACT_EXTERNAL_EXECUTE,
+            confirmation_id=confirmation.id,
+            auth_context_id=auth_context.id,
+            transaction_id=transaction_id,
+            idempotency_key=ledger_key,
+        )
     return TransferExecuteData(
         outcome=TransferOutcome.COMPLETED,
         transaction_id=transaction_id,

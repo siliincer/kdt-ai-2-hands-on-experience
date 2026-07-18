@@ -93,6 +93,27 @@ async def test_first_call_reserves_and_proceeds(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_concurrent_insert_conflict_maps_to_in_progress(monkeypatch):
+    """C1: 같은 순간 다른 요청이 같은 키를 선점(IntegrityError) → 처리중(409)."""
+    from sqlalchemy.exc import IntegrityError
+
+    async def _get(session, ctx_id, operation, key):
+        return None  # 조회 시점엔 없음
+
+    async def _create(session, **kwargs):
+        raise IntegrityError("insert", {}, Exception("unique violation"))
+
+    monkeypatch.setattr(idempotency_service, "get_idempotency_record", _get)
+    monkeypatch.setattr(idempotency_service, "create_in_progress", _create)
+
+    with pytest.raises(AgentToolError) as exc:
+        await idempotency_service.begin(_NO_SESSION, _ctx(), _OP, "k-1", "hash-1")
+    assert exc.value.status_code == 409
+    assert exc.value.code == "IDEMPOTENCY_REQUEST_IN_PROGRESS"
+    assert exc.value.headers == {"Retry-After": "1"}
+
+
+@pytest.mark.asyncio
 async def test_same_key_same_body_replays_first_response(monkeypatch):
     body = {"success": True, "data": {"outcome": "completed"}}
     _patch(monkeypatch, existing=_record("hash-1", body=body, code=200))

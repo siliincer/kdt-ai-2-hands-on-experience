@@ -229,6 +229,34 @@ async def test_prepare_with_consumed_candidate_410(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_prepare_candidate_lost_consume_race_410(monkeypatch):
+    """C6: 조건부 소비에서 진 요청(동시 Prepare 가 방금 소비)은 재검증 유도(410)."""
+    ctx = _ctx()
+    from_acct = _acct()
+    recipient = _acct(account_number="110-222-123456")
+    cand = _candidate(ctx.user_id, recipient.id)
+    _patch_stack(
+        monkeypatch,
+        owned={from_acct.id: from_acct},
+        any_accounts={recipient.id: recipient},
+        candidate=cand,
+    )
+
+    # 소비 선점에서 진다(rowcount 0).
+    async def _lost(session, candidate):
+        return False
+
+    monkeypatch.setattr(transfer_service, "mark_candidate_consumed", _lost)
+
+    with pytest.raises(AgentToolError) as exc:
+        await transfer_service.prepare_external_transfer(
+            _NO_SESSION, ctx, _req_candidate(from_acct, cand)
+        )
+    assert exc.value.status_code == 410
+    assert exc.value.code == "RECIPIENT_CANDIDATE_EXPIRED"
+
+
+@pytest.mark.asyncio
 async def test_prepare_with_other_users_candidate_404(monkeypatch):
     ctx = _ctx()
     from_acct = _acct()

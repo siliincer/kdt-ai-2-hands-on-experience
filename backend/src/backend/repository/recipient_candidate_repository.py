@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import CursorResult, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.recipient_candidate import (
     CANDIDATE_STATUS_CONSUMED,
+    CANDIDATE_STATUS_VERIFIED,
     RecipientCandidate,
 )
 
@@ -51,9 +53,22 @@ async def get_recipient_candidate_by_id(
 
 async def mark_candidate_consumed(
     session: AsyncSession, candidate: RecipientCandidate
-) -> RecipientCandidate:
-    """Prepare 가 후보를 소비하면 재사용할 수 없게 처리한다."""
-    candidate.status = CANDIDATE_STATUS_CONSUMED
+) -> bool:
+    """후보를 원자적으로 소비 처리한다(C6 동시성).
+
+    verified→consumed 조건부 UPDATE 로 한 번만 성공한다. 동시 Prepare 에서 이미 다른
+    요청이 소비했으면 rowcount 0 → False. 하나의 후보는 한 번만 소비될 수 있다.
+    """
+    result = cast(
+        "CursorResult[Any]",
+        await session.execute(
+            update(RecipientCandidate)
+            .where(
+                RecipientCandidate.id == candidate.id,
+                RecipientCandidate.status == CANDIDATE_STATUS_VERIFIED,
+            )
+            .values(status=CANDIDATE_STATUS_CONSUMED)
+        ),
+    )
     await session.commit()
-    await session.refresh(candidate)
-    return candidate
+    return bool(result.rowcount)

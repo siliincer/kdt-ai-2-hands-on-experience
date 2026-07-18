@@ -25,6 +25,7 @@ from ..models.confirmation import (
 from ..repository.confirmation_repository import (
     create_confirmation,
     get_confirmation_by_id,
+    mark_executed_if_approved,
     set_confirmation_status,
 )
 from ..schemas.execution_context import ResolvedExecutionContext
@@ -142,13 +143,10 @@ async def invalidate(session: AsyncSession, confirmation: Confirmation) -> Confi
     )
 
 
-async def mark_executed(
-    session: AsyncSession, confirmation: Confirmation
-) -> Confirmation:
-    """실행 완료 처리. 하나의 Confirmation 은 한 번만 실행될 수 있다."""
-    return await set_confirmation_status(
-        session,
-        confirmation,
-        ConfirmationStatus.EXECUTED,
-        executed_at=datetime.now(timezone.utc),
-    )
+async def mark_executed(session: AsyncSession, confirmation: Confirmation) -> bool:
+    """실행 완료를 원자적으로 처리한다(C2 동시성).
+
+    APPROVED→EXECUTED 조건부 전이로 한 번만 성공한다. 동시 실행에서 이미 다른 요청이
+    선점했으면 False 를 반환한다(호출부는 중복 Audit 을 남기지 않는다).
+    """
+    return await mark_executed_if_approved(session, confirmation)
