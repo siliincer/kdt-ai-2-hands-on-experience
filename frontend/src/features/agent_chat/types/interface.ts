@@ -38,7 +38,10 @@ export interface ChatUiMessage {
 
 // --- API ---
 
-export type ApprovalDecision = 'approve' | 'reject';
+// 레거시 송금/자동이체 confirm 은 approve/reject.
+// confirm_modal(UI-HITL 계약 3.7)은 approve/change_requested/cancelled.
+export type ApprovalDecision =
+  'approve' | 'reject' | 'change_requested' | 'cancelled';
 
 export interface ChatResponse {
   chat_session_id: string;

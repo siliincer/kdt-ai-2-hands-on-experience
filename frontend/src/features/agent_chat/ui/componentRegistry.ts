@@ -6,8 +6,11 @@ import { BalanceToolUI } from './BalanceToolUI';
 import { BudgetToolUI } from './BudgetToolUI';
 import { CardsToolUI } from './CardsToolUI';
 import { ConfirmAutoTransferToolUI } from './ConfirmAutoTransferToolUI';
+import { ConfirmModalUI } from './ConfirmModalUI';
 import { ConfirmTransferToolUI } from './ConfirmTransferToolUI';
+import { SettingResultUI } from './SettingResultUI';
 import { SpendingToolUI } from './SpendingToolUI';
+import { TextInputUI } from './TextInputUI';
 import { TransactionsToolUI } from './TransactionsToolUI';
 
 /**
@@ -25,7 +28,10 @@ export const TOOL_UI_REGISTRY: Record<string, ToolCallMessagePartComponent> = {
   render_budget: BudgetToolUI,
   render_cards: CardsToolUI,
   render_balance_result: BalanceResultUI,
+  render_setting_result: SettingResultUI,
   input_account_card_list: AccountCardListUI,
+  input_text_input: TextInputUI,
   confirm_transfer: ConfirmTransferToolUI,
   confirm_autotransfer: ConfirmAutoTransferToolUI,
+  confirm_modal: ConfirmModalUI,
 };

@@ -11,22 +11,35 @@ agent:stream:{chat_session_id} 에 status/tool_call/need_approval/done 을 XADD 
 import asyncio
 import logging
 import re
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
 
 from ..db.postgres import AsyncSessionLocal
 from ..db.redis import stream_pool
+from ..models.confirmation import ConfirmationOperation
+from ..repository.confirmation_repository import get_confirmation_by_id
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 from .agent_stream_producer import publish_agent_event
+from .confirmation_service import create_pending
+from .execution_context_service import resolve_context
 from .mock.hitl_fixtures import (
+    ALIAS_TARGET_ACCOUNT,
     BALANCE_ACCOUNTS,
+    UI_ACCOUNT_ALIAS_INPUT,
     UI_BALANCE_ACCOUNT_SELECTION,
+    build_alias_confirm_view,
+    build_alias_setting_result,
     build_balance_result,
 )
 from .pending_input_service import register_pending_input
 
 logger = logging.getLogger(__name__)
+
+# confirm_modal(설정 변경) component 값 — run_after_approval 이 실제 Confirmation
+# 생명주기로 분기하는 데 쓴다. 레거시 송금/자동이체와 구분한다.
+_SETTING_COMPONENTS = frozenset({"account_alias", "default_account"})
 
 _STEP_DELAY_SECONDS = 0.5
 
@@ -78,6 +91,14 @@ _AUTOTRANSFER_SAMPLE_ARGS = {
     "amount": "200000",
     "day": "매월 25일",
 }
+
+
+# 계좌 별칭 변경 의도 키워드(wf_set_account_alias).
+_ALIAS_KEYWORDS = ("별칭", "계좌 이름", "계좌명", "계좌 별명", "alias")
+
+
+def _is_alias_intent(message: str) -> bool:
+    return any(keyword in message for keyword in _ALIAS_KEYWORDS)
 
 
 def _is_autotransfer_intent(message: str) -> bool:
@@ -191,6 +212,13 @@ async def run_initial_turn(
     """
     redis_stream = aioredis.Redis(connection_pool=stream_pool)
     try:
+        # 계좌 별칭 변경(wf_set_account_alias): 별칭 입력(text_input)부터 시작.
+        if _is_alias_intent(message):
+            await _run_alias_input(
+                redis_stream, chat_session_id, execution_context_id, agent_thread_id
+            )
+            return
+
         # 자동이체는 "이체"를 포함하므로 송금보다 먼저 검사한다.
         if _is_autotransfer_intent(message):
             args = _extract_autotransfer_args(message)
@@ -350,10 +378,93 @@ async def _run_balance_account_selection(
     # 입력 대기 — done 을 보내지 않고 종료(스트림은 열린 채 유지)
 
 
+async def _run_alias_input(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    execution_context_id: UUID | None,
+    agent_thread_id: str | None,
+) -> None:
+    """wf_set_account_alias: 새 별칭을 text_input 으로 입력받는다(계약 3.1)."""
+    input_request_id = f"input_alias_{uuid4().hex[:12]}"
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "계좌 별칭 변경을 도와드릴게요.",
+        delay=False,
+    )
+    await _register_pending_input(
+        chat_session_id,
+        input_request_id,
+        UI_ACCOUNT_ALIAS_INPUT,
+        "text_input",
+        execution_context_id,
+        agent_thread_id,
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.NEED_INPUT,
+        "새 계좌 별칭을 입력해 주세요.",
+        metadata={
+            "input_request_id": input_request_id,
+            "ui_contract_id": UI_ACCOUNT_ALIAS_INPUT,
+            "ui": {
+                "type": "text_input",
+                "payload": {
+                    "title": "새 계좌 별칭을 입력해 주세요.",
+                    "description": (
+                        f"{ALIAS_TARGET_ACCOUNT['bank_name']} "
+                        f"{ALIAS_TARGET_ACCOUNT['masked_account_number']}"
+                    ),
+                    "validation": {"required": True, "max_length": 30},
+                    "actions": ["submit", "cancel"],
+                },
+            },
+        },
+    )
+    # 입력 대기 — done 을 보내지 않고 종료
+
+
+async def _create_alias_confirmation(
+    execution_context_id: UUID, alias: str
+) -> str | None:
+    """별칭 변경 Confirmation 을 실제로 생성한다(승인 생명주기, 계약 14장).
+
+    fixed_data 에 계좌·별칭을 고정해 두면, 승인 후 결과 단계에서 이 값을 그대로
+    복원해 setting_result 를 만든다(교차 스텝 상태를 Confirmation 이 대신한다).
+    """
+    async with AsyncSessionLocal() as session:
+        context = await resolve_context(session, str(execution_context_id))
+        confirmation = await create_pending(
+            session,
+            context,
+            ConfirmationOperation.ACCOUNT_ALIAS_CHANGE,
+            fixed_data={"account": ALIAS_TARGET_ACCOUNT, "alias": alias},
+        )
+        return str(confirmation.id)
+
+
+async def _load_confirmation(
+    confirmation_id: str,
+) -> tuple[dict | None, UUID | None]:
+    """Confirmation 의 fixed_data 와 execution_context_id 를 읽는다(결과·재요청용)."""
+    try:
+        conf_uuid = UUID(confirmation_id)
+    except ValueError:
+        return None, None
+    async with AsyncSessionLocal() as session:
+        confirmation = await get_confirmation_by_id(session, conf_uuid)
+        if confirmation is None:
+            return None, None
+        return dict(confirmation.fixed_data), confirmation.execution_context_id
+
+
 async def run_after_input(
     chat_session_id: UUID,
     ui_contract_id: str,
     value: dict,
+    execution_context_id: UUID | None = None,
 ) -> None:
     """일반 입력·선택 대기 회신 이후의 후속 턴을 발행한다(UI-HITL 계약 1.5).
 
@@ -363,6 +474,10 @@ async def run_after_input(
     try:
         if ui_contract_id == UI_BALANCE_ACCOUNT_SELECTION:
             await _run_balance_result(redis_stream, chat_session_id, value)
+        elif ui_contract_id == UI_ACCOUNT_ALIAS_INPUT:
+            await _run_alias_confirm(
+                redis_stream, chat_session_id, value, execution_context_id
+            )
         else:
             # 아직 워크플로우가 없는 계약: 브리지 확인용 플레이스홀더(다음 Slice 교체).
             await _emit(
@@ -374,6 +489,46 @@ async def run_after_input(
             )
     finally:
         await redis_stream.aclose()
+
+
+async def _run_alias_confirm(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+    execution_context_id: UUID | None,
+) -> None:
+    """별칭 입력 후 confirm_modal(승인 대기)을 발행한다(계약 3.7)."""
+    if value.get("alias_input_outcome") != "submitted":
+        await _emit(
+            redis_stream,
+            chat_session_id,
+            AgentStreamEventType.DONE,
+            "별칭 변경을 취소했어요.",
+            delay=False,
+        )
+        return
+
+    alias = str(value.get("alias") or "").strip()
+    if not alias or execution_context_id is None:
+        await _emit(
+            redis_stream,
+            chat_session_id,
+            AgentStreamEventType.DONE,
+            "별칭을 확인하지 못해 취소했어요.",
+            delay=False,
+        )
+        return
+
+    confirmation_id = await _create_alias_confirmation(execution_context_id, alias)
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.NEED_APPROVAL,
+        "아래 내용으로 계좌 별칭을 변경할까요?",
+        approval_id=confirmation_id,
+        metadata={"tool": "modal", "args": build_alias_confirm_view(alias)},
+    )
+    # 승인 대기 — done 을 보내지 않고 종료
 
 
 async def _run_balance_result(
@@ -433,7 +588,11 @@ async def run_after_approval(
     """
     redis_stream = aioredis.Redis(connection_pool=stream_pool)
     try:
-        if component == "autotransfer":
+        if component in _SETTING_COMPONENTS:
+            await _run_setting_result(
+                redis_stream, chat_session_id, approval_id, decision
+            )
+        elif component == "autotransfer":
             await _run_autotransfer_result(
                 redis_stream, chat_session_id, approval_id, decision, args
             )
@@ -443,6 +602,63 @@ async def run_after_approval(
             )
     finally:
         await redis_stream.aclose()
+
+
+async def _run_setting_result(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    confirmation_id: str,
+    decision: str,
+) -> None:
+    """설정(별칭) confirm_modal 결과 후속 턴(계약 4.6).
+
+    승인 상태는 chat_service 가 이미 실제 Confirmation 에 반영했다. 여기서는 결과 UI
+    또는 재요청/취소만 발행한다. 결과 데이터는 Confirmation.fixed_data 에서 복원한다.
+    """
+    if decision == "cancelled":
+        await _emit(
+            redis_stream,
+            chat_session_id,
+            AgentStreamEventType.DONE,
+            "별칭 변경을 취소했어요.",
+            delay=False,
+        )
+        return
+
+    fixed_data, execution_context_id = await _load_confirmation(confirmation_id)
+
+    if decision == "change_requested":
+        # 수정: 기존 Confirmation 은 폐기됐고, 별칭을 다시 입력받는다(re-prepare).
+        await _run_alias_input(
+            redis_stream, chat_session_id, execution_context_id, None
+        )
+        return
+
+    alias = (fixed_data or {}).get("alias")
+    completed_at = datetime.now(timezone.utc).isoformat()
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "별칭을 변경하고 있어요...",
+        delay=False,
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.COMPONENT,
+        "별칭을 변경했어요.",
+        metadata={
+            "component": "setting_result",
+            "params": build_alias_setting_result(alias, completed_at),
+        },
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.DONE,
+        "다른 도움이 필요하시면 말씀해 주세요.",
+    )
 
 
 async def _run_transfer_result(

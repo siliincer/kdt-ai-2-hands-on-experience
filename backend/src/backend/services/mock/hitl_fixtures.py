@@ -56,3 +56,43 @@ def build_balance_result(account_ids: list[str]) -> dict:
             }
         )
     return {"accounts": accounts}
+
+
+# ── wf_set_account_alias (계약 5.7) ──────────────────────────────────────────
+# UI 계약 식별자.
+UI_ACCOUNT_ALIAS_INPUT = "UI-ACCOUNT-ALIAS-INPUT"
+UI_ACCOUNT_ALIAS_CONFIRMATION = "UI-ACCOUNT-ALIAS-CONFIRMATION"
+
+# 별칭 변경 대상 계좌(계약 21.4: 식별용 마스킹 정보만). 계좌 선택 단계는 Slice 1 에서
+# account_card_list 로 이미 검증했으므로, 별칭 흐름은 기본 계좌를 고정해 둔다.
+ALIAS_TARGET_ACCOUNT = {
+    "account_id": "acc_001",
+    "bank_name": "신한은행",
+    "masked_account_number": "110-***-4200",
+}
+
+
+def build_alias_confirm_view(alias: str) -> dict:
+    """계좌 별칭 변경 confirm_modal payload(계약 3.7·21.4)."""
+    return {
+        "purpose": "account_alias",
+        "title": "계좌 별칭을 변경할까요?",
+        "account": ALIAS_TARGET_ACCOUNT,
+        "alias": alias,
+        "allowed_change_targets": ["alias"],
+        "actions": ["approve", "modify", "cancel"],
+    }
+
+
+def build_alias_setting_result(alias: str | None, completed_at: str) -> dict:
+    """계좌 별칭 변경 setting_result payload(계약 4.6)."""
+    return {
+        "purpose": "account_alias",
+        "outcome": "completed",
+        "account": {
+            "account_id": ALIAS_TARGET_ACCOUNT["account_id"],
+            "masked_account_number": ALIAS_TARGET_ACCOUNT["masked_account_number"],
+        },
+        "alias": alias,
+        "completed_at": completed_at,
+    }

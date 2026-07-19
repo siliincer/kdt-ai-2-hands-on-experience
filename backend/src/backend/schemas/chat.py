@@ -21,12 +21,16 @@ class ChatResponse(BaseModel):
 
 
 class ApprovalDecision(str, Enum):
+    # 레거시 송금/자동이체 confirm 은 approve/reject 를 쓴다.
     APPROVE = "approve"
     REJECT = "reject"
+    # confirm_modal(UI-HITL 계약 3.7): 승인/수정/취소.
+    CHANGE_REQUESTED = "change_requested"
+    CANCELLED = "cancelled"
 
 
 class ApproveRequest(BaseModel):
-    """POST /api/v1/agent/approve — confirm 카드(HITL) 승인/거절."""
+    """POST /api/v1/agent/approve — confirm 카드(HITL) 승인/거절/수정."""
 
     chat_session_id: UUID
     approval_id: str
@@ -37,7 +41,11 @@ class ApproveRequest(BaseModel):
     )
     component: str | None = Field(
         default=None,
-        description="어떤 confirm 인지(transfer/autotransfer). 후속 턴 분기에 사용.",
+        description="어떤 confirm 인지(transfer/autotransfer/account_alias 등).",
+    )
+    change_target: str | None = Field(
+        default=None,
+        description="change_requested 일 때 수정 대상(계약 3.7, 예: alias).",
     )
 
 

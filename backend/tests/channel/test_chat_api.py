@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -6,10 +7,12 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from backend.services import chat_session_service
+from backend.models.confirmation import ConfirmationStatus
+from backend.services import chat_service, chat_session_service
 from backend.services.mock_agent_driver import (
     _extract_autotransfer_args,
     _extract_transfer_args,
+    _is_alias_intent,
     _is_autotransfer_intent,
     _is_transfer_intent,
 )
@@ -149,6 +152,123 @@ async def test_register_from_event_extracts_metadata():
     assert captured["input_request_id"] == "input_amount_1"
     assert captured["ui_contract_id"] == "UI-TRANSFER-AMOUNT-INPUT"
     assert captured["ui_type"] == "number_input"
+
+
+# --- 설정 confirm_modal → Confirmation 생명주기(_apply_setting_confirmation) ---------
+
+
+def test_is_alias_intent_detects_keywords():
+    assert _is_alias_intent("계좌 별칭 바꿔줘")
+    assert _is_alias_intent("계좌 이름 변경")
+    assert not _is_alias_intent("송금하고 싶어")
+
+
+def _confirmation(user_id, status=ConfirmationStatus.PENDING, expires_in=300):
+    return SimpleNamespace(
+        id=uuid4(),
+        user_id=user_id,
+        status=status,
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+    )
+
+
+@pytest.mark.asyncio
+async def test_apply_setting_approve_marks_approved():
+    user_id = uuid4()
+    conf = _confirmation(user_id)
+    calls = {"approve": 0, "invalidate": 0}
+
+    async def _get(session, cid):
+        return conf
+
+    async def _approve(session, c):
+        calls["approve"] += 1
+
+    async def _invalidate(session, c):
+        calls["invalidate"] += 1
+
+    with (
+        patch.object(chat_service, "get_confirmation_by_id", _get),
+        patch.object(chat_service.confirmation_service, "approve", _approve),
+        patch.object(chat_service.confirmation_service, "invalidate", _invalidate),
+    ):
+        await chat_service._apply_setting_confirmation(
+            AsyncMock(), user_id, str(conf.id), "approve"
+        )
+    assert calls == {"approve": 1, "invalidate": 0}
+
+
+@pytest.mark.asyncio
+async def test_apply_setting_cancel_invalidates():
+    user_id = uuid4()
+    conf = _confirmation(user_id)
+    calls = {"approve": 0, "invalidate": 0}
+
+    async def _get(session, cid):
+        return conf
+
+    async def _approve(session, c):
+        calls["approve"] += 1
+
+    async def _invalidate(session, c):
+        calls["invalidate"] += 1
+
+    with (
+        patch.object(chat_service, "get_confirmation_by_id", _get),
+        patch.object(chat_service.confirmation_service, "approve", _approve),
+        patch.object(chat_service.confirmation_service, "invalidate", _invalidate),
+    ):
+        await chat_service._apply_setting_confirmation(
+            AsyncMock(), user_id, str(conf.id), "cancelled"
+        )
+    assert calls == {"approve": 0, "invalidate": 1}
+
+
+@pytest.mark.asyncio
+async def test_apply_setting_other_user_is_404():
+    conf = _confirmation(uuid4())  # 다른 사용자
+
+    async def _get(session, cid):
+        return conf
+
+    with patch.object(chat_service, "get_confirmation_by_id", _get):
+        with pytest.raises(HTTPException) as exc:
+            await chat_service._apply_setting_confirmation(
+                AsyncMock(), uuid4(), str(conf.id), "approve"
+            )
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_apply_setting_expired_is_410():
+    user_id = uuid4()
+    conf = _confirmation(user_id, expires_in=-1)
+
+    async def _get(session, cid):
+        return conf
+
+    with patch.object(chat_service, "get_confirmation_by_id", _get):
+        with pytest.raises(HTTPException) as exc:
+            await chat_service._apply_setting_confirmation(
+                AsyncMock(), user_id, str(conf.id), "approve"
+            )
+    assert exc.value.status_code == 410
+
+
+@pytest.mark.asyncio
+async def test_apply_setting_non_pending_is_409():
+    user_id = uuid4()
+    conf = _confirmation(user_id, status=ConfirmationStatus.APPROVED)
+
+    async def _get(session, cid):
+        return conf
+
+    with patch.object(chat_service, "get_confirmation_by_id", _get):
+        with pytest.raises(HTTPException) as exc:
+            await chat_service._apply_setting_confirmation(
+                AsyncMock(), user_id, str(conf.id), "approve"
+            )
+    assert exc.value.status_code == 409
 
 
 @pytest.mark.asyncio
