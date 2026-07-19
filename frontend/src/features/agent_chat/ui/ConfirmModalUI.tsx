@@ -36,6 +36,7 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
         target: 'from_account',
       });
     }
+    // 타인송금은 recipient, 본인송금은 입금 계좌(to_account)를 표시한다(계약 3.7·4.5).
     if (a.recipient) {
       rows.push({
         label: '받는 분',
@@ -47,11 +48,32 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
         target: 'recipient',
       });
     }
+    if (a.to_account) {
+      rows.push({
+        label: '받는 계좌',
+        value: join(
+          a.to_account.account_alias ?? a.to_account.bank_name,
+          a.to_account.masked_account_number,
+        ),
+        target: 'to_account',
+      });
+    }
     if (a.amount !== undefined) {
       rows.push({
         label: '금액',
         value: `${(a.amount ?? 0).toLocaleString()}원`,
         target: 'amount',
+      });
+    }
+    return rows;
+  }
+
+  // 기본 출금 계좌 변경.
+  if (purpose === 'default_account') {
+    if (a.account) {
+      rows.push({
+        label: '새 기본 계좌',
+        value: join(a.account.bank_name, a.account.masked_account_number),
       });
     }
     return rows;

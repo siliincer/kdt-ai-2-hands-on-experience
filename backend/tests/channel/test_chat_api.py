@@ -14,7 +14,10 @@ from backend.services import chat_service, chat_session_service
 from backend.services.mock.hitl_fixtures import (
     build_account_list,
     build_amount_summary,
+    build_default_account_confirm_view,
+    build_default_account_result,
     build_external_transfer_confirm_view,
+    build_internal_transfer_confirm_view,
     build_transaction_list,
     build_transfer_result,
     find_recipient,
@@ -25,6 +28,8 @@ from backend.services.mock_agent_driver import (
     _is_account_list_intent,
     _is_alias_intent,
     _is_autotransfer_intent,
+    _is_default_account_intent,
+    _is_internal_transfer_intent,
     _is_summary_intent,
     _is_transfer_intent,
 )
@@ -489,3 +494,34 @@ def test_query_view_builders():
     income = build_amount_summary(["acc_001"], "2026-07-01", "2026-07-15", "income")
     assert spending["summary_type"] == "spending"
     assert spending["total_amount"] != income["total_amount"]
+
+
+# --- 본인송금 + 기본계좌 변경 intents + fixtures -------------------------------
+
+
+def test_internal_and_default_intents():
+    assert _is_internal_transfer_intent("내 계좌로 이체해줘")
+    assert _is_internal_transfer_intent("본인송금 할래")
+    assert _is_default_account_intent("기본 출금 계좌 바꿔줘")
+    # "내 계좌 목록"은 본인송금이 아니라 계좌목록으로 잡혀야 한다(키워드 분리).
+    assert not _is_internal_transfer_intent("내 계좌 목록 보여줘")
+    assert _is_account_list_intent("계좌 목록 보여줘")
+
+
+def test_internal_and_default_view_builders():
+    internal = build_internal_transfer_confirm_view(
+        {"from_account_id": "acc_001", "to_account_id": "acc_002", "amount": 30000}
+    )
+    assert internal["purpose"] == "internal_transfer"
+    assert internal["from_account"]["masked_account_number"]
+    assert internal["to_account"]["masked_account_number"]
+    assert "to_account" in internal["allowed_change_targets"]
+
+    confirm = build_default_account_confirm_view("acc_002")
+    assert confirm["purpose"] == "default_account"
+    assert confirm["account"]["account_id"] == "acc_002"
+    assert confirm["allowed_change_targets"] == []
+
+    result = build_default_account_result("acc_002", "2026-07-18T00:00:00+00:00")
+    assert result["outcome"] == "completed"
+    assert result["account"]["account_id"] == "acc_002"

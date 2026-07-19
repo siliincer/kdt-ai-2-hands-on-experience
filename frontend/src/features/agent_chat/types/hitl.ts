@@ -71,6 +71,7 @@ export interface ConfirmModalArgs {
   // 송금 목적의 표시 필드.
   from_account?: DisplayAccountRef;
   recipient?: DisplayRecipientRef;
+  to_account?: DisplayAccountRef;
   amount?: number;
   currency?: string;
   allowed_change_targets?: string[];

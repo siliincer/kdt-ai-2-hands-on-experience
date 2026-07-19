@@ -353,3 +353,75 @@ def build_amount_summary(
         "total_amount": total,
         "currency": "KRW",
     }
+
+
+# ── wf_internal_transfer (계약 5.8) ───────────────────────────────────────────
+UI_INTERNAL_FROM_ACCOUNT = "UI-INTERNAL-TRANSFER-FROM-ACCOUNT"
+UI_INTERNAL_TO_ACCOUNT = "UI-INTERNAL-TRANSFER-TO-ACCOUNT"
+
+
+def build_internal_transfer_confirm_view(fixed_data: dict) -> dict:
+    """본인송금 confirm_modal payload(계약 3.7). 수취인 대신 입금 계좌를 표시."""
+    return {
+        "purpose": "internal_transfer",
+        "title": "본인 계좌 이체 내용을 확인해 주세요.",
+        "from_account": _account_display(fixed_data.get("from_account_id", "")),
+        "to_account": _account_display(fixed_data.get("to_account_id", "")),
+        "amount": fixed_data.get("amount"),
+        "currency": "KRW",
+        "allowed_change_targets": ["from_account", "to_account", "amount"],
+        "actions": ["approve", "modify", "cancel"],
+    }
+
+
+def build_internal_transfer_result(
+    fixed_data: dict, transaction_id: str, completed_at: str
+) -> dict:
+    """본인송금 transfer_result payload(계약 4.5). recipient 대신 입금 계좌 표시."""
+    to_account = _account_display(fixed_data.get("to_account_id", ""))
+    return {
+        "transaction_id": transaction_id,
+        "completed_at": completed_at,
+        "from_account": _account_display(fixed_data.get("from_account_id", "")),
+        "recipient": {
+            "name": to_account.get("account_alias"),
+            "bank_name": to_account.get("bank_name"),
+            "masked_account_number": to_account.get("masked_account_number"),
+        },
+        "amount": fixed_data.get("amount"),
+        "currency": "KRW",
+    }
+
+
+# ── wf_set_default_account (계약 5.6) ─────────────────────────────────────────
+UI_DEFAULT_ACCOUNT_SELECTION = "UI-DEFAULT-ACCOUNT-SELECTION"
+
+
+def build_default_account_confirm_view(account_id: str) -> dict:
+    """기본 출금 계좌 변경 confirm_modal payload(계약 3.7)."""
+    display = _account_display(account_id)
+    return {
+        "purpose": "default_account",
+        "title": "기본 출금 계좌를 변경할까요?",
+        "account": {
+            "account_id": account_id,
+            "bank_name": display.get("bank_name"),
+            "masked_account_number": display.get("masked_account_number"),
+        },
+        "allowed_change_targets": [],
+        "actions": ["approve", "cancel"],
+    }
+
+
+def build_default_account_result(account_id: str, completed_at: str) -> dict:
+    """기본 출금 계좌 변경 setting_result payload(계약 4.6)."""
+    display = _account_display(account_id)
+    return {
+        "purpose": "default_account",
+        "outcome": "completed",
+        "account": {
+            "account_id": account_id,
+            "masked_account_number": display.get("masked_account_number"),
+        },
+        "completed_at": completed_at,
+    }
