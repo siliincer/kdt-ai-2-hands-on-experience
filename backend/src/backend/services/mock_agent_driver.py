@@ -23,7 +23,7 @@ from ..repository.confirmation_repository import get_confirmation_by_id
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 from .agent_stream_producer import publish_agent_event
 from .auth_context_service import create_for_confirmation
-from .confirmation_service import create_pending
+from .confirmation_service import create_pending, mark_executed
 from .execution_context_service import resolve_context
 from .mock.hitl_fixtures import (
     ALIAS_TARGET_ACCOUNT,
@@ -42,6 +42,8 @@ from .mock.hitl_fixtures import (
     UI_SUMMARY_TYPE_SELECTION,
     UI_TRANSACTION_ACCOUNT_SELECTION,
     UI_TRANSFER_AMOUNT_INPUT,
+    apply_account_alias,
+    apply_default_account,
     build_account_card_payload,
     build_account_list,
     build_alias_confirm_view,
@@ -541,6 +543,22 @@ async def _load_confirmation(
         if confirmation is None:
             return None, None
         return dict(confirmation.fixed_data), confirmation.execution_context_id
+
+
+async def _mark_confirmation_executed(confirmation_id: str) -> None:
+    """실행 완료 상태로 전이한다(APPROVED→EXECUTED). 실 Agent 의 Execute 에 해당.
+
+    mock 은 별도 Execute Tool 호출이 없으므로 결과 발행 직전에 여기서 전이시킨다.
+    APPROVED 가 아니면 no-op(승인 실패 시 EXECUTED 로 넘어가지 않는다).
+    """
+    try:
+        conf_uuid = UUID(confirmation_id)
+    except ValueError:
+        return
+    async with AsyncSessionLocal() as session:
+        confirmation = await get_confirmation_by_id(session, conf_uuid)
+        if confirmation is not None:
+            await mark_executed(session, confirmation)
 
 
 async def run_after_input(
@@ -1096,6 +1114,9 @@ async def run_after_auth(
         if auth_status == "verified":
             transaction_id = f"txn_{uuid4().hex[:12]}"
             completed_at = datetime.now(timezone.utc).isoformat()
+            # 실행 완료로 전이(APPROVED→EXECUTED). 실 Agent 의 송금 Execute 에 해당.
+            if confirmation_id:
+                await _mark_confirmation_executed(confirmation_id)
             if state.get("wf") == "internal_transfer":
                 result = build_internal_transfer_result(
                     fixed_data or {}, transaction_id, completed_at
@@ -1463,14 +1484,20 @@ async def _run_setting_result(
 
     completed_at = datetime.now(timezone.utc).isoformat()
     if is_alias:
-        params = build_alias_setting_result(
-            (fixed_data or {}).get("alias"), completed_at
-        )
+        alias = (fixed_data or {}).get("alias")
+        alias_account_id = ((fixed_data or {}).get("account") or {}).get("account_id")
+        # 승인된 변경을 실제 반영(mock 상태) + Confirmation 을 EXECUTED 로 전이.
+        if alias_account_id:
+            apply_account_alias(str(alias_account_id), str(alias or ""))
+        await _mark_confirmation_executed(confirmation_id)
+        params = build_alias_setting_result(alias, completed_at)
         status_text, result_text = "별칭을 변경하고 있어요...", "별칭을 변경했어요."
     else:
-        params = build_default_account_result(
-            (fixed_data or {}).get("account_id", ""), completed_at
-        )
+        account_id = (fixed_data or {}).get("account_id", "")
+        if account_id:
+            apply_default_account(str(account_id))
+        await _mark_confirmation_executed(confirmation_id)
+        params = build_default_account_result(str(account_id), completed_at)
         status_text = "기본 계좌를 변경하고 있어요..."
         result_text = "기본 계좌를 변경했어요."
 

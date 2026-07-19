@@ -425,3 +425,22 @@ def build_default_account_result(account_id: str, completed_at: str) -> dict:
         },
         "completed_at": completed_at,
     }
+
+
+# ── 설정 변경 반영(mock 상태) ─────────────────────────────────────────────────
+# 실 Agent 연동 시 agent-tools 의 Execute 가 DB 에 반영한다. mock 은 정적 픽스처라
+# 승인 후 결과가 이후 조회(account_list·balance)에 일관되게 보이도록 BALANCE_ACCOUNTS 를
+# 직접 갱신한다. 프로세스 메모리 상태라 서버 재시작 시 초기값으로 돌아간다(데모 전제).
+
+
+def apply_default_account(account_id: str) -> None:
+    """기본 출금 계좌를 갱신한다(사용자당 1개, 나머지는 해제)."""
+    for account in BALANCE_ACCOUNTS:
+        account["is_default"] = account["account_id"] == account_id
+
+
+def apply_account_alias(account_id: str, alias: str) -> None:
+    """계좌 별칭을 갱신한다."""
+    for account in BALANCE_ACCOUNTS:
+        if account["account_id"] == account_id:
+            account["account_alias"] = alias
