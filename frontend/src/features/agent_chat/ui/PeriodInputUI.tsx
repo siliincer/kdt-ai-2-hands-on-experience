@@ -1,8 +1,15 @@
 import { useState } from 'react';
 
-import { Check, X } from 'lucide-react';
-
 import { useSubmitInput } from '../model/submitInputContext';
+
+import { OutcomeChip } from './OutcomeChip';
+import {
+  HITL_ACTIONS_ROW,
+  HITL_BTN_PILL,
+  HITL_BTN_PRIMARY,
+  HITL_BTN_SECONDARY,
+  HITL_CARD,
+} from './uiStyles';
 
 import type { PeriodInputArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
@@ -70,24 +77,14 @@ export const PeriodInputUI: ToolCallMessagePartComponent = ({ args }) => {
   };
 
   if (outcome === 'cancelled') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-        <X className="h-3.5 w-3.5" />
-        조회를 취소했어요.
-      </div>
-    );
+    return <OutcomeChip variant="cancel">조회를 취소했어요.</OutcomeChip>;
   }
   if (outcome === 'selected') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
-        <Check className="h-3.5 w-3.5" />
-        기간을 선택했어요.
-      </div>
-    );
+    return <OutcomeChip variant="success">기간을 선택했어요.</OutcomeChip>;
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <p className="mb-3 text-sm font-semibold text-foreground">
         {a.title ?? '조회 기간을 선택해 주세요.'}
       </p>
@@ -98,7 +95,7 @@ export const PeriodInputUI: ToolCallMessagePartComponent = ({ args }) => {
             key={preset}
             type="button"
             onClick={() => submit(...presetRange(preset))}
-            className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/40"
+            className={HITL_BTN_PILL}
           >
             {PRESET_LABEL[preset] ?? preset}
           </button>
@@ -123,12 +120,8 @@ export const PeriodInputUI: ToolCallMessagePartComponent = ({ args }) => {
         </div>
       ) : null}
 
-      <div className="mt-3 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={cancel}
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
-        >
+      <div className={HITL_ACTIONS_ROW}>
+        <button type="button" onClick={cancel} className={HITL_BTN_SECONDARY}>
           취소
         </button>
         {a.manual_range ? (
@@ -136,7 +129,7 @@ export const PeriodInputUI: ToolCallMessagePartComponent = ({ args }) => {
             type="button"
             onClick={() => submit(start, end)}
             disabled={!start || !end}
-            className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition disabled:opacity-40"
+            className={HITL_BTN_PRIMARY}
           >
             확인
           </button>

@@ -1,3 +1,5 @@
+import { HITL_CARD } from './uiStyles';
+
 import type { AccountListArgs, AccountListItem } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
@@ -10,7 +12,7 @@ export const AccountListUI: ToolCallMessagePartComponent = ({ args }) => {
   const accounts = a.accounts ?? [];
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <div className="mb-3 flex items-center gap-2">
         <span className="text-lg">🏦</span>
         <p className="text-sm font-semibold text-foreground">내 계좌 목록</p>

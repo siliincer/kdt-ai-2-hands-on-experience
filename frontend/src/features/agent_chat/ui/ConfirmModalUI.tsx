@@ -1,10 +1,12 @@
 import { useState } from 'react';
 
-import { Check, X } from 'lucide-react';
-
 import { ERow } from '@/features/transfer/ERow';
 
 import { useApprove } from '../model/approveContext';
+import { joinParts, won } from '../utils/format';
+
+import { OutcomeChip } from './OutcomeChip';
+import { HITL_BTN_PRIMARY, HITL_BTN_SECONDARY, HITL_CARD } from './uiStyles';
 
 import type { ConfirmModalArgs } from '../types/hitl';
 import type { ApprovalDecision } from '../types/interface';
@@ -17,9 +19,6 @@ interface DisplayRow {
   target?: string;
 }
 
-const join = (...parts: (string | null | undefined)[]) =>
-  parts.filter(Boolean).join(' ');
-
 /** confirm_modal 을 목적별 표시 행으로 변환한다(계약 3.7). */
 function buildRows(a: ConfirmModalArgs): DisplayRow[] {
   const purpose = a.purpose ?? '';
@@ -29,7 +28,7 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
     if (a.from_account) {
       rows.push({
         label: '보내는 계좌',
-        value: join(
+        value: joinParts(
           a.from_account.account_alias ?? a.from_account.bank_name,
           a.from_account.masked_account_number,
         ),
@@ -40,7 +39,7 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
     if (a.recipient) {
       rows.push({
         label: '받는 분',
-        value: join(
+        value: joinParts(
           a.recipient.name,
           a.recipient.bank_name,
           a.recipient.masked_account_number,
@@ -51,7 +50,7 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
     if (a.to_account) {
       rows.push({
         label: '받는 계좌',
-        value: join(
+        value: joinParts(
           a.to_account.account_alias ?? a.to_account.bank_name,
           a.to_account.masked_account_number,
         ),
@@ -59,11 +58,7 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
       });
     }
     if (a.amount !== undefined) {
-      rows.push({
-        label: '금액',
-        value: `${(a.amount ?? 0).toLocaleString()}원`,
-        target: 'amount',
-      });
+      rows.push({ label: '금액', value: won(a.amount), target: 'amount' });
     }
     return rows;
   }
@@ -73,7 +68,7 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
     if (a.account) {
       rows.push({
         label: '새 기본 계좌',
-        value: join(a.account.bank_name, a.account.masked_account_number),
+        value: joinParts(a.account.bank_name, a.account.masked_account_number),
       });
     }
     return rows;
@@ -83,7 +78,7 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
   if (a.account) {
     rows.push({
       label: '계좌',
-      value: join(a.account.bank_name, a.account.masked_account_number),
+      value: joinParts(a.account.bank_name, a.account.masked_account_number),
     });
   }
   if (a.alias !== undefined) {
@@ -123,33 +118,19 @@ export const ConfirmModalUI: ToolCallMessagePartComponent = ({ args }) => {
   };
 
   if (outcome === 'cancelled') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-        <X className="h-3.5 w-3.5" />
-        변경을 취소했어요.
-      </div>
-    );
+    return <OutcomeChip variant="cancel">변경을 취소했어요.</OutcomeChip>;
   }
   if (outcome === 'change_requested') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-        다시 입력할게요.
-      </div>
-    );
+    return <OutcomeChip variant="neutral">다시 입력할게요.</OutcomeChip>;
   }
   if (outcome === 'approve') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
-        <Check className="h-3.5 w-3.5" />
-        변경을 승인했어요.
-      </div>
-    );
+    return <OutcomeChip variant="success">변경을 승인했어요.</OutcomeChip>;
   }
 
   const rows = buildRows(a);
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <p className="mb-3 text-sm font-semibold text-foreground">
         {a.title ?? '변경 내용을 확인해 주세요.'}
       </p>
@@ -185,14 +166,14 @@ export const ConfirmModalUI: ToolCallMessagePartComponent = ({ args }) => {
         <button
           type="button"
           onClick={() => respond('cancelled')}
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+          className={HITL_BTN_SECONDARY}
         >
           취소
         </button>
         <button
           type="button"
           onClick={() => respond('approve')}
-          className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition"
+          className={HITL_BTN_PRIMARY}
         >
           승인
         </button>

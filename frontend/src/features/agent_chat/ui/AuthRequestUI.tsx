@@ -1,8 +1,17 @@
 import { useState } from 'react';
 
-import { Check, ShieldCheck, X } from 'lucide-react';
+import { ShieldCheck, X } from 'lucide-react';
 
 import { useAuthenticate } from '../model/authenticateContext';
+
+import { OutcomeChip } from './OutcomeChip';
+import {
+  HITL_ACTIONS_ROW,
+  HITL_BTN_PRIMARY,
+  HITL_BTN_SECONDARY,
+  HITL_CARD,
+  HITL_INPUT,
+} from './uiStyles';
 
 import type { AuthRequestArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
@@ -41,16 +50,11 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
   };
 
   if (phase === 'done') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
-        <Check className="h-3.5 w-3.5" />
-        인증을 확인했어요.
-      </div>
-    );
+    return <OutcomeChip variant="success">인증을 확인했어요.</OutcomeChip>;
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <div className="mb-3 flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" />
         <p className="text-sm font-semibold text-foreground">
@@ -74,15 +78,15 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
         }}
         disabled={phase === 'verifying'}
         placeholder="비밀번호"
-        className="w-full rounded-xl border border-border bg-input-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-50"
+        className={`${HITL_INPUT} disabled:opacity-50`}
       />
 
-      <div className="mt-3 flex items-center justify-end gap-2">
+      <div className={HITL_ACTIONS_ROW}>
         <button
           type="button"
           onClick={cancel}
           disabled={phase === 'verifying'}
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
+          className={`${HITL_BTN_SECONDARY} disabled:opacity-50`}
         >
           취소
         </button>
@@ -90,7 +94,7 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
           type="button"
           onClick={() => void submit()}
           disabled={!password || phase === 'verifying'}
-          className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition disabled:opacity-40"
+          className={HITL_BTN_PRIMARY}
         >
           {phase === 'verifying' ? '확인 중...' : '인증'}
         </button>

@@ -1,10 +1,17 @@
 import { useState } from 'react';
 
-import { Check, X } from 'lucide-react';
-
 import { BANKS } from '@/shared/constants/banks';
 
 import { useSubmitInput } from '../model/submitInputContext';
+
+import { OutcomeChip } from './OutcomeChip';
+import {
+  HITL_BTN_PILL,
+  HITL_BTN_PRIMARY,
+  HITL_BTN_SECONDARY,
+  HITL_CARD,
+  HITL_INPUT,
+} from './uiStyles';
 
 import type { RecipientSelectArgs, RecentRecipient } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
@@ -64,24 +71,14 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
   };
 
   if (outcome === 'cancelled') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-        <X className="h-3.5 w-3.5" />
-        송금을 취소했어요.
-      </div>
-    );
+    return <OutcomeChip variant="cancel">송금을 취소했어요.</OutcomeChip>;
   }
   if (outcome === 'selected') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
-        <Check className="h-3.5 w-3.5" />
-        받는 분을 선택했어요.
-      </div>
-    );
+    return <OutcomeChip variant="success">받는 분을 선택했어요.</OutcomeChip>;
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <p className="mb-3 text-sm font-semibold text-foreground">
         {a.title ?? '받는 분을 선택해 주세요.'}
       </p>
@@ -115,14 +112,14 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
             <button
               type="button"
               onClick={() => setMode('manual')}
-              className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/40"
+              className={HITL_BTN_PILL}
             >
               새 계좌 입력
             </button>
             <button
               type="button"
               onClick={cancel}
-              className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+              className={HITL_BTN_SECONDARY}
             >
               취소
             </button>
@@ -134,7 +131,7 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
             <select
               value={bankCode}
               onChange={(event) => setBankCode(event.target.value)}
-              className="w-full rounded-xl border border-border bg-input-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+              className={HITL_INPUT}
             >
               <option value="">은행 선택</option>
               {BANK_OPTIONS.map((bank) => (
@@ -150,14 +147,14 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
                 setAccount(event.target.value.replace(/[^\d]/g, ''))
               }
               placeholder="계좌번호 입력"
-              className="w-full rounded-xl border border-border bg-input-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+              className={HITL_INPUT}
             />
           </div>
           <div className="mt-3 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => setMode('initial')}
-              className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+              className={HITL_BTN_SECONDARY}
             >
               뒤로
             </button>
@@ -165,7 +162,7 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
               type="button"
               onClick={submitManual}
               disabled={!bankCode || !account}
-              className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition disabled:opacity-40"
+              className={HITL_BTN_PRIMARY}
             >
               확인
             </button>

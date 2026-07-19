@@ -1,3 +1,7 @@
+import { won } from '../utils/format';
+
+import { HITL_CARD } from './uiStyles';
+
 import type { BalanceResultArgs, BalanceResultItem } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
@@ -11,7 +15,7 @@ export const BalanceResultUI: ToolCallMessagePartComponent = ({ args }) => {
   const accounts = a.accounts ?? [];
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <div className="mb-3 flex items-center gap-2">
         <span className="text-lg">💳</span>
         <p className="text-sm font-semibold text-foreground">잔액 조회 결과</p>
@@ -37,10 +41,10 @@ export const BalanceResultUI: ToolCallMessagePartComponent = ({ args }) => {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-foreground">
-                    {account.balance.toLocaleString()}원
+                    {won(account.balance)}
                   </p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    출금 가능 {account.available_amount.toLocaleString()}원
+                    출금 가능 {won(account.available_amount)}
                   </p>
                 </div>
               </div>

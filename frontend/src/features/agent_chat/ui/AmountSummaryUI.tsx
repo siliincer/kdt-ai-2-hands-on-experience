@@ -1,3 +1,7 @@
+import { won } from '../utils/format';
+
+import { HITL_CARD } from './uiStyles';
+
 import type { AmountSummaryArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
@@ -11,7 +15,7 @@ export const AmountSummaryUI: ToolCallMessagePartComponent = ({ args }) => {
   const label = isSpending ? '지출' : '수입';
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <div className="mb-1 flex items-center gap-2">
         <span className="text-lg">{isSpending ? '💸' : '💰'}</span>
         <p className="text-sm font-semibold text-foreground">{label} 합계</p>
@@ -23,7 +27,7 @@ export const AmountSummaryUI: ToolCallMessagePartComponent = ({ args }) => {
       ) : null}
 
       <p className="text-2xl font-bold text-foreground">
-        {(a.total_amount ?? 0).toLocaleString()}원
+        {won(a.total_amount)}
       </p>
     </div>
   );

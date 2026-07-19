@@ -1,8 +1,16 @@
 import { useState } from 'react';
 
-import { Check, X } from 'lucide-react';
-
 import { useSubmitInput } from '../model/submitInputContext';
+import { won } from '../utils/format';
+
+import { OutcomeChip } from './OutcomeChip';
+import {
+  HITL_ACTIONS_ROW,
+  HITL_BTN_PRIMARY,
+  HITL_BTN_SECONDARY,
+  HITL_CARD,
+  HITL_INPUT,
+} from './uiStyles';
 
 import type { NumberInputArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
@@ -39,24 +47,16 @@ export const NumberInputUI: ToolCallMessagePartComponent = ({ args }) => {
   };
 
   if (outcome === 'cancelled') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-        <X className="h-3.5 w-3.5" />
-        금액 입력을 취소했어요.
-      </div>
-    );
+    return <OutcomeChip variant="cancel">금액 입력을 취소했어요.</OutcomeChip>;
   }
   if (outcome === 'submitted') {
     return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
-        <Check className="h-3.5 w-3.5" />
-        {amount.toLocaleString()}원을 입력했어요.
-      </div>
+      <OutcomeChip variant="success">{won(amount)}을 입력했어요.</OutcomeChip>
     );
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <p className="text-sm font-semibold text-foreground">
         {a.title ?? '금액을 입력해 주세요.'}
       </p>
@@ -66,16 +66,16 @@ export const NumberInputUI: ToolCallMessagePartComponent = ({ args }) => {
           value={raw ? amount.toLocaleString() : ''}
           onChange={(event) => setRaw(event.target.value)}
           placeholder="0"
-          className="w-full rounded-xl border border-border bg-input-background px-3 py-2 text-right text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+          className={`${HITL_INPUT} text-right`}
         />
         <span className="text-sm text-muted-foreground">원</span>
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-2">
+      <div className={HITL_ACTIONS_ROW}>
         <button
           type="button"
           onClick={() => respond('cancelled')}
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+          className={HITL_BTN_SECONDARY}
         >
           취소
         </button>
@@ -83,7 +83,7 @@ export const NumberInputUI: ToolCallMessagePartComponent = ({ args }) => {
           type="button"
           onClick={() => respond('submitted')}
           disabled={!canSubmit}
-          className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition disabled:opacity-40"
+          className={HITL_BTN_PRIMARY}
         >
           확인
         </button>

@@ -1,3 +1,7 @@
+import { won } from '../utils/format';
+
+import { HITL_CARD } from './uiStyles';
+
 import type { TransactionItem, TransactionListArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
@@ -14,7 +18,7 @@ export const TransactionListUI: ToolCallMessagePartComponent = ({ args }) => {
   const period = a.period;
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <div className="mb-1 flex items-center gap-2">
         <span className="text-lg">🧾</span>
         <p className="text-sm font-semibold text-foreground">거래내역</p>
@@ -49,7 +53,7 @@ export const TransactionListUI: ToolCallMessagePartComponent = ({ args }) => {
                   className={`text-sm font-medium ${inflow ? 'text-chart-2' : 'text-foreground'}`}
                 >
                   {inflow ? '+' : ''}
-                  {tx.amount.toLocaleString()}원
+                  {won(tx.amount)}
                 </span>
               </div>
             );

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 
-import { Check } from 'lucide-react';
-
 import { useSubmitInput } from '../model/submitInputContext';
+
+import { OutcomeChip } from './OutcomeChip';
+import { HITL_BTN_PILL, HITL_CARD } from './uiStyles';
 
 import type { OptionItem, OptionSelectArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
@@ -31,16 +32,11 @@ export const OptionSelectUI: ToolCallMessagePartComponent = ({ args }) => {
 
   if (chosen) {
     const label = options.find((o) => o.value === chosen)?.label ?? chosen;
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
-        <Check className="h-3.5 w-3.5" />
-        {label}
-      </div>
-    );
+    return <OutcomeChip variant="success">{label}</OutcomeChip>;
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <p className="mb-3 text-sm font-semibold text-foreground">
         {a.title ?? '선택해 주세요.'}
       </p>
@@ -50,7 +46,7 @@ export const OptionSelectUI: ToolCallMessagePartComponent = ({ args }) => {
             key={option.value}
             type="button"
             onClick={() => respond(option.value)}
-            className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/40"
+            className={HITL_BTN_PILL}
           >
             {option.label}
           </button>

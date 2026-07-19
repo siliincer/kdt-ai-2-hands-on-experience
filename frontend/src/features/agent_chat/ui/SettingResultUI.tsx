@@ -1,5 +1,7 @@
 import { Check } from 'lucide-react';
 
+import { HITL_CARD } from './uiStyles';
+
 import type { SettingResultArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
@@ -19,7 +21,7 @@ export const SettingResultUI: ToolCallMessagePartComponent = ({ args }) => {
   const unchanged = a.outcome === 'unchanged';
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <div className="mb-3 flex items-center gap-2">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-chart-2/15 text-chart-2">
           <Check className="h-4 w-4" />

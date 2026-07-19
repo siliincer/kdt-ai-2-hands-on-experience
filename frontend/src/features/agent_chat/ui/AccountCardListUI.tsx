@@ -1,8 +1,16 @@
 import { useState } from 'react';
 
-import { Check, X } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 import { useSubmitInput } from '../model/submitInputContext';
+
+import { OutcomeChip } from './OutcomeChip';
+import {
+  HITL_ACTIONS_ROW,
+  HITL_BTN_PRIMARY,
+  HITL_BTN_SECONDARY,
+  HITL_CARD,
+} from './uiStyles';
 
 import type { AccountCardItem, AccountCardListArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
@@ -43,33 +51,23 @@ export const AccountCardListUI: ToolCallMessagePartComponent = ({ args }) => {
   };
 
   if (outcome === 'cancelled') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-        <X className="h-3.5 w-3.5" />
-        계좌 선택을 취소했어요.
-      </div>
-    );
+    return <OutcomeChip variant="cancel">계좌 선택을 취소했어요.</OutcomeChip>;
   }
 
   if (outcome === 'selected') {
-    return (
-      <div className="my-1 inline-flex items-center gap-2 rounded-full border border-chart-2/40 bg-chart-2/10 px-3 py-1.5 text-xs text-foreground">
-        <Check className="h-3.5 w-3.5" />
-        계좌를 선택했어요.
-      </div>
-    );
+    return <OutcomeChip variant="success">계좌를 선택했어요.</OutcomeChip>;
   }
 
   if (accounts.length === 0) {
     return (
-      <div className="mt-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+      <div className={`${HITL_CARD} text-sm text-muted-foreground`}>
         선택 가능한 계좌가 없어요.
       </div>
     );
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <p className="mb-3 text-sm font-semibold text-foreground">
         {a.title ?? '계좌를 선택해 주세요.'}
       </p>
@@ -118,11 +116,11 @@ export const AccountCardListUI: ToolCallMessagePartComponent = ({ args }) => {
         })}
       </div>
 
-      <div className="mt-4 flex items-center justify-end gap-2">
+      <div className={HITL_ACTIONS_ROW}>
         <button
           type="button"
           onClick={() => respond('cancelled')}
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+          className={HITL_BTN_SECONDARY}
         >
           취소
         </button>
@@ -130,7 +128,7 @@ export const AccountCardListUI: ToolCallMessagePartComponent = ({ args }) => {
           type="button"
           onClick={() => respond('selected')}
           disabled={selected.length === 0}
-          className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition disabled:opacity-40"
+          className={HITL_BTN_PRIMARY}
         >
           선택 완료
         </button>

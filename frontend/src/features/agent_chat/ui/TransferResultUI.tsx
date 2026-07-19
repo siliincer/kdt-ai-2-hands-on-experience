@@ -1,5 +1,9 @@
 import { Check } from 'lucide-react';
 
+import { won } from '../utils/format';
+
+import { HITL_CARD } from './uiStyles';
+
 import type { TransferResultArgs } from '../types/hitl';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
@@ -31,7 +35,7 @@ export const TransferResultUI: ToolCallMessagePartComponent = ({ args }) => {
   const a = (args ?? {}) as TransferResultArgs;
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-card p-4">
+    <div className={HITL_CARD}>
       <div className="mb-3 flex items-center gap-2">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-chart-2/15 text-chart-2">
           <Check className="h-4 w-4" />
@@ -39,9 +43,7 @@ export const TransferResultUI: ToolCallMessagePartComponent = ({ args }) => {
         <p className="text-sm font-semibold text-foreground">송금 완료</p>
       </div>
 
-      <p className="mb-3 text-2xl font-bold text-foreground">
-        {(a.amount ?? 0).toLocaleString()}원
-      </p>
+      <p className="mb-3 text-2xl font-bold text-foreground">{won(a.amount)}</p>
 
       <div className="space-y-2 rounded-2xl border border-border p-3">
         <AccountLine
