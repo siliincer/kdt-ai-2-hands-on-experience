@@ -143,6 +143,66 @@ export interface TransferResultArgs {
   currency?: string;
 }
 
+/** period_input need_input args(계약 3.5) */
+export interface PeriodInputArgs {
+  title?: string;
+  presets?: string[];
+  manual_range?: boolean;
+  actions?: string[];
+  inputRequestId?: string;
+  ui_contract_id?: string;
+}
+
+/** account_list 결과 항목(계약 4.1) */
+export interface AccountListItem {
+  account_id: string;
+  bank_name: string;
+  account_alias?: string;
+  account_type?: string;
+  masked_account_number: string;
+  currency?: string;
+  is_default?: boolean;
+  status?: string;
+}
+
+export interface AccountListArgs {
+  accounts?: AccountListItem[];
+}
+
+/** transaction_list 결과 항목·args(계약 4.3) */
+export interface TransactionItem {
+  transaction_id: string;
+  transaction_title: string;
+  amount: number;
+  currency?: string;
+  occurred_at?: string;
+}
+
+export interface TransactionListArgs {
+  account_ids?: string[];
+  period?: { start_date?: string | null; end_date?: string | null };
+  transactions?: TransactionItem[];
+  transaction_query_id?: string;
+  pagination?: { next_cursor?: string | null };
+}
+
+/** amount_summary 결과 args(계약 4.4) */
+export interface AmountSummaryArgs {
+  account_ids?: string[];
+  start_date?: string | null;
+  end_date?: string | null;
+  summary_type?: string;
+  total_amount?: number;
+  currency?: string;
+}
+
+/** 안내·오류·차단 메시지 args(계약 2.2) */
+export interface MessageArgs {
+  title?: string;
+  message?: string;
+  content?: string;
+}
+
 /** setting_result 결과 args(inline payload, 계약 4.6) */
 export interface SettingResultArgs {
   purpose?: string;

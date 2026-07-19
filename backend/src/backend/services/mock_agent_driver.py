@@ -33,17 +33,27 @@ from .mock.hitl_fixtures import (
     UI_EXTERNAL_FROM_ACCOUNT,
     UI_EXTERNAL_TRANSFER_AUTH,
     UI_EXTERNAL_TRANSFER_AUTH_RETRY,
+    UI_PERIOD_SELECTION,
     UI_RECIPIENT_SELECT,
+    UI_SUMMARY_ACCOUNT_SELECTION,
+    UI_SUMMARY_TYPE_SELECTION,
+    UI_TRANSACTION_ACCOUNT_SELECTION,
     UI_TRANSFER_AMOUNT_INPUT,
+    build_account_card_payload,
+    build_account_list,
     build_alias_confirm_view,
     build_alias_setting_result,
     build_amount_input_view,
+    build_amount_summary,
     build_auth_request_view,
     build_auth_retry_view,
     build_balance_result,
     build_external_transfer_confirm_view,
     build_from_account_view,
+    build_period_input_view,
     build_recipient_select_view,
+    build_summary_type_view,
+    build_transaction_list,
     build_transfer_result,
     find_recipient,
 )
@@ -115,9 +125,23 @@ _AUTOTRANSFER_SAMPLE_ARGS = {
 # 계좌 별칭 변경 의도 키워드(wf_set_account_alias).
 _ALIAS_KEYWORDS = ("별칭", "계좌 이름", "계좌명", "계좌 별명", "alias")
 
+# 계좌 목록 조회 의도(wf_account_list).
+_ACCOUNT_LIST_KEYWORDS = ("계좌 목록", "계좌목록", "보유 계좌", "내 계좌", "계좌 보여")
+
+# 기간 합계 조회 의도(wf_period_amount_summary). "얼마"류 지출·수입 합계.
+_SUMMARY_KEYWORDS = ("합계", "얼마 썼", "얼마 벌", "지출 합", "수입 합", "총 지출")
+
 
 def _is_alias_intent(message: str) -> bool:
     return any(keyword in message for keyword in _ALIAS_KEYWORDS)
+
+
+def _is_account_list_intent(message: str) -> bool:
+    return any(keyword in message for keyword in _ACCOUNT_LIST_KEYWORDS)
+
+
+def _is_summary_intent(message: str) -> bool:
+    return any(keyword in message for keyword in _SUMMARY_KEYWORDS)
 
 
 def _is_autotransfer_intent(message: str) -> bool:
@@ -267,11 +291,30 @@ async def run_initial_turn(
             )
             return
 
+        # 기간 합계(wf_period_amount_summary): 계좌 선택부터 시작.
+        if _is_summary_intent(message):
+            await _run_query_account_selection(
+                redis_stream, chat_session_id, execution_context_id, "summary"
+            )
+            return
+
+        # 계좌 목록(wf_account_list): 입력 없이 결과만 발행.
+        if _is_account_list_intent(message):
+            await _run_account_list(redis_stream, chat_session_id)
+            return
+
         component = _match_component(message)
         if component == "balance":
             # 잔액 조회는 계약 wf_balance_inquiry: 계좌 선택(need_input) → 잔액 결과.
             await _run_balance_account_selection(
                 redis_stream, chat_session_id, execution_context_id, agent_thread_id
+            )
+            return
+
+        if component == "transactions":
+            # 거래내역(wf_transaction_history): 계좌 선택 → 기간 → 거래 목록.
+            await _run_query_account_selection(
+                redis_stream, chat_session_id, execution_context_id, "transaction"
             )
             return
 
@@ -492,6 +535,19 @@ async def run_after_input(
             await _run_external_auth_retry(
                 redis_stream, chat_session_id, value, execution_context_id
             )
+        elif ui_contract_id in (
+            UI_TRANSACTION_ACCOUNT_SELECTION,
+            UI_SUMMARY_ACCOUNT_SELECTION,
+        ):
+            await _run_query_after_account(
+                redis_stream, chat_session_id, value, execution_context_id
+            )
+        elif ui_contract_id == UI_PERIOD_SELECTION:
+            await _run_query_after_period(
+                redis_stream, chat_session_id, value, execution_context_id
+            )
+        elif ui_contract_id == UI_SUMMARY_TYPE_SELECTION:
+            await _run_summary_result(redis_stream, chat_session_id, value)
         else:
             # 아직 워크플로우가 없는 계약: 브리지 확인용 플레이스홀더(다음 Slice 교체).
             await _emit(
@@ -894,6 +950,192 @@ async def _run_external_auth_retry(
     auth_context_id = await _create_auth_context(ctx_id, confirmation_id)
     state["auth_context_id"] = auth_context_id
     await _emit_auth_request(redis_stream, chat_session_id, auth_context_id)
+
+
+# ── 조회 워크플로우 (계약 5.2·5.4·5.5) ────────────────────────────────────────
+
+
+async def _run_account_list(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+) -> None:
+    """wf_account_list: 입력 없이 계좌 목록 결과만 발행(계약 5.2)."""
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "계좌 목록을 불러오고 있어요...",
+        delay=False,
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.COMPONENT,
+        "계좌 목록을 불러왔어요.",
+        metadata={"component": "account_list", "params": build_account_list()},
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.DONE,
+        "다른 도움이 필요하시면 말씀해 주세요.",
+    )
+
+
+async def _run_query_account_selection(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    execution_context_id: UUID | None,
+    workflow: str,
+) -> None:
+    """거래내역·기간합계 공통: 조회 계좌 선택(account_card_list)부터 시작.
+
+    두 워크플로우는 같은 UI-PERIOD-SELECTION 을 쓰므로 활성 workflow 를 상태에 기록해
+    이후 분기한다(계약 5.4·5.5).
+    """
+    _WF_STATE[str(chat_session_id)] = {"wf": workflow}
+    ui_contract_id = (
+        UI_TRANSACTION_ACCOUNT_SELECTION
+        if workflow == "transaction"
+        else UI_SUMMARY_ACCOUNT_SELECTION
+    )
+    title = "조회할 계좌를 선택해 주세요."
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "조회할 계좌를 확인하고 있어요...",
+        delay=False,
+    )
+    await _emit_need_input(
+        redis_stream,
+        chat_session_id,
+        execution_context_id,
+        ui_contract_id,
+        "account_card_list",
+        title,
+        build_account_card_payload(title),
+    )
+
+
+async def _run_query_after_account(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+    execution_context_id: UUID | None,
+) -> None:
+    """조회 계좌 확정 → 기간 선택(period_input)으로 진행."""
+    account_ids = value.get("account_ids") or []
+    if value.get("account_selection_outcome") != "selected" or not account_ids:
+        await _external_cancel(redis_stream, chat_session_id, "조회를 취소했어요.")
+        return
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    state["account_ids"] = [str(a) for a in account_ids]
+    await _emit_need_input(
+        redis_stream,
+        chat_session_id,
+        execution_context_id,
+        UI_PERIOD_SELECTION,
+        "period_input",
+        "조회 기간을 선택해 주세요.",
+        build_period_input_view(),
+    )
+
+
+async def _run_query_after_period(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+    execution_context_id: UUID | None,
+) -> None:
+    """기간 확정 → 거래내역이면 결과, 합계면 유형 선택으로 분기(활성 wf 기준)."""
+    if value.get("period_selection_outcome") != "selected":
+        await _external_cancel(redis_stream, chat_session_id, "조회를 취소했어요.")
+        return
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    state["start_date"] = value.get("start_date")
+    state["end_date"] = value.get("end_date")
+
+    if state.get("wf") == "summary":
+        await _emit_need_input(
+            redis_stream,
+            chat_session_id,
+            execution_context_id,
+            UI_SUMMARY_TYPE_SELECTION,
+            "option_select",
+            "합계 유형을 선택해 주세요.",
+            build_summary_type_view(),
+        )
+        return
+
+    # 거래내역 결과.
+    payload = build_transaction_list(
+        state.get("account_ids", []),
+        state.get("start_date"),
+        state.get("end_date"),
+        f"txq_{uuid4().hex[:12]}",
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "거래내역을 불러오고 있어요...",
+        delay=False,
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.COMPONENT,
+        "거래내역을 불러왔어요.",
+        metadata={"component": "transaction_list", "params": payload},
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.DONE,
+        "다른 도움이 필요하시면 말씀해 주세요.",
+    )
+    _WF_STATE.pop(str(chat_session_id), None)
+
+
+async def _run_summary_result(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+) -> None:
+    """합계 유형 확정 → amount_summary 결과 발행(계약 4.4)."""
+    if value.get("option_selection_outcome") != "selected":
+        await _external_cancel(redis_stream, chat_session_id, "조회를 취소했어요.")
+        return
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    summary_type = value.get("option") or "spending"
+    payload = build_amount_summary(
+        state.get("account_ids", []),
+        state.get("start_date"),
+        state.get("end_date"),
+        str(summary_type),
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "합계를 계산하고 있어요...",
+        delay=False,
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.COMPONENT,
+        "합계를 불러왔어요.",
+        metadata={"component": "amount_summary", "params": payload},
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.DONE,
+        "다른 도움이 필요하시면 말씀해 주세요.",
+    )
+    _WF_STATE.pop(str(chat_session_id), None)
 
 
 async def _run_balance_result(

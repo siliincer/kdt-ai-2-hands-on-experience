@@ -12,15 +12,20 @@ from backend.models.auth_context import AuthContextStatus
 from backend.models.confirmation import ConfirmationStatus
 from backend.services import chat_service, chat_session_service
 from backend.services.mock.hitl_fixtures import (
+    build_account_list,
+    build_amount_summary,
     build_external_transfer_confirm_view,
+    build_transaction_list,
     build_transfer_result,
     find_recipient,
 )
 from backend.services.mock_agent_driver import (
     _extract_autotransfer_args,
     _extract_transfer_args,
+    _is_account_list_intent,
     _is_alias_intent,
     _is_autotransfer_intent,
+    _is_summary_intent,
     _is_transfer_intent,
 )
 
@@ -458,3 +463,29 @@ def test_agent_authenticate_requires_auth(client: TestClient):
         },
     )
     assert response.status_code == 401
+
+
+# --- 조회 워크플로우 intents + fixtures ---------------------------------------
+
+
+def test_query_intents():
+    assert _is_account_list_intent("계좌 목록 보여줘")
+    assert _is_summary_intent("이번 달 얼마 썼어")
+    assert _is_summary_intent("지출 합계 알려줘")
+    assert not _is_account_list_intent("송금할래")
+
+
+def test_query_view_builders():
+    accounts = build_account_list()["accounts"]
+    assert accounts and accounts[0]["status"] == "active"
+    assert "balance" not in accounts[0]  # 잔액 미포함(계약 4.1)
+
+    txn = build_transaction_list(["acc_001"], "2026-07-01", "2026-07-15", "txq_1")
+    assert txn["transaction_query_id"] == "txq_1"
+    assert txn["transactions"][0]["transaction_title"]  # display_name 아님
+    assert txn["period"]["start_date"] == "2026-07-01"
+
+    spending = build_amount_summary(["acc_001"], "2026-07-01", "2026-07-15", "spending")
+    income = build_amount_summary(["acc_001"], "2026-07-01", "2026-07-15", "income")
+    assert spending["summary_type"] == "spending"
+    assert spending["total_amount"] != income["total_amount"]

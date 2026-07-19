@@ -233,3 +233,123 @@ def build_auth_retry_view() -> dict:
         ],
         "actions": ["select"],
     }
+
+
+# ── 조회 워크플로우 (계약 5.2·5.4·5.5) ────────────────────────────────────────
+# UI 계약 식별자.
+UI_ACCOUNT_LIST_RESULT = "UI-ACCOUNT-LIST-RESULT"
+UI_TRANSACTION_ACCOUNT_SELECTION = "UI-TRANSACTION-ACCOUNT-SELECTION"
+UI_SUMMARY_ACCOUNT_SELECTION = "UI-SUMMARY-ACCOUNT-SELECTION"
+UI_PERIOD_SELECTION = "UI-PERIOD-SELECTION"
+UI_TRANSACTION_LIST = "UI-TRANSACTION-LIST"
+UI_SUMMARY_TYPE_SELECTION = "UI-SUMMARY-TYPE-SELECTION"
+UI_AMOUNT_SUMMARY = "UI-AMOUNT-SUMMARY"
+
+# 거래내역 목 표본(계약 4.3: transaction_title·부호 있는 amount·occurred_at).
+_SAMPLE_TRANSACTIONS = [
+    {
+        "transaction_id": "txn_001",
+        "transaction_title": "편의점",
+        "amount": -5200,
+        "currency": "KRW",
+        "occurred_at": "2026-07-14T20:30:00+09:00",
+    },
+    {
+        "transaction_id": "txn_002",
+        "transaction_title": "급여",
+        "amount": 3_200_000,
+        "currency": "KRW",
+        "occurred_at": "2026-07-10T09:00:00+09:00",
+    },
+    {
+        "transaction_id": "txn_003",
+        "transaction_title": "카페",
+        "amount": -4800,
+        "currency": "KRW",
+        "occurred_at": "2026-07-08T14:10:00+09:00",
+    },
+]
+
+
+def build_account_card_payload(title: str) -> dict:
+    """조회 계좌 선택 account_card_list payload(계약 3.3)."""
+    return {
+        "title": title,
+        "accounts": BALANCE_ACCOUNTS,
+        "actions": ["select", "cancel"],
+    }
+
+
+def build_account_list() -> dict:
+    """계좌 목록 결과 account_list payload(계약 4.1). 잔액·전체 번호는 담지 않는다."""
+    accounts = []
+    for account in BALANCE_ACCOUNTS:
+        accounts.append(
+            {
+                "account_id": account["account_id"],
+                "bank_name": account["bank_name"],
+                "account_alias": account["account_alias"],
+                "account_type": account["account_type"],
+                "masked_account_number": account["masked_account_number"],
+                "currency": account["currency"],
+                "is_default": account["is_default"],
+                "status": "active",
+            }
+        )
+    return {"accounts": accounts}
+
+
+def build_period_input_view() -> dict:
+    """조회 기간 선택 period_input payload(계약 3.5)."""
+    return {
+        "title": "조회 기간을 선택해 주세요.",
+        "presets": ["this_month", "last_month", "recent_1_month"],
+        "manual_range": True,
+        "actions": ["select", "cancel"],
+    }
+
+
+def build_summary_type_view() -> dict:
+    """합계 유형 선택 option_select payload(계약 3.6)."""
+    return {
+        "title": "합계 유형을 선택해 주세요.",
+        "options": [
+            {"value": "spending", "label": "지출"},
+            {"value": "income", "label": "수입"},
+        ],
+        "actions": ["select", "cancel"],
+    }
+
+
+def build_transaction_list(
+    account_ids: list[str],
+    start_date: str | None,
+    end_date: str | None,
+    transaction_query_id: str,
+) -> dict:
+    """거래내역 첫 페이지 transaction_list payload(계약 4.3)."""
+    return {
+        "account_ids": account_ids,
+        "period": {"start_date": start_date, "end_date": end_date},
+        "transactions": _SAMPLE_TRANSACTIONS,
+        "transaction_query_id": transaction_query_id,
+        "pagination": {"next_cursor": None},
+    }
+
+
+def build_amount_summary(
+    account_ids: list[str],
+    start_date: str | None,
+    end_date: str | None,
+    summary_type: str,
+) -> dict:
+    """기간 거래 합계 amount_summary payload(계약 4.4)."""
+    total = 350_000 if summary_type == "spending" else 3_200_000
+    return {
+        "account_ids": account_ids,
+        "start_date": start_date,
+        "end_date": end_date,
+        "summary_type": summary_type,
+        "total_amount": total,
+        "currency": "KRW",
+    }
