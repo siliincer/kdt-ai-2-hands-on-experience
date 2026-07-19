@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -21,12 +20,13 @@ from agent.tools.contract_registry import (
     ContractToolInputError,
     ContractToolRegistry,
 )
+from agent.workflows.query_slot_extraction import (
+    AccountSlotExtractor,
+    extract_balance_slots_by_rule,
+    extract_balance_slots_llm_first,
+)
 
 WORKFLOW_ID = "wf_balance_inquiry"
-_ACCOUNT_HINT = re.compile(
-    r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))"
-)
-_ALL_ACCOUNT_MARKERS = ("전체", "모든", "전부", "다 보여", "모두")
 
 
 def _default_input_request_id() -> str:
@@ -38,19 +38,9 @@ def _default_tool_request_id(parent_request_id: str, step_id: str) -> str:
 
 
 def extract_balance_slots_from_text(message: str) -> Mapping[str, Any]:
-    """Backend 호출 없이 잔액조회 발화의 계좌 힌트를 추출한다."""
+    """테스트와 장애 폴백용 결정적 잔액조회 Slot 추출."""
 
-    all_accounts_requested = any(marker in message for marker in _ALL_ACCOUNT_MARKERS)
-    match = _ACCOUNT_HINT.search(message)
-    account_hint = (
-        None
-        if all_accounts_requested or match is None
-        else match.group(1)
-    )
-    return {
-        "account_hint": account_hint,
-        "all_accounts_requested": all_accounts_requested,
-    }
+    return extract_balance_slots_by_rule(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,8 +57,8 @@ class BalanceInquiryDependencies:
     tool_request_id_factory: Callable[[str, str], str] = field(
         default=_default_tool_request_id
     )
-    slot_extractor: Callable[[str], Mapping[str, Any]] = field(
-        default=extract_balance_slots_from_text
+    slot_extractor: AccountSlotExtractor = field(
+        default=extract_balance_slots_llm_first
     )
 
 
@@ -82,7 +72,9 @@ def build_balance_inquiry_graph(
     async def extract_balance_slots(
         state: AgentState,
     ) -> dict[str, Any]:
-        extracted = dependencies.slot_extractor(str(state.get("user_input") or ""))
+        extracted = await dependencies.slot_extractor(
+            str(state.get("user_input") or "")
+        )
         return {
             "workflow_id": WORKFLOW_ID,
             "current_step_id": "extract_balance_slots",
