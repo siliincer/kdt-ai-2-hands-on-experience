@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -7,8 +8,14 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from backend.models.auth_context import AuthContextStatus
 from backend.models.confirmation import ConfirmationStatus
 from backend.services import chat_service, chat_session_service
+from backend.services.mock.hitl_fixtures import (
+    build_external_transfer_confirm_view,
+    build_transfer_result,
+    find_recipient,
+)
 from backend.services.mock_agent_driver import (
     _extract_autotransfer_args,
     _extract_transfer_args,
@@ -289,3 +296,165 @@ async def test_register_from_event_skips_when_incomplete():
         )
     assert result is None
     assert called["n"] == 0
+
+
+# --- 타인송금 fixtures + 인증(authenticate_and_resume) ------------------------
+
+
+def test_transfer_intent_and_recipient_lookup():
+    assert _is_transfer_intent("홍길동에게 송금해줘")
+    assert find_recipient("rcp_001") is not None
+    assert find_recipient("nope") is None
+
+
+def test_external_transfer_view_builders():
+    fixed = {
+        "from_account_id": "acc_001",
+        "recipient": {
+            "name": "홍*동",
+            "bank_name": "국민은행",
+            "masked_account_number": "123-***-456789",
+        },
+        "amount": 50000,
+    }
+    confirm = build_external_transfer_confirm_view(fixed)
+    assert confirm["purpose"] == "external_transfer"
+    assert confirm["amount"] == 50000
+    assert confirm["from_account"]["masked_account_number"]  # acc_001 매핑됨
+    assert "recipient" in confirm["allowed_change_targets"]
+
+    result = build_transfer_result(fixed, "txn_1", "2026-07-18T00:00:00+00:00")
+    assert result["transaction_id"] == "txn_1"
+    assert result["amount"] == 50000
+    assert result["recipient"]["name"] == "홍*동"
+
+
+def _auth_context(user_id, status=AuthContextStatus.PENDING, expires_in=180):
+    return SimpleNamespace(
+        id=uuid4(),
+        user_id=user_id,
+        status=status,
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+    )
+
+
+def _patch_auth(monkeypatch_ctx, auth_context, password_ok):
+    """authenticate_and_resume 의 의존성을 대체하는 컨텍스트 매니저 목록을 만든다."""
+    user = SimpleNamespace(password_hash="hash")
+    calls = {"verified": 0, "failed": 0, "resumed": []}
+
+    async def _owner(session, uid, cid):
+        return None
+
+    async def _get_auth(session, aid):
+        return auth_context
+
+    async def _get_user(session, uid):
+        return user
+
+    async def _mark_verified(session, ac):
+        calls["verified"] += 1
+
+    async def _set_status(session, ac, status, **kw):
+        calls["failed"] += 1
+
+    async def _run_after_auth(cs, status):
+        calls["resumed"].append(status)
+
+    patches = [
+        patch.object(chat_service, "verify_chat_session_owner", _owner),
+        patch.object(chat_service, "get_auth_context_by_id", _get_auth),
+        patch.object(chat_service, "get_user_by_id", _get_user),
+        patch.object(chat_service, "verify_password", lambda p, h: password_ok),
+        patch.object(
+            chat_service.auth_context_service, "mark_verified", _mark_verified
+        ),
+        patch.object(chat_service, "set_auth_context_status", _set_status),
+        patch.object(chat_service, "run_after_auth", _run_after_auth),
+    ]
+    return patches, calls
+
+
+@pytest.mark.asyncio
+async def test_authenticate_correct_password_verifies():
+    user_id = uuid4()
+    auth = _auth_context(user_id)
+    patches, calls = _patch_auth(None, auth, password_ok=True)
+    for p in patches:
+        p.start()
+    try:
+        result = await chat_service.authenticate_and_resume(
+            AsyncMock(), user_id, uuid4(), str(auth.id), "a1b2c3d4!!"
+        )
+        await asyncio.sleep(0)  # 백그라운드 재개 task 를 실행시킨다
+    finally:
+        for p in patches:
+            p.stop()
+    assert result == "verified"
+    assert calls["verified"] == 1 and calls["resumed"] == ["verified"]
+
+
+@pytest.mark.asyncio
+async def test_authenticate_wrong_password_fails():
+    user_id = uuid4()
+    auth = _auth_context(user_id)
+    patches, calls = _patch_auth(None, auth, password_ok=False)
+    for p in patches:
+        p.start()
+    try:
+        result = await chat_service.authenticate_and_resume(
+            AsyncMock(), user_id, uuid4(), str(auth.id), "wrong"
+        )
+        await asyncio.sleep(0)  # 백그라운드 재개 task 를 실행시킨다
+    finally:
+        for p in patches:
+            p.stop()
+    assert result == "failed"
+    assert calls["failed"] == 1 and calls["resumed"] == ["failed"]
+
+
+@pytest.mark.asyncio
+async def test_authenticate_other_user_is_404():
+    auth = _auth_context(uuid4())  # 다른 사용자
+    patches, _ = _patch_auth(None, auth, password_ok=True)
+    for p in patches:
+        p.start()
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await chat_service.authenticate_and_resume(
+                AsyncMock(), uuid4(), uuid4(), str(auth.id), "x"
+            )
+    finally:
+        for p in patches:
+            p.stop()
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_authenticate_expired_is_410():
+    user_id = uuid4()
+    auth = _auth_context(user_id, expires_in=-1)
+    patches, _ = _patch_auth(None, auth, password_ok=True)
+    for p in patches:
+        p.start()
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await chat_service.authenticate_and_resume(
+                AsyncMock(), user_id, uuid4(), str(auth.id), "x"
+            )
+    finally:
+        for p in patches:
+            p.stop()
+    assert exc.value.status_code == 410
+
+
+def test_agent_authenticate_requires_auth(client: TestClient):
+    response = client.post(
+        "/api/v1/agent/authenticate",
+        json={
+            "chat_session_id": str(uuid4()),
+            "auth_context_id": "auth_1",
+            "password": "x",
+        },
+    )
+    assert response.status_code == 401

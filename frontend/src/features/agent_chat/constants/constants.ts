@@ -3,6 +3,7 @@
 export const CHAT_URL = '/backendApi/api/v1/chat';
 export const APPROVE_URL = '/backendApi/api/v1/agent/approve';
 export const AGENT_INPUT_URL = '/backendApi/api/v1/agent/input';
+export const AGENT_AUTHENTICATE_URL = '/backendApi/api/v1/agent/authenticate';
 
 // UI Data API (BFF) — component 시그널 이후 카드 데이터 조회(ADR-002)
 export const UI_BALANCE_URL = '/backendApi/api/v1/ui/balance';

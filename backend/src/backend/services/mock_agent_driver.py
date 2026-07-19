@@ -22,6 +22,7 @@ from ..models.confirmation import ConfirmationOperation
 from ..repository.confirmation_repository import get_confirmation_by_id
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 from .agent_stream_producer import publish_agent_event
+from .auth_context_service import create_for_confirmation
 from .confirmation_service import create_pending
 from .execution_context_service import resolve_context
 from .mock.hitl_fixtures import (
@@ -29,9 +30,22 @@ from .mock.hitl_fixtures import (
     BALANCE_ACCOUNTS,
     UI_ACCOUNT_ALIAS_INPUT,
     UI_BALANCE_ACCOUNT_SELECTION,
+    UI_EXTERNAL_FROM_ACCOUNT,
+    UI_EXTERNAL_TRANSFER_AUTH,
+    UI_EXTERNAL_TRANSFER_AUTH_RETRY,
+    UI_RECIPIENT_SELECT,
+    UI_TRANSFER_AMOUNT_INPUT,
     build_alias_confirm_view,
     build_alias_setting_result,
+    build_amount_input_view,
+    build_auth_request_view,
+    build_auth_retry_view,
     build_balance_result,
+    build_external_transfer_confirm_view,
+    build_from_account_view,
+    build_recipient_select_view,
+    build_transfer_result,
+    find_recipient,
 )
 from .pending_input_service import register_pending_input
 
@@ -40,6 +54,11 @@ logger = logging.getLogger(__name__)
 # confirm_modal(설정 변경) component 값 — run_after_approval 이 실제 Confirmation
 # 생명주기로 분기하는 데 쓴다. 레거시 송금/자동이체와 구분한다.
 _SETTING_COMPONENTS = frozenset({"account_alias", "default_account"})
+
+# 타인송금은 여러 입력을 순차로 모아 Confirmation 을 만든다. mock 은 실 Agent 의
+# LangGraph state 를 대신해 chat_session 별 진행 상태를 인메모리로 보관한다(단일 워커
+# 데모 전제, 실 Agent 연동 시 제거). key=str(chat_session_id).
+_WF_STATE: dict[str, dict] = {}
 
 _STEP_DELAY_SECONDS = 0.5
 
@@ -242,31 +261,10 @@ async def run_initial_turn(
             return
 
         if _is_transfer_intent(message):
-            args = _extract_transfer_args(message)
-            approval_id = uuid4().hex
-            await _emit(
-                redis_stream,
-                chat_session_id,
-                AgentStreamEventType.STATUS,
-                "요청을 이해했어요. 송금 정보를 확인할게요.",
-                delay=False,
+            # 타인송금(wf_external_transfer): 수취인 선택(need_input)부터 시작.
+            await _run_external_recipient(
+                redis_stream, chat_session_id, execution_context_id
             )
-            await _emit(
-                redis_stream,
-                chat_session_id,
-                AgentStreamEventType.TOOL_CALL,
-                "받는 분 계좌 정보를 조회하고 있어요...",
-                metadata={"tool": "lookup_account"},
-            )
-            await _emit(
-                redis_stream,
-                chat_session_id,
-                AgentStreamEventType.NEED_APPROVAL,
-                "아래 정보로 송금할까요? 각 항목을 확인하고 수정할 수 있어요.",
-                approval_id=approval_id,
-                metadata={"tool": "transfer", "args": args},
-            )
-            # 승인 대기 — done 을 보내지 않고 종료(스트림은 열린 채 유지)
             return
 
         component = _match_component(message)
@@ -478,6 +476,22 @@ async def run_after_input(
             await _run_alias_confirm(
                 redis_stream, chat_session_id, value, execution_context_id
             )
+        elif ui_contract_id == UI_RECIPIENT_SELECT:
+            await _run_external_after_recipient(
+                redis_stream, chat_session_id, value, execution_context_id
+            )
+        elif ui_contract_id == UI_EXTERNAL_FROM_ACCOUNT:
+            await _run_external_after_from_account(
+                redis_stream, chat_session_id, value, execution_context_id
+            )
+        elif ui_contract_id == UI_TRANSFER_AMOUNT_INPUT:
+            await _run_external_after_amount(
+                redis_stream, chat_session_id, value, execution_context_id
+            )
+        elif ui_contract_id == UI_EXTERNAL_TRANSFER_AUTH_RETRY:
+            await _run_external_auth_retry(
+                redis_stream, chat_session_id, value, execution_context_id
+            )
         else:
             # 아직 워크플로우가 없는 계약: 브리지 확인용 플레이스홀더(다음 Slice 교체).
             await _emit(
@@ -529,6 +543,357 @@ async def _run_alias_confirm(
         metadata={"tool": "modal", "args": build_alias_confirm_view(alias)},
     )
     # 승인 대기 — done 을 보내지 않고 종료
+
+
+# ── wf_external_transfer (계약 5.9) ───────────────────────────────────────────
+
+
+async def _emit_need_input(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    execution_context_id: UUID | None,
+    ui_contract_id: str,
+    ui_type: str,
+    content: str,
+    payload: dict,
+) -> None:
+    """need_input 대기 행 등록 + 이벤트 발행 공통 헬퍼."""
+    input_request_id = f"input_{ui_type}_{uuid4().hex[:8]}"
+    await _register_pending_input(
+        chat_session_id,
+        input_request_id,
+        ui_contract_id,
+        ui_type,
+        execution_context_id,
+        None,
+    )
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.NEED_INPUT,
+        content,
+        metadata={
+            "input_request_id": input_request_id,
+            "ui_contract_id": ui_contract_id,
+            "ui": {"type": ui_type, "payload": payload},
+        },
+    )
+
+
+async def _external_cancel(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    message: str = "송금을 취소했어요.",
+) -> None:
+    _WF_STATE.pop(str(chat_session_id), None)
+    await _emit(
+        redis_stream, chat_session_id, AgentStreamEventType.DONE, message, delay=False
+    )
+
+
+async def _run_external_recipient(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    execution_context_id: UUID | None,
+) -> None:
+    """타인송금 1단계: 수취인 선택(recipient_select)."""
+    _WF_STATE[str(chat_session_id)] = {}
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.STATUS,
+        "타인송금을 도와드릴게요.",
+        delay=False,
+    )
+    await _emit_need_input(
+        redis_stream,
+        chat_session_id,
+        execution_context_id,
+        UI_RECIPIENT_SELECT,
+        "recipient_select",
+        "받는 분을 선택해 주세요.",
+        build_recipient_select_view(),
+    )
+
+
+async def _run_external_after_recipient(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+    execution_context_id: UUID | None,
+) -> None:
+    """수취인 확정 → 출금 계좌 선택으로 진행."""
+    if value.get("recipient_selection_outcome") != "selected":
+        await _external_cancel(redis_stream, chat_session_id)
+        return
+
+    recipient = None
+    to_recipient_id = value.get("to_recipient_id")
+    candidate_id = value.get("to_recipient_candidate_id")
+    if to_recipient_id:
+        recipient = find_recipient(str(to_recipient_id))
+    elif candidate_id:
+        # 신규 검증 후보(mock): 표시 정보는 최소만 둔다.
+        recipient = {
+            "name": "신규 수취인",
+            "bank_name": None,
+            "masked_account_number": "",
+        }
+    if recipient is None:
+        await _external_cancel(
+            redis_stream, chat_session_id, "수취인을 확인하지 못해 취소했어요."
+        )
+        return
+
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    state["recipient"] = recipient
+    await _emit_need_input(
+        redis_stream,
+        chat_session_id,
+        execution_context_id,
+        UI_EXTERNAL_FROM_ACCOUNT,
+        "account_card_list",
+        "출금할 계좌를 선택해 주세요.",
+        build_from_account_view(),
+    )
+
+
+async def _run_external_after_from_account(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+    execution_context_id: UUID | None,
+) -> None:
+    """출금 계좌 확정 → 금액 입력으로 진행."""
+    account_ids = value.get("account_ids") or []
+    if value.get("account_selection_outcome") != "selected" or not account_ids:
+        await _external_cancel(redis_stream, chat_session_id)
+        return
+
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    state["from_account_id"] = str(account_ids[0])
+    await _emit_need_input(
+        redis_stream,
+        chat_session_id,
+        execution_context_id,
+        UI_TRANSFER_AMOUNT_INPUT,
+        "number_input",
+        "송금 금액을 입력해 주세요.",
+        build_amount_input_view(),
+    )
+
+
+async def _run_external_after_amount(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+    execution_context_id: UUID | None,
+) -> None:
+    """금액 확정 → Confirmation 생성 후 confirm_modal(승인 대기)."""
+    if value.get("amount_input_outcome") != "submitted":
+        await _external_cancel(redis_stream, chat_session_id)
+        return
+    if execution_context_id is None:
+        await _external_cancel(
+            redis_stream, chat_session_id, "송금 정보를 확인하지 못해 취소했어요."
+        )
+        return
+
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    state["amount"] = value.get("amount")
+    fixed_data = {
+        "from_account_id": state.get("from_account_id"),
+        "recipient": state.get("recipient"),
+        "amount": state.get("amount"),
+    }
+    confirmation_id = await _create_external_confirmation(
+        execution_context_id, fixed_data
+    )
+    state["confirmation_id"] = confirmation_id
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.NEED_APPROVAL,
+        "송금 내용을 확인해 주세요.",
+        approval_id=confirmation_id,
+        metadata={
+            "tool": "modal",
+            "args": build_external_transfer_confirm_view(fixed_data),
+        },
+    )
+
+
+async def _create_external_confirmation(
+    execution_context_id: UUID, fixed_data: dict
+) -> str:
+    """타인송금 Confirmation 을 생성한다(EXTERNAL_TRANSFER, fixed_data 고정)."""
+    async with AsyncSessionLocal() as session:
+        context = await resolve_context(session, str(execution_context_id))
+        confirmation = await create_pending(
+            session,
+            context,
+            ConfirmationOperation.EXTERNAL_TRANSFER,
+            fixed_data=fixed_data,
+        )
+        return str(confirmation.id)
+
+
+async def _run_external_after_approval(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    approval_id: str,
+    decision: str,
+) -> None:
+    """송금 confirm_modal 결과 → 인증 요청/재입력/취소."""
+    if decision == "cancelled":
+        await _external_cancel(redis_stream, chat_session_id)
+        return
+
+    _fixed_data, execution_context_id = await _load_confirmation(approval_id)
+    if decision == "change_requested":
+        # 수정: 기존 Confirmation 은 폐기됐고, 금액부터 재입력한다(recipient·계좌 유지).
+        await _emit_need_input(
+            redis_stream,
+            chat_session_id,
+            execution_context_id,
+            UI_TRANSFER_AMOUNT_INPUT,
+            "number_input",
+            "송금 금액을 다시 입력해 주세요.",
+            build_amount_input_view(),
+        )
+        return
+
+    # approve → 추가 인증(auth_request) 발행.
+    auth_context_id = await _create_auth_context(execution_context_id, approval_id)
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    state["auth_context_id"] = auth_context_id
+    await _emit_auth_request(redis_stream, chat_session_id, auth_context_id)
+
+
+async def _create_auth_context(
+    execution_context_id: UUID | None, confirmation_id: str
+) -> str | None:
+    """승인된 Confirmation 에 대한 인증 Context 를 생성한다(계약 15장)."""
+    if execution_context_id is None:
+        return None
+    async with AsyncSessionLocal() as session:
+        context = await resolve_context(session, str(execution_context_id))
+        confirmation = await get_confirmation_by_id(session, UUID(confirmation_id))
+        if confirmation is None:
+            return None
+        auth_context = await create_for_confirmation(session, context, confirmation)
+        return str(auth_context.id)
+
+
+async def _emit_auth_request(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    auth_context_id: str | None,
+) -> None:
+    """authentication_required 발행(계약 3.8). 인증은 auth_context_id 로 매칭한다.
+
+    일반 입력(pending_input)과 달리, 인증 대기는 auth_context 행 자체가 상태를 가지므로
+    pending_input 을 만들지 않는다. FE 는 비밀번호를 /agent/authenticate 로 제출한다.
+    """
+    await _emit(
+        redis_stream,
+        chat_session_id,
+        AgentStreamEventType.AUTHENTICATION_REQUIRED,
+        "송금을 계속하려면 비밀번호를 다시 입력해 주세요.",
+        metadata={
+            "auth_context_id": auth_context_id,
+            "ui_contract_id": UI_EXTERNAL_TRANSFER_AUTH,
+            "ui": {"type": "auth_request", "payload": build_auth_request_view()},
+        },
+    )
+
+
+async def run_after_auth(
+    chat_session_id: UUID,
+    auth_status: str,
+) -> None:
+    """Backend 인증 검증 결과 이후의 후속 턴(계약 3.8·4.5).
+
+    verified → 송금 완료(transfer_result). failed → 재인증 선택(option_select).
+    """
+    redis_stream = aioredis.Redis(connection_pool=stream_pool)
+    try:
+        state = _WF_STATE.setdefault(str(chat_session_id), {})
+        confirmation_id = state.get("confirmation_id")
+        fixed_data, execution_context_id = (
+            await _load_confirmation(confirmation_id)
+            if confirmation_id
+            else (None, None)
+        )
+
+        if auth_status == "verified":
+            transaction_id = f"txn_{uuid4().hex[:12]}"
+            completed_at = datetime.now(timezone.utc).isoformat()
+            await _emit(
+                redis_stream,
+                chat_session_id,
+                AgentStreamEventType.STATUS,
+                "송금을 처리하고 있어요...",
+                delay=False,
+            )
+            await _emit(
+                redis_stream,
+                chat_session_id,
+                AgentStreamEventType.COMPONENT,
+                "송금을 완료했어요.",
+                metadata={
+                    "component": "transfer_result",
+                    "params": build_transfer_result(
+                        fixed_data or {}, transaction_id, completed_at
+                    ),
+                },
+            )
+            await _emit(
+                redis_stream,
+                chat_session_id,
+                AgentStreamEventType.DONE,
+                "송금이 완료되었어요.",
+            )
+            _WF_STATE.pop(str(chat_session_id), None)
+        else:
+            await _emit_need_input(
+                redis_stream,
+                chat_session_id,
+                execution_context_id,
+                UI_EXTERNAL_TRANSFER_AUTH_RETRY,
+                "option_select",
+                "인증에 실패했어요.",
+                build_auth_retry_view(),
+            )
+    finally:
+        await redis_stream.aclose()
+
+
+async def _run_external_auth_retry(
+    redis_stream: aioredis.Redis,
+    chat_session_id: UUID,
+    value: dict,
+    execution_context_id: UUID | None,
+) -> None:
+    """재인증 선택(option_select) → 새 인증 요청 또는 취소."""
+    state = _WF_STATE.setdefault(str(chat_session_id), {})
+    if (
+        value.get("option_selection_outcome") != "selected"
+        or value.get("option") != "retry"
+    ):
+        await _external_cancel(redis_stream, chat_session_id)
+        return
+
+    confirmation_id = state.get("confirmation_id")
+    if not confirmation_id:
+        await _external_cancel(
+            redis_stream, chat_session_id, "송금 정보를 확인하지 못해 취소했어요."
+        )
+        return
+    _fixed_data, ctx_id = await _load_confirmation(confirmation_id)
+    auth_context_id = await _create_auth_context(ctx_id, confirmation_id)
+    state["auth_context_id"] = auth_context_id
+    await _emit_auth_request(redis_stream, chat_session_id, auth_context_id)
 
 
 async def _run_balance_result(
@@ -588,7 +953,11 @@ async def run_after_approval(
     """
     redis_stream = aioredis.Redis(connection_pool=stream_pool)
     try:
-        if component in _SETTING_COMPONENTS:
+        if component == "external_transfer":
+            await _run_external_after_approval(
+                redis_stream, chat_session_id, approval_id, decision
+            )
+        elif component in _SETTING_COMPONENTS:
             await _run_setting_result(
                 redis_stream, chat_session_id, approval_id, decision
             )

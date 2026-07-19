@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.postgres import get_db
 from ..models.user import User
 from ..schemas.chat import (
+    AgentAuthenticateRequest,
     AgentInputRequest,
     ApproveRequest,
     ChatRequest,
@@ -12,6 +13,7 @@ from ..schemas.chat import (
 from ..schemas.response import CommonResponse
 from ..security.jwt import get_current_user
 from ..services.chat_service import (
+    authenticate_and_resume,
     resume_after_approval,
     resume_after_input,
     start_chat_turn,
@@ -76,4 +78,24 @@ async def submit_agent_input(
     return success_response(
         message="입력이 접수되었습니다.",
         data={"input_request_id": payload.input_request_id},
+    )
+
+
+@chat_router.post("/agent/authenticate", response_model=CommonResponse[dict])
+async def authenticate_agent_action(
+    payload: AgentAuthenticateRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """추가 인증(비밀번호 재확인) → 검증 후 에이전트 후속 턴을 재개한다(계약 3.8)."""
+    auth_status = await authenticate_and_resume(
+        session,
+        current_user.id,
+        payload.chat_session_id,
+        payload.auth_context_id,
+        payload.password,
+    )
+    return success_response(
+        message="인증 결과가 접수되었습니다.",
+        data={"auth_status": auth_status},
     )

@@ -96,3 +96,140 @@ def build_alias_setting_result(alias: str | None, completed_at: str) -> dict:
         "alias": alias,
         "completed_at": completed_at,
     }
+
+
+# ── wf_external_transfer (계약 5.9) ───────────────────────────────────────────
+# UI 계약 식별자.
+UI_RECIPIENT_SELECT = "UI-RECIPIENT-SELECT"
+UI_EXTERNAL_FROM_ACCOUNT = "UI-EXTERNAL-TRANSFER-FROM-ACCOUNT"
+UI_TRANSFER_AMOUNT_INPUT = "UI-TRANSFER-AMOUNT-INPUT"
+UI_EXTERNAL_TRANSFER_CONFIRMATION = "UI-EXTERNAL-TRANSFER-CONFIRMATION"
+UI_EXTERNAL_TRANSFER_AUTH = "UI-EXTERNAL-TRANSFER-AUTH"
+UI_EXTERNAL_TRANSFER_AUTH_RETRY = "UI-EXTERNAL-TRANSFER-AUTH-RETRY"
+
+# 최근 송금 수취인(계약 3.2 initial). Backend 가 마스킹해 제공하는 형태를 모사한다.
+RECENT_RECIPIENTS = [
+    {
+        "to_recipient_id": "rcp_001",
+        "name": "홍*동",
+        "bank_name": "국민은행",
+        "masked_account_number": "123-***-456789",
+        "last_transfer_at": "2026-07-01",
+    },
+    {
+        "to_recipient_id": "rcp_002",
+        "name": "김*수",
+        "bank_name": "카카오뱅크",
+        "masked_account_number": "3333-**-987654",
+        "last_transfer_at": "2026-06-21",
+    },
+]
+
+
+def find_recipient(to_recipient_id: str) -> dict | None:
+    """최근 수취인 목록에서 id 로 표시 정보를 찾는다."""
+    for recipient in RECENT_RECIPIENTS:
+        if recipient["to_recipient_id"] == to_recipient_id:
+            return recipient
+    return None
+
+
+def build_recipient_select_view() -> dict:
+    """recipient_select initial payload(계약 3.2). 최근 수취인 + 신규 계좌 입력."""
+    return {
+        "state": "initial",
+        "title": "받는 분을 선택해 주세요.",
+        "recipient_selection_reason": "no_match",
+        "recent_recipients": RECENT_RECIPIENTS,
+        "manual_input": {"enabled": True, "fields": ["bank_code", "account_number"]},
+        "actions": ["select", "submit_manual", "cancel"],
+    }
+
+
+def build_from_account_view() -> dict:
+    """타인송금 출금 계좌 선택 account_card_list payload(계약 3.3)."""
+    return {
+        "title": "출금할 계좌를 선택해 주세요.",
+        "accounts": BALANCE_ACCOUNTS,
+        "actions": ["select", "cancel"],
+    }
+
+
+def build_amount_input_view() -> dict:
+    """송금 금액 number_input payload(계약 3.4)."""
+    return {
+        "title": "송금 금액을 입력해 주세요.",
+        "currency": "KRW",
+        "min": 1,
+        "actions": ["submit", "cancel"],
+    }
+
+
+def _account_display(account_id: str) -> dict:
+    for account in BALANCE_ACCOUNTS:
+        if account["account_id"] == account_id:
+            return {
+                "bank_name": account["bank_name"],
+                "account_alias": account["account_alias"],
+                "masked_account_number": account["masked_account_number"],
+            }
+    return {}
+
+
+def build_external_transfer_confirm_view(fixed_data: dict) -> dict:
+    """타인송금 confirm_modal payload(계약 3.7)."""
+    recipient = fixed_data.get("recipient", {})
+    return {
+        "purpose": "external_transfer",
+        "title": "송금 내용을 확인해 주세요.",
+        "from_account": _account_display(fixed_data.get("from_account_id", "")),
+        "recipient": {
+            "name": recipient.get("name"),
+            "bank_name": recipient.get("bank_name"),
+            "masked_account_number": recipient.get("masked_account_number"),
+        },
+        "amount": fixed_data.get("amount"),
+        "currency": "KRW",
+        "allowed_change_targets": ["from_account", "recipient", "amount"],
+        "actions": ["approve", "modify", "cancel"],
+    }
+
+
+def build_transfer_result(
+    fixed_data: dict, transaction_id: str, completed_at: str
+) -> dict:
+    """타인송금 transfer_result payload(계약 4.5)."""
+    recipient = fixed_data.get("recipient", {})
+    return {
+        "transaction_id": transaction_id,
+        "completed_at": completed_at,
+        "from_account": _account_display(fixed_data.get("from_account_id", "")),
+        "recipient": {
+            "name": recipient.get("name"),
+            "bank_name": recipient.get("bank_name"),
+            "masked_account_number": recipient.get("masked_account_number"),
+        },
+        "amount": fixed_data.get("amount"),
+        "currency": "KRW",
+    }
+
+
+def build_auth_request_view() -> dict:
+    """추가 인증 auth_request payload(계약 3.8). FE 는 비밀번호 재확인으로 처리."""
+    return {
+        "title": "송금을 계속하려면 비밀번호를 다시 입력해 주세요.",
+        "available_methods": ["password"],
+        "actions": ["submit", "cancel"],
+    }
+
+
+def build_auth_retry_view() -> dict:
+    """재인증 선택 option_select payload(계약 3.6·3.8)."""
+    return {
+        "title": "인증에 실패했어요. 다시 시도할까요?",
+        "options": [
+            {"value": "retry", "label": "다시 시도"},
+            {"value": "cancelled", "label": "송금 취소"},
+        ],
+        "actions": ["select"],
+    }

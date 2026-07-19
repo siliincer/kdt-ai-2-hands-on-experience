@@ -1,6 +1,7 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 
 import { AccountCardListUI } from './AccountCardListUI';
+import { AuthRequestUI } from './AuthRequestUI';
 import { BalanceResultUI } from './BalanceResultUI';
 import { BalanceToolUI } from './BalanceToolUI';
 import { BudgetToolUI } from './BudgetToolUI';
@@ -8,10 +9,14 @@ import { CardsToolUI } from './CardsToolUI';
 import { ConfirmAutoTransferToolUI } from './ConfirmAutoTransferToolUI';
 import { ConfirmModalUI } from './ConfirmModalUI';
 import { ConfirmTransferToolUI } from './ConfirmTransferToolUI';
+import { NumberInputUI } from './NumberInputUI';
+import { OptionSelectUI } from './OptionSelectUI';
+import { RecipientSelectUI } from './RecipientSelectUI';
 import { SettingResultUI } from './SettingResultUI';
 import { SpendingToolUI } from './SpendingToolUI';
 import { TextInputUI } from './TextInputUI';
 import { TransactionsToolUI } from './TransactionsToolUI';
+import { TransferResultUI } from './TransferResultUI';
 
 /**
  * assistant-ui tools.by_name 레지스트리.
@@ -29,8 +34,13 @@ export const TOOL_UI_REGISTRY: Record<string, ToolCallMessagePartComponent> = {
   render_cards: CardsToolUI,
   render_balance_result: BalanceResultUI,
   render_setting_result: SettingResultUI,
+  render_transfer_result: TransferResultUI,
   input_account_card_list: AccountCardListUI,
   input_text_input: TextInputUI,
+  input_number_input: NumberInputUI,
+  input_recipient_select: RecipientSelectUI,
+  input_option_select: OptionSelectUI,
+  auth_request: AuthRequestUI,
   confirm_transfer: ConfirmTransferToolUI,
   confirm_autotransfer: ConfirmAutoTransferToolUI,
   confirm_modal: ConfirmModalUI,

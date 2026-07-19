@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useAgentStream } from '@/features/agent_transfer/model/useAgentStream';
 
 import { approveAgentAction } from '../api/approve';
+import { authenticateAgentAction } from '../api/authenticate';
 import { sendChat } from '../api/sendChat';
 import { submitAgentInput } from '../api/submitInput';
 import { convertMessage } from './chatMessage';
@@ -62,6 +63,18 @@ export function useChatRuntime(): ChatRuntime {
       inputRequestId: string;
       value: Record<string, unknown>;
     }) => submitAgentInput(vars.chatSessionId, vars.inputRequestId, vars.value),
+  });
+  const authenticateMutation = useMutation({
+    mutationFn: (vars: {
+      chatSessionId: string;
+      authContextId: string;
+      password: string;
+    }) =>
+      authenticateAgentAction(
+        vars.chatSessionId,
+        vars.authContextId,
+        vars.password,
+      ),
   });
 
   // agent 가 바인딩한 세션 id 추적(재연결 시 사용)
@@ -129,6 +142,21 @@ export function useChatRuntime(): ChatRuntime {
     [submitInputMutation],
   );
 
+  const authenticate = useCallback(
+    async (authContextId: string, password: string) => {
+      const chatSessionId = chatSessionIdRef.current;
+      if (!chatSessionId) return 'failed';
+      const { auth_status } = await authenticateMutation.mutateAsync({
+        chatSessionId,
+        authContextId,
+        password,
+      });
+      // 후속 이벤트(결과 또는 재인증)는 열려 있는 스트림으로 흘러온다.
+      return auth_status;
+    },
+    [authenticateMutation],
+  );
+
   const isRunning =
     agent.status === 'connecting' ||
     agent.status === 'streaming' ||
@@ -142,5 +170,5 @@ export function useChatRuntime(): ChatRuntime {
     convertMessage,
   });
 
-  return { runtime, approve, submitInput };
+  return { runtime, approve, submitInput, authenticate };
 }

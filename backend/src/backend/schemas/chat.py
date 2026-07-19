@@ -61,3 +61,15 @@ class AgentInputRequest(BaseModel):
         min_length=1, description="Agent 가 발급한 입력 요청 id"
     )
     value: dict = Field(description="UI 계약별 제출값(outcome 필드 포함)")
+
+
+class AgentAuthenticateRequest(BaseModel):
+    """POST /api/v1/agent/authenticate — 추가 인증(비밀번호 재확인, 계약 3.8).
+
+    인증 원문은 Backend 까지만 전달하고 Agent 로 넘기지 않는다(계약 7.2). Backend 가
+    검증한 결과 상태만 Agent 재개에 사용한다.
+    """
+
+    chat_session_id: UUID
+    auth_context_id: str = Field(min_length=1, description="Backend 가 발급한 인증 id")
+    password: str = Field(min_length=1, description="비밀번호 재확인 원문")

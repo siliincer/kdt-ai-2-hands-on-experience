@@ -83,4 +83,9 @@ export interface ChatRuntime {
     inputRequestId: string,
     value: Record<string, unknown>,
   ) => Promise<void>;
+  /**
+   * 추가 인증(auth_request) UI 에서 비밀번호 재확인 제출 시 호출(계약 3.8).
+   * 비밀번호는 Backend 까지만 전달되고 후속은 SSE 로 흘러온다. 반환값은 검증 상태.
+   */
+  authenticate: (authContextId: string, password: string) => Promise<string>;
 }
