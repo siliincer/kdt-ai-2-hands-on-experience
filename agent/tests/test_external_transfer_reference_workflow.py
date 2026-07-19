@@ -468,10 +468,14 @@ async def test_external_transfer_selection_required_for_recipient_and_account() 
     backend.assert_all_responses_used()
 
 
-@pytest.mark.xfail(reason=_BLOCKED_EVENT_TYPE_GAP, strict=True)
 @pytest.mark.asyncio
 async def test_external_transfer_amount_missing_then_submitted() -> None:
-    """금액이 없으면 되묻고, 제출된 금액으로 이어서 진행한다."""
+    """금액이 없으면 되묻고, 제출된 금액으로 정상 완료까지 이어간다.
+
+    차단(blocked) 케이스는 별도로 test_external_transfer_blocked_at_prepare가
+    이미 다루므로 여기서는 엮지 않는다 — 이 시나리오의 관심사는 "금액
+    재입력"이지 차단이 아니다.
+    """
 
     backend = MockBackend()
     backend.add_success(
@@ -493,26 +497,56 @@ async def test_external_transfer_amount_missing_then_submitted() -> None:
         "POST",
         "/api/v1/agent-tools/transfers/external:prepare",
         {
-            "outcome": "blocked",
-            "reason": "transfer_restricted",
-            "blocked_view": {"title": "송금을 진행할 수 없습니다."},
+            "outcome": "ready_for_confirmation",
+            "confirmation_id": "confirm_amount_missing",
+            "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_blocked"})
+    backend.add_success(
+        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_amount"}
+    )
+    backend.add_success(
+        "POST",
+        "/api/v1/agent-tools/auth-contexts",
+        {
+            "outcome": "authentication_required",
+            "auth_context_id": "auth_amount_missing",
+            "auth_request_view": {
+                "title": "본인 인증이 필요합니다.",
+                "available_methods": ["biometric"],
+                "expires_at": "2026-07-17T10:10:00+09:00",
+            },
+        },
+    )
+    backend.add_success(
+        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_amount"}
+    )
+    backend.add_success(
+        "POST",
+        "/api/v1/agent-tools/transfers/external",
+        {
+            "outcome": "completed",
+            "transaction_id": "txn_amount_missing",
+            "completed_at": "2026-07-17T10:11:00+09:00",
+        },
+    )
+    backend.add_success(
+        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_amount"}
+    )
 
     async with create_external_transfer_mock_testbed(
         backend, _config(), thread_id="thread_amount_missing"
     ) as testbed:
-        waiting = await testbed.start(
+        waiting_amount = await testbed.start(
             message="철수에게 송금해줘",
             request_id="req_1",
             chat_session_id="chat_1",
             execution_context_id="exec_1",
         )
-        assert waiting.pending_interaction is not None
-        input_request_id = waiting.pending_interaction["input_request_id"]
+        assert waiting_amount.pending_interaction is not None
+        input_request_id = waiting_amount.pending_interaction["input_request_id"]
 
-        completed = await testbed.resume_input(
+        waiting_approval = await testbed.resume_input(
             agent_thread_id="thread_amount_missing",
             request_id="req_2",
             chat_session_id="chat_1",
@@ -520,10 +554,47 @@ async def test_external_transfer_amount_missing_then_submitted() -> None:
             input_request_id=input_request_id,
             value={"amount_input_outcome": "submitted", "amount": 70000},
         )
+        assert waiting_approval.pending_interaction is not None
+        confirmation_id = waiting_approval.pending_interaction["confirmation_id"]
+
+        waiting_auth = await testbed.resume(
+            "thread_amount_missing",
+            ExecutionResumeRequest.model_validate(
+                {
+                    "request_id": "req_3",
+                    "chat_session_id": "chat_1",
+                    "execution_context_id": "exec_1",
+                    "resume": {
+                        "type": "approval",
+                        "confirmation_id": confirmation_id,
+                        "approval_outcome": "approved",
+                    },
+                }
+            ),
+        )
+        assert waiting_auth.pending_interaction is not None
+        auth_context_id = waiting_auth.pending_interaction["auth_context_id"]
+
+        completed = await testbed.resume(
+            "thread_amount_missing",
+            ExecutionResumeRequest.model_validate(
+                {
+                    "request_id": "req_4",
+                    "chat_session_id": "chat_1",
+                    "execution_context_id": "exec_1",
+                    "resume": {
+                        "type": "authentication",
+                        "auth_context_id": auth_context_id,
+                        "auth_status": "verified",
+                    },
+                }
+            ),
+        )
         state = await testbed.state("thread_amount_missing")
 
     assert completed.status == "completed"
-    assert state["status"] == "workflow_failed"
+    assert state["status"] == "completed"
+    assert state["data"]["transaction_id"] == "txn_amount_missing"
     prepare_request = json.loads(
         backend.requests_to("POST", "/api/v1/agent-tools/transfers/external:prepare")[
             0
