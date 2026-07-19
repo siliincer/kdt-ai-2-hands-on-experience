@@ -102,6 +102,7 @@ state에 쌓입니다. 엔진용 고정 필드(응답 문장, 분기 키 등)와
 | 담당 | 접점 | 봐야 할 것 |
 |---|---|---|
 | **프론트** | 채팅 응답의 `ui` 필드로 화면을 그린다 — 계좌 카드 목록, 승인 카드(버튼 라벨 포함) 등. 버튼 라벨("송금하기")을 **그대로 다음 메시지로 보내면** 에이전트가 인식 | `frontend/src/features/agent_chat/api/types.ts` (타입), [docs/README.md](docs/README.md) 3절 (ui 종류별 예시) |
+| **E2E 테스트** | `agent` 자체는 화면이 없어(FastAPI `/chat` `/health`만) Playwright는 `e2e/`에서 돈다. mock 없이 실제 backend API(회원가입/로그인)와 실제 브라우저로 로그인→계좌조회→송금 플로우 검증 — 이 서비스가 `/chat`에서 실제로 만들어내는 응답(잔액조회 tool 결과, 송금 need_approval 흐름)이 바뀌면 여기 테스트가 깨짐 | [`e2e/README.md`](../e2e/README.md) |
 | **백엔드** | `/api/v1/agent/chat`이 이 서비스의 `/chat`으로 프록시. 요청/응답을 그대로 전달만 하면 됨 | `backend/src/backend/api/agent_api.py`, `backend/src/backend/services/agent_client.py` |
 | **원장(mock-financial-service)** | 에이전트가 http 모드에서 호출하는 계좌/송금 REST API | `mock-financial-service/README.md` (구현된 API와 에러 규칙) |
 
