@@ -340,3 +340,124 @@ X-Analytics-Key: <key>
 | POST   | `/api/v1/transfers`                    | 송금 (200, Idempotency-Key 필수)                 |
 
 계정계 잔액 (`GET /accounts/{id}/balance`) 과 정보계 잔액 (`GET /analytics/accounts/{id}/balance`) 은 동일한 저장 컬럼(`Account.balance`)을 읽으므로 같은 값을 반환해야 함.
+
+---
+
+## 다은행 지원 (multi-bank support) 변경 사항
+
+### 은행 카탈로그 (`BANK_CATALOG`)
+
+계좌 생성·송금 시 허용되는 은행명 목록 (고정 상수, 자유 입력 불가):
+
+```
+KDT은행, 신한은행, 국민은행, 하나은행, 우리은행
+```
+
+### POST `/api/v1/accounts` — 계좌 생성 (변경)
+
+`bank_name` 필드가 추가됨. **생략 시 기존과 동일하게 `KDT은행`** (하위호환 유지).
+
+#### Request Body (변경)
+
+```json
+{
+  "owner": "홍길동",
+  "initial_balance": 100000,
+  "bank_name": "신한은행"
+}
+```
+
+| 필드              | 타입    | 필수 | 기본값   | 설명                                          |
+| ----------------- | ------- | ---- | -------- | --------------------------------------------- |
+| `owner`           | string  | ✅   | -        | 예금주명 (1–255자)                             |
+| `initial_balance` | integer | -    | 0        | 초기 입금액 (0 이상)                           |
+| `bank_name`       | string  | -    | `KDT은행` | 은행 카탈로그 중 하나. 생략 시 KDT은행        |
+
+#### 에러 — 카탈로그 외 은행명
+
+```json
+HTTP 422
+{ "error_code": "BANK_NOT_IN_CATALOG", "message": "Unsupported bank: 존재하지않는은행 ..." }
+```
+
+### AccountResponse — bank_name 필드
+
+계좌 생성·조회 응답(`AccountResponse`)에 `bank_name` 필드가 포함됨.
+
+```json
+{
+  "account_id": "550e8400-...",
+  "owner": "홍길동",
+  "bank_name": "신한은행",
+  "account_number": "123-456-789012",
+  "alias": null,
+  "balance": 100000,
+  "currency": "KRW",
+  "created_at": "2026-07-20T09:00:00Z"
+}
+```
+
+### POST `/api/v1/transfers` — 송금 검증 변경
+
+기존: `receiver_bank_name != "KDT은행"` → 무조건 `BANK_NOT_SUPPORTED` 거절  
+**변경 후**: `receiver_bank_name`이 `BANK_CATALOG` 내에 있으면 타행 송금도 허용. 카탈로그 외 은행명만 거절.
+
+| 상황 | 이전 동작 | 변경 후 동작 |
+|------|-----------|-------------|
+| `receiver_bank_name = "KDT은행"` | 허용 | 허용 (동일) |
+| `receiver_bank_name = "신한은행"` (카탈로그 내) | `BANK_NOT_SUPPORTED` 거절 | **허용** |
+| `receiver_bank_name = "존재하지않는은행"` | `BANK_NOT_SUPPORTED` 거절 | `BANK_NOT_IN_CATALOG` 거절 |
+
+정산은 기존과 동일하게 단일 DB 트랜잭션 내 원자적 완료 (`settlement_mode = "atomic_same_transaction"`). 은행이 달라도 청산/지연 정산 없음.
+
+### 에러 코드 추가 (`BANK_NOT_IN_CATALOG`)
+
+| error_code              | HTTP | 발생 상황                                           |
+| ----------------------- | ---- | --------------------------------------------------- |
+| `BANK_NOT_IN_CATALOG`   | 422  | 계좌 생성 또는 송금 시 카탈로그에 없는 은행명 입력 |
+
+> `BANK_NOT_SUPPORTED`는 이번 변경으로 더 이상 발생하지 않음 (카탈로그 검증으로 대체).
+
+### 미구현 항목 및 고민거리
+
+이번 스코프에서 구현하지 않은 항목과 오픈 이슈는 `docs/todo-account-system-resolution.md` "다은행 지원 스코프" 섹션 참고.
+
+---
+
+## 거래 상호명·카테고리 (소비 분석용) 변경 사항
+
+실제 은행 시스템엔 없는 개념이지만, mock 장부로 소비 분석을 하기 위해 추가. **카드결제(카드
+원장 단위)에만** 적용 — 계좌이체는 기존 `LedgerEntryResponse.counterparty_owner`(상대 계좌
+owner 이름)를 상호명으로 그대로 쓴다. 설계 근거는 `docs/todo-account-system-resolution.md`
+참고.
+
+### GET `/api/v1/analytics/cards/{card_id}/ledger` — 응답 필드 추가
+
+`CardLedgerEntryResponse`에 `merchant_name`(기존 컬럼, 응답 노출 추가) + `category`(신규)
+추가:
+
+```json
+{
+  "card_ledger_entry_id": "cle-...",
+  "card_id": "card-...",
+  "amount": 12000,
+  "merchant_name": "스타벅스",
+  "category": "외식",
+  "created_at": "2026-07-20T09:00:00Z"
+}
+```
+
+mock 시드 데이터는 항상 둘 다 채워져 있음. 실제 `POST /cards/{id}/charges`는 클라이언트에서
+`merchant_name`을 받지 않으므로(스키마에 필드 자체가 없음) 라이브 생성 엔트리는 계속 둘 다
+`null`.
+
+카테고리 값은 `financial_service/merchant_catalog.py`의 고정 매핑(외식/마트-편의점/쇼핑/여행/
+배달/교통/취미-문화)에서 상호명으로 조회해 파생됨 — DB에 별도 카테고리 상수 테이블 없음.
+
+### 소비 분석 사용법
+
+계좌 원장(`GET /accounts/{id}/transactions`, `transaction_type=TRANSFER`인 행의
+`counterparty_owner`를 상호명으로) + 카드 원장(위 엔드포인트, `merchant_name`/`category`)을
+합쳐서 본다. **계좌 원장에서 `transaction_type=CARD_SETTLEMENT`인 행은 반드시 제외** — 카드
+정산은 여러 가맹점 결제를 하나로 합산한 lump-sum 디빗이라 카테고리가 없고, 이미 카드 원장
+쪽에 가맹점별로 잡혀 있는 지출이므로 포함하면 이중계산된다.

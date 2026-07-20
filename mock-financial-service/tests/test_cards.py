@@ -277,6 +277,16 @@ class TestCardAnalytics:
         assert r.status_code == 404
         assert r.json()["error_code"] == "CARD_NOT_FOUND"
 
+    def test_analytics_ledger_live_charge_has_no_merchant_or_category(self, client):
+        """라이브 charges는 merchant_name을 안 받으므로 둘 다 null 유지."""
+        acct = _create_account(client, initial_balance=100_000)
+        card = _create_card(client, acct["account_id"], limit=50_000).json()
+        _charge(client, card["card_id"], 5_000, "idem-al-live")
+        r = _analytics_ledger(client, card["card_id"])
+        entry = r.json()[0]
+        assert entry["merchant_name"] is None
+        assert entry["category"] is None
+
     def test_analytics_card_detail(self, client):
         acct = _create_account(client)
         card = _create_card(client, acct["account_id"], limit=25_000).json()
