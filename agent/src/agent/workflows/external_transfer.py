@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -27,14 +26,13 @@ from agent.tools.contract_registry import (
     ContractToolInputError,
     ContractToolRegistry,
 )
+from agent.workflows.transfer_slot_extraction import (
+    TransferSlotExtractor,
+    extract_external_transfer_slots_by_rule,
+    extract_external_transfer_slots_llm_first,
+)
 
 WORKFLOW_ID = "wf_external_transfer"
-
-_RECIPIENT_HINT = re.compile(r"([가-힣]{2,4})\s*(?:에게|한테)")
-_ACCOUNT_HINT = re.compile(
-    r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))"
-)
-_AMOUNT = re.compile(r"(\d[\d,]*)\s*만\s*원|(\d[\d,]*)\s*원")
 
 # 승인·수정 화면의 정정 대상 3종 — route_external_transfer_correction,
 # request_external_transfer_approval, request_external_transfer_correction이 공유한다.
@@ -54,32 +52,9 @@ def _default_tool_request_id(parent_request_id: str, step_id: str) -> str:
 
 
 def extract_external_transfer_slots_from_text(message: str) -> Mapping[str, Any]:
-    """타인송금 발화의 수취인 이름 힌트·출금 계좌 힌트·금액을 Backend 없이 추출한다.
+    """테스트와 장애 폴백용 결정적 타인송금 Slot 추출."""
 
-    수취인 이름은 "에게/한테" 앞의 이름으로, 출금 계좌 힌트는 "은행/통장/계좌"로
-    끝나는 표현으로 구분해 독립적으로 추출한다(관리시트 Data Schema가 이 Step의
-    output_state_keys로 from_account_hint를 요구한다).
-    """
-
-    name_match = _RECIPIENT_HINT.search(message)
-    recipient_name_hint = name_match.group(1) if name_match else None
-
-    account_match = _ACCOUNT_HINT.search(message)
-    from_account_hint = account_match.group(1).strip() if account_match else None
-
-    amount = None
-    amount_match = _AMOUNT.search(message)
-    if amount_match:
-        if amount_match.group(1):
-            amount = int(amount_match.group(1).replace(",", "")) * 10_000
-        elif amount_match.group(2):
-            amount = int(amount_match.group(2).replace(",", ""))
-
-    return {
-        "recipient_name_hint": recipient_name_hint,
-        "from_account_hint": from_account_hint,
-        "amount": amount,
-    }
+    return extract_external_transfer_slots_by_rule(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,8 +71,8 @@ class ExternalTransferDependencies:
     tool_request_id_factory: Callable[[str, str], str] = field(
         default=_default_tool_request_id
     )
-    slot_extractor: Callable[[str], Mapping[str, Any]] = field(
-        default=extract_external_transfer_slots_from_text
+    slot_extractor: TransferSlotExtractor = field(
+        default=extract_external_transfer_slots_llm_first
     )
 
 
@@ -109,7 +84,8 @@ def build_external_transfer_graph(
     """타인송금 Step과 Route를 관리시트 순서대로 컴파일한다."""
 
     async def extract_external_transfer_slots(state: AgentState) -> dict[str, Any]:
-        extracted = dependencies.slot_extractor(str(state.get("user_input") or ""))
+        user_input = str(state.get("user_input") or "")
+        extracted = await dependencies.slot_extractor(user_input)
         recipient_name_hint = extracted.get("recipient_name_hint")
         return {
             "workflow_id": WORKFLOW_ID,
