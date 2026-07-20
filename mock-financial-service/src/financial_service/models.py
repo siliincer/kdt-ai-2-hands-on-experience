@@ -162,6 +162,14 @@ class Transaction(Base):
     ledger_entries: Mapped[list["LedgerEntry"]] = relationship(
         "LedgerEntry", back_populates="transaction"
     )
+    # 상대방(counterparty) 조회용 — 두 FK가 같은 테이블을 가리켜 foreign_keys로 명시.
+    # DB 컬럼 추가 아님(순수 ORM 관계), 마이그레이션 불필요.
+    sender_account: Mapped["Account"] = relationship(
+        "Account", foreign_keys=[sender_account_id]
+    )
+    receiver_account: Mapped["Account"] = relationship(
+        "Account", foreign_keys=[receiver_account_id]
+    )
 
 
 class LedgerEntry(Base):

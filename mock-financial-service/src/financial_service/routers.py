@@ -1,5 +1,6 @@
-"""FastAPI routers — 5 endpoints."""
+"""FastAPI routers — 7 endpoints."""
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query
@@ -11,13 +12,17 @@ from .crud import (
     ValidationError,
     create_account,
     get_account,
+    get_account_by_number,
     get_balance,
     get_ledger_entries,
+    ledger_entry_counterparty_fields,
     transfer,
+    update_account_alias,
 )
 from .database import get_db
 from .models import BANK_NAME
 from .schemas import (
+    AccountAliasUpdate,
     AccountCreate,
     AccountResponse,
     BalanceResponse,
@@ -48,6 +53,7 @@ def create_account_endpoint(payload: AccountCreate, db: DbDep):
         owner=acct.owner,
         bank_name=acct.bank_name,
         account_number=acct.account_number,
+        alias=acct.alias,
         balance=balance,
         currency=acct.currency,
         created_at=acct.created_at,
@@ -72,13 +78,70 @@ def get_account_endpoint(account_id: str, db: DbDep):
         owner=acct.owner,
         bank_name=acct.bank_name,
         account_number=acct.account_number,
+        alias=acct.alias,
         balance=balance,
         currency=acct.currency,
         created_at=acct.created_at,
     )
 
 
-# ── 3. GET /accounts/{account_id}/balance — balance ──────────────────────────
+# ── 3. GET /accounts/by-number/{account_number} — lookup(예금주 조회) ────────
+# TODO(계정계) 해소: 계좌번호 기반 조회 — 신규 수취 계좌 검증(D5)이 여기로 위임 가능.
+
+
+@router.get(
+    "/accounts/by-number/{account_number}",
+    response_model=AccountResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+def get_account_by_number_endpoint(account_number: str, db: DbDep):
+    acct = get_account_by_number(db, account_number)
+    if acct is None:
+        throw_err(
+            404, "ACCOUNT_NOT_FOUND", f"Account with number {account_number} not found"
+        )
+    balance = get_balance(db, acct.account_id)
+    return AccountResponse(
+        account_id=acct.account_id,
+        owner=acct.owner,
+        bank_name=acct.bank_name,
+        account_number=acct.account_number,
+        alias=acct.alias,
+        balance=balance,
+        currency=acct.currency,
+        created_at=acct.created_at,
+    )
+
+
+# ── 4. PATCH /accounts/{account_id}/alias — alias 변경 ───────────────────────
+# TODO(계정계) 해소: 별칭 write endpoint.
+
+
+@router.patch(
+    "/accounts/{account_id}/alias",
+    response_model=AccountResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+def update_account_alias_endpoint(
+    account_id: str, payload: AccountAliasUpdate, db: DbDep
+):
+    acct = update_account_alias(db, account_id, payload.alias)
+    if acct is None:
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+    balance = get_balance(db, account_id)
+    return AccountResponse(
+        account_id=acct.account_id,
+        owner=acct.owner,
+        bank_name=acct.bank_name,
+        account_number=acct.account_number,
+        alias=acct.alias,
+        balance=balance,
+        currency=acct.currency,
+        created_at=acct.created_at,
+    )
+
+
+# ── 5. GET /accounts/{account_id}/balance — balance ──────────────────────────
 
 
 @router.get(
@@ -96,7 +159,7 @@ def get_balance_endpoint(account_id: str, db: DbDep):
     )
 
 
-# ── 4. GET /accounts/{account_id}/transactions — ledger history ───────────────
+# ── 6. GET /accounts/{account_id}/transactions — ledger history ───────────────
 
 
 @router.get(
@@ -109,11 +172,20 @@ def get_transactions_endpoint(
     db: DbDep,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
 ):
     acct = get_account(db, account_id)
     if acct is None:
         throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
-    entries = get_ledger_entries(db, account_id, limit=limit, offset=offset)
+    entries = get_ledger_entries(
+        db,
+        account_id,
+        limit=limit,
+        offset=offset,
+        start_date=start_date,
+        end_date=end_date,
+    )
     return [
         LedgerEntryResponse(
             entry_id=e.entry_id,
@@ -122,12 +194,13 @@ def get_transactions_endpoint(
             amount=e.amount,
             running_balance=e.running_balance,
             created_at=e.created_at,
+            **ledger_entry_counterparty_fields(e),
         )
         for e in entries
     ]
 
 
-# ── 5. POST /transfers — transfer ────────────────────────────────────────────
+# ── 7. POST /transfers — transfer ────────────────────────────────────────────
 
 
 @router.post(

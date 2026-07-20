@@ -2,10 +2,10 @@
 
 import hashlib
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .models import (
     BANK_NAME,
@@ -145,27 +145,104 @@ def get_account_by_number(db: Session, account_number: str) -> Account | None:
     ).scalar_one_or_none()
 
 
+def update_account_alias(db: Session, account_id: str, alias: str) -> Account | None:
+    acct = get_account(db, account_id)
+    if acct is None:
+        return None
+    acct.alias = alias
+    db.commit()
+    db.refresh(acct)
+    return acct
+
+
+def get_daily_transferred_amount(
+    db: Session, account_id: str, business_date: date
+) -> int:
+    """business_date(UTC 기준) 하루 동안 이 계좌가 sender 로 실행한 일반 송금 합계.
+
+    카드 정산(CARD_SETTLEMENT)·실패 거래·계좌 개설 초기입금(seed, sender==receiver
+    인 합성 거래)은 제외한다.
+    """
+    day_start, day_end = _day_range_utc(business_date)
+    total = db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.sender_account_id == account_id)
+        .where(Transaction.receiver_account_id != account_id)
+        .where(Transaction.status == "success")
+        .where(Transaction.settlement_type.is_(None))
+        .where(Transaction.created_at >= day_start)
+        .where(Transaction.created_at < day_end)
+    ).scalar()
+    return int(total or 0)
+
+
 def get_balance(db: Session, account_id: str) -> int:
     """Read canonical stored balance (O(1), Account.balance column)."""
     acct = get_account(db, account_id)
     return acct.balance if acct is not None else 0
 
 
+def _day_range_utc(d: date) -> tuple[datetime, datetime]:
+    start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+    return start, start + timedelta(days=1)
+
+
 def get_ledger_entries(
-    db: Session, account_id: str, limit: int = 50, offset: int = 0
+    db: Session,
+    account_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> list[LedgerEntry]:
-    result = (
-        db.execute(
-            select(LedgerEntry)
-            .where(LedgerEntry.account_id == account_id)
-            .order_by(LedgerEntry.created_at.desc())
-            .limit(limit)
-            .offset(offset)
+    """start_date/end_date는 포함 범위(inclusive) — 양쪽 날짜 전체를 포함한다."""
+    stmt = select(LedgerEntry).where(LedgerEntry.account_id == account_id)
+    if start_date is not None:
+        day_start, _ = _day_range_utc(start_date)
+        stmt = stmt.where(LedgerEntry.created_at >= day_start)
+    if end_date is not None:
+        _, day_end = _day_range_utc(end_date)
+        stmt = stmt.where(LedgerEntry.created_at < day_end)
+    stmt = (
+        stmt.options(
+            joinedload(LedgerEntry.transaction).joinedload(Transaction.sender_account),
+            joinedload(LedgerEntry.transaction).joinedload(
+                Transaction.receiver_account
+            ),
         )
-        .scalars()
-        .all()
+        .order_by(LedgerEntry.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
+    result = db.execute(stmt).scalars().all()
     return list(result)
+
+
+def ledger_entry_counterparty_fields(entry: LedgerEntry) -> dict:
+    """entry 가 속한 Transaction 에서 transaction_type·상대 계좌 정보를 파생한다.
+
+    get_ledger_entries() 의 eager-load(joinedload) 전제 — 추가 쿼리 없음.
+    """
+    txn = entry.transaction
+    transaction_type = "CARD_SETTLEMENT" if txn.settlement_type else "TRANSFER"
+    is_self_seed = txn.sender_account_id == txn.receiver_account_id
+    counterparty = (
+        None
+        if is_self_seed
+        else (
+            txn.receiver_account
+            if entry.account_id == txn.sender_account_id
+            else txn.sender_account
+        )
+    )
+    return {
+        "transaction_type": transaction_type,
+        "counterparty_account_id": counterparty.account_id if counterparty else None,
+        "counterparty_account_number": (
+            counterparty.account_number if counterparty else None
+        ),
+        "counterparty_owner": counterparty.owner if counterparty else None,
+    }
 
 
 def get_audit_logs(
