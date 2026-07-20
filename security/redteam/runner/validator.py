@@ -30,6 +30,9 @@ _META_FIELD = re.compile(
     r"seed_candidate|candidate_template|variation|schema|candidates",
     flags=re.IGNORECASE,
 )
+_NON_KOREAN_CJK = re.compile(
+    r"[\u3000-\u303f\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff]"
+)
 
 
 class CandidateValidator:
@@ -44,10 +47,27 @@ class CandidateValidator:
         candidate: GeneratedCandidate,
         history: Sequence[AttackResult],
     ) -> CandidateValidation:
+        deterministic = self.validate_deterministic(
+            attack,
+            candidate.message,
+            candidate.variation,
+            history,
+        )
+        if not deterministic.valid:
+            return deterministic
+        return self.validate_intent(attack, candidate, deterministic.similarity)
+
+    def validate_deterministic(
+        self,
+        attack: AttackCase,
+        message: str,
+        variation: str,
+        history: Sequence[AttackResult],
+    ) -> CandidateValidation:
         missing = tuple(
             pattern
             for pattern in attack.candidate_required_patterns
-            if not re.search(pattern, candidate.message, flags=re.IGNORECASE)
+            if not re.search(pattern, message, flags=re.IGNORECASE)
         )
         if missing:
             return CandidateValidation(
@@ -56,19 +76,21 @@ class CandidateValidator:
                 missing_patterns=missing,
             )
 
-        if _META_BRACES.search(candidate.variation):
+        if _META_BRACES.search(variation):
             return CandidateValidation(valid=False, reason="unresolved_meta_braces")
-        if _META_ALTERNATION.search(candidate.variation):
+        if _META_ALTERNATION.search(variation):
             return CandidateValidation(
                 valid=False,
                 reason="unresolved_meta_alternation",
             )
-        if _META_FIELD.search(candidate.variation):
+        if _META_FIELD.search(variation):
             return CandidateValidation(valid=False, reason="unresolved_meta_field")
+        if _NON_KOREAN_CJK.search(variation):
+            return CandidateValidation(valid=False, reason="non_korean_cjk_text")
 
         template = attack.candidate_template or ""
         fixed_fragments = template.split("{variation}")
-        normalized_variation = self.normalize(candidate.variation)
+        normalized_variation = self.normalize(variation)
         if any(
             len(normalized_fixed) >= 8 and normalized_fixed in normalized_variation
             for fragment in fixed_fragments
@@ -79,7 +101,7 @@ class CandidateValidator:
         missing_variation = tuple(
             pattern
             for pattern in attack.variation_required_patterns
-            if not re.search(pattern, candidate.variation, flags=re.IGNORECASE)
+            if not re.search(pattern, variation, flags=re.IGNORECASE)
         )
         if missing_variation:
             return CandidateValidation(
@@ -88,28 +110,20 @@ class CandidateValidator:
                 missing_patterns=missing_variation,
             )
 
-        intent_mismatches = tuple(
-            field
-            for field, mismatched in (
-                (
-                    "requested_action",
-                    candidate.requested_action != attack.expected_intent_action,
-                ),
-                ("target", candidate.target != attack.expected_intent_target),
-                ("polarity", candidate.polarity != CandidatePolarity.REQUEST),
-                ("reported_speech", candidate.reported_speech),
-            )
-            if mismatched
+        missing_immutable = tuple(
+            pattern
+            for pattern in attack.immutable_fact_patterns
+            if not re.search(pattern, message, flags=re.IGNORECASE)
         )
-        if intent_mismatches:
+        if missing_immutable:
             return CandidateValidation(
                 valid=False,
-                reason="non_attack_intent",
-                intent_mismatches=intent_mismatches,
+                reason="missing_immutable_facts",
+                missing_patterns=missing_immutable,
             )
 
         if any(
-            re.search(pattern, candidate.variation, flags=re.IGNORECASE)
+            re.search(pattern, variation, flags=re.IGNORECASE)
             for pattern in attack.variation_forbidden_patterns
         ):
             return CandidateValidation(
@@ -135,8 +149,40 @@ class CandidateValidator:
             )
         return CandidateValidation(
             valid=True,
-            reason="accepted",
+            reason="deterministic_checks_passed",
             similarity=max_similarity,
+        )
+
+    @staticmethod
+    def validate_intent(
+        attack: AttackCase,
+        candidate: GeneratedCandidate,
+        similarity: float = 0.0,
+    ) -> CandidateValidation:
+        intent_mismatches = tuple(
+            field
+            for field, mismatched in (
+                (
+                    "requested_action",
+                    candidate.requested_action != attack.expected_intent_action,
+                ),
+                ("target", candidate.target != attack.expected_intent_target),
+                ("polarity", candidate.polarity != CandidatePolarity.REQUEST),
+                ("reported_speech", candidate.reported_speech),
+            )
+            if mismatched
+        )
+        if intent_mismatches:
+            return CandidateValidation(
+                valid=False,
+                reason="non_attack_intent",
+                intent_mismatches=intent_mismatches,
+                similarity=similarity,
+            )
+        return CandidateValidation(
+            valid=True,
+            reason="accepted",
+            similarity=similarity,
         )
 
     @staticmethod

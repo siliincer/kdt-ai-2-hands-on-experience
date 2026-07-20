@@ -8,43 +8,8 @@ from html import escape
 from pathlib import Path
 
 from security.redteam.models import ScenarioResult
+from security.redteam.runner.sanitizer import contains_sensitive_data, redact
 
-_REDACTED = "[REDACTED]"
-_SENSITIVE_KEYS = frozenset(
-    {
-        "access_token",
-        "api-key",
-        "api_key",
-        "authorization",
-        "client-secret",
-        "client_secret",
-        "cookie",
-        "id_token",
-        "password",
-        "refresh_token",
-        "secret",
-        "set-cookie",
-        "token",
-    }
-)
-_SENSITIVE_KEY_PATTERN = "|".join(
-    re.escape(key) for key in sorted(_SENSITIVE_KEYS, key=len, reverse=True)
-)
-_LONG_NUMBER = re.compile(r"\b\d{10,16}\b")
-_HYPHENATED_NUMBER = re.compile(r"\b\d{2,6}(?:-\d{2,6}){1,3}\b")
-_BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
-_AUTH_VALUE = re.compile(
-    r"(?im)\b(authorization\s*[:=]\s*).*?"
-    r"(?=\s+(?:token|api[_-]?key|secret|password|(?:set-)?cookie|authorization)"
-    r"\s*[:=]|$)"
-)
-_COOKIE_VALUE = re.compile(
-    r"(?i)\b((?:set-)?cookie\s*[:=]\s*)[^,\s;]+(?:\s*;\s*[^,\s;]+)*"
-)
-_SECRET_VALUE = re.compile(
-    rf"(?i)\b((?:{_SENSITIVE_KEY_PATTERN})[\"']?\s*[:=]\s*)"
-    r"(?:\"[^\"]*\"|'[^']*'|[^\s,;&]+)"
-)
 _COMMONMARK_PUNCTUATION = re.compile(r"""([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])""")
 
 
@@ -60,32 +25,6 @@ def _markdown_code(value: object) -> str:
         .replace("\r", "\\r")
         .replace("\n", "\\n")
     )
-
-
-def _redact_hyphenated_number(match: re.Match[str]) -> str:
-    digit_count = sum(character.isdigit() for character in match.group())
-    return _REDACTED if digit_count >= 9 else match.group()
-
-
-def redact(value: object, fields: set[str]) -> object:
-    normalized_fields = {field.casefold() for field in fields} | _SENSITIVE_KEYS
-    if isinstance(value, dict):
-        return {
-            key: _REDACTED
-            if isinstance(key, str) and key.casefold() in normalized_fields
-            else redact(item, normalized_fields)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [redact(item, normalized_fields) for item in value]
-    if isinstance(value, str):
-        value = _LONG_NUMBER.sub(_REDACTED, value)
-        value = _HYPHENATED_NUMBER.sub(_redact_hyphenated_number, value)
-        value = _BEARER_TOKEN.sub(f"Bearer {_REDACTED}", value)
-        value = _AUTH_VALUE.sub(rf"\1{_REDACTED}", value)
-        value = _COOKIE_VALUE.sub(rf"\1{_REDACTED}", value)
-        return _SECRET_VALUE.sub(rf"\1{_REDACTED}", value)
-    return value
 
 
 def _markdown_report(data: dict) -> str:
@@ -219,12 +158,14 @@ def write_report(
     output_dir: Path,
     redact_fields: set[str],
 ) -> tuple[Path, Path]:
-    output_dir.mkdir(parents=True, exist_ok=True)
     raw = result.model_dump(mode="json")
     data = redact(raw, redact_fields)
     if not isinstance(data, dict):
         raise TypeError("redacted report must remain a mapping")
+    if contains_sensitive_data(data, redact_fields):
+        raise ValueError("report still contains a sensitive value after redaction")
 
+    output_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{result.run_id}-{result.scenario_id}"
     json_path = output_dir / f"{stem}.json"
     markdown_path = output_dir / f"{stem}.md"

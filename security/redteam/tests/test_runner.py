@@ -9,6 +9,7 @@ import pytest
 from markdown_it import MarkdownIt
 
 import security.redteam.runner.client as client_module
+import security.redteam.runner.reporter as reporter_module
 import security.redteam.runner.service as service_module
 from security.redteam.config import load_config, load_scenario
 from security.redteam.models import (
@@ -28,6 +29,26 @@ from security.redteam.runner.reporter import redact, write_report
 from security.redteam.runner.service import SafetyPolicyError, run_scenario
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _ledger_payload(
+    balances: dict[str, int],
+    audit_events: list[dict] | None = None,
+) -> dict:
+    events = audit_events or []
+    return {
+        "balances": balances,
+        "account_state_digests": {
+            account_id: f"metadata-{account_id}" for account_id in balances
+        },
+        "collection_state_digests": {
+            "accounts": "accounts-v1",
+            "recipients": "recipients-v1",
+            "transactions": "transactions-v1",
+        },
+        "audit_log_count": len(events),
+        "audit_events": events,
+    }
 
 
 class _SeedGenerator:
@@ -86,7 +107,7 @@ def _handler(request: httpx.Request) -> httpx.Response:
     if request.url.path == "/__local_test__/ledger":
         return httpx.Response(
             200,
-            json={"balances": {"acc_001": 1250000}, "audit_log_count": 0},
+            json=_ledger_payload({"acc_001": 1250000}),
         )
     if request.url.path == "/__local_test__/llm-telemetry":
         return httpx.Response(
@@ -142,6 +163,36 @@ def test_prompt_injection_run_and_report(tmp_path):
         for summary in result.loop_summaries
     )
     assert budget.used == 2 + len(scenario.attacks) * 3 * 3
+
+
+def test_report_fails_closed_before_writing(tmp_path, monkeypatch):
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[0]]})
+    with AgentClient(
+        config.target,
+        RequestBudget(config.execution.max_requests_per_run),
+        httpx.MockTransport(_handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", _SeedGenerator())
+
+    turn = result.results[0].turns[0]
+    assert turn.response is not None
+    unsafe_response = turn.response.model_copy(
+        update={"reply": "계좌는 123 456 789012 입니다"}
+    )
+    unsafe_turn = turn.model_copy(update={"response": unsafe_response})
+    unsafe_result = result.model_copy(
+        update={
+            "results": [result.results[0].model_copy(update={"turns": [unsafe_turn]})]
+        }
+    )
+    monkeypatch.setattr(reporter_module, "redact", lambda value, _fields: value)
+
+    with pytest.raises(ValueError, match="sensitive value"):
+        write_report(unsafe_result, tmp_path, config.safety.redact_fields)
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_run_timing_can_include_managed_startup(monkeypatch):
@@ -393,7 +444,7 @@ def test_unexpected_ledger_mutation_stops_remaining_cases():
             balance = 1250000 if ledger_reads == 1 else 1200000
             return httpx.Response(
                 200,
-                json={"balances": {"acc_001": balance}, "audit_log_count": 0},
+                json=_ledger_payload({"acc_001": balance}),
             )
         if request.url.path == "/__local_test__/llm-telemetry":
             return httpx.Response(
@@ -437,11 +488,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
         if request.url.path == "/__local_test__/ledger":
             return httpx.Response(
                 200,
-                json={
-                    "balances": balances,
-                    "audit_log_count": audit_log_count,
-                    "audit_events": audit_events,
-                },
+                json=_ledger_payload(balances, audit_events),
             )
         if request.url.path == "/__local_test__/llm-telemetry":
             return httpx.Response(
@@ -500,15 +547,6 @@ def test_multi_turn_scenario_preserves_thread_ids():
                     "ui": None,
                 },
             )
-        audit_log_count += 1
-        audit_events.append(
-            {
-                "event_type": "workflow_completed",
-                "workflow_id": "wf_external_transfer",
-                "tool_id": "write_audit_log",
-                "result_digest": "b" * 64,
-            }
-        )
         return httpx.Response(
             200,
             json={
@@ -1088,3 +1126,19 @@ def test_report_redacts_keys_and_sensitive_text():
     assert "123-456-789012" not in redacted["reply"]
     assert "abc.def" not in redacted["reply"]
     assert redacted["started_at"] == "2026-07-13T03:10:47Z"
+
+
+def test_report_redacts_spaced_and_numeric_account_values():
+    redacted = redact(
+        {
+            "reply": "계좌는 123 456 789012 입니다",
+            "ui_number": 123456789012,
+            "ui_values": [123, 456, 789012],
+        },
+        set(),
+    )
+
+    assert isinstance(redacted, dict)
+    assert redacted["reply"] == "계좌는 [REDACTED] 입니다"
+    assert redacted["ui_number"] == "[REDACTED]"
+    assert redacted["ui_values"] == ["[REDACTED]"]

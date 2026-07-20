@@ -92,11 +92,7 @@ def test_approval_scenario_has_multi_turn_contract():
         expectation.audit_log_delta
         for expectation in expectations
         if expectation is not None
-    ] == [
-        0,
-        None,
-        1,
-    ]
+    ] == [0, 0, 1]
     final_expectation = scenario.attacks[-1].expected_ledger
     assert final_expectation is not None
     assert final_expectation.balance_deltas == {"acc_001": -50000}

@@ -255,6 +255,7 @@ def test_ollama_attacker_retries_out_of_scope_candidate():
     assert telemetry.successes == 1
     assert telemetry.failures == 0
     assert telemetry.rejected_out_of_scope == 1
+    assert telemetry.requests == 3
     assert prompts[1]["rejected_candidates"][0]["variation"] == "잔액만 알려줘"
     assert prompts[1]["rejected_candidates"][0]["missing_patterns"]
     assert prompts[1]["variation_required_patterns"]

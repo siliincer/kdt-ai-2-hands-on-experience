@@ -22,7 +22,7 @@ from security.redteam.models import (
 )
 from security.redteam.runner.client import RequestBudget
 from security.redteam.runner.planner import AdaptivePlanner
-from security.redteam.runner.validator import CandidateValidator
+from security.redteam.runner.validator import CandidateValidation, CandidateValidator
 
 
 class AttackGenerator(Protocol):
@@ -104,6 +104,38 @@ class OllamaAttackGenerator:
         rejection_reasons: set[str] = set()
         missing_patterns: set[str] = set()
 
+        def record_rejection(
+            variation: str,
+            validation: CandidateValidation,
+            candidate: GeneratedCandidate | None = None,
+        ) -> None:
+            if validation.reason == "duplicate_candidate":
+                self._rejected_duplicates += 1
+            else:
+                self._rejected_out_of_scope += 1
+                missing_patterns.update(validation.missing_patterns)
+            rejection_reasons.add(validation.reason)
+            self._rejection_reasons[validation.reason] += 1
+            rejected_candidates.append(
+                {
+                    "variation": variation,
+                    "reason": validation.reason,
+                    "missing_patterns": validation.missing_patterns,
+                    "intent": (
+                        {
+                            "requested_action": candidate.requested_action.value,
+                            "target": candidate.target.value,
+                            "polarity": candidate.polarity.value,
+                            "reported_speech": candidate.reported_speech,
+                        }
+                        if candidate is not None
+                        else None
+                    ),
+                    "intent_mismatches": validation.intent_mismatches,
+                    "similarity": round(validation.similarity, 4),
+                }
+            )
+
         def evaluate_draft(
             draft: object,
             style: str,
@@ -119,13 +151,22 @@ class OllamaAttackGenerator:
                     raise ValueError("candidate did not contain a variation")
                 if not isinstance(strategy, str) or not strategy.strip():
                     raise ValueError("candidate did not contain a strategy")
-                intent = self._classify_intent(variation.strip())
+                variation = variation.strip()
+                message = template.replace("{variation}", variation).strip()
+                deterministic = self._validator.validate_deterministic(
+                    attack,
+                    message,
+                    variation,
+                    history,
+                )
+                if not deterministic.valid:
+                    record_rejection(variation, deterministic)
+                    return None
+                intent = self._classify_intent(variation)
                 candidate = GeneratedCandidate.model_validate(
                     {
-                        "message": template.replace(
-                            "{variation}", variation.strip()
-                        ).strip(),
-                        "variation": variation.strip(),
+                        "message": message,
+                        "variation": variation,
                         "strategy": strategy.strip(),
                         "style": style,
                         "seed": seed,
@@ -139,32 +180,15 @@ class OllamaAttackGenerator:
                 self._rejection_reasons[reason] += 1
                 return None
 
-            validation = self._validator.validate(attack, candidate, history)
+            validation = self._validator.validate_intent(
+                attack,
+                candidate,
+                deterministic.similarity,
+            )
             if validation.valid:
                 self._successes += 1
                 return candidate
-            if validation.reason == "duplicate_candidate":
-                self._rejected_duplicates += 1
-            else:
-                self._rejected_out_of_scope += 1
-                missing_patterns.update(validation.missing_patterns)
-            rejection_reasons.add(validation.reason)
-            self._rejection_reasons[validation.reason] += 1
-            rejected_candidates.append(
-                {
-                    "variation": variation,
-                    "reason": validation.reason,
-                    "missing_patterns": validation.missing_patterns,
-                    "intent": {
-                        "requested_action": candidate.requested_action.value,
-                        "target": candidate.target.value,
-                        "polarity": candidate.polarity.value,
-                        "reported_speech": candidate.reported_speech,
-                    },
-                    "intent_mismatches": validation.intent_mismatches,
-                    "similarity": round(validation.similarity, 4),
-                }
-            )
+            record_rejection(variation, validation, candidate)
             return None
 
         for retry_index in range(self._config.max_generation_attempts):

@@ -25,6 +25,8 @@ app = importlib.import_module("agent.main").app
 
 AUDIT_LOG = mock_bank.AUDIT_LOG
 MOCK_ACCOUNTS = mock_bank.MOCK_ACCOUNTS
+MOCK_RECIPIENTS = mock_bank.MOCK_RECIPIENTS
+MOCK_TRANSACTIONS = mock_bank.MOCK_TRANSACTIONS
 
 _LLM_TELEMETRY = {"attempts": 0, "successes": 0, "failures": 0}
 _LLM_TELEMETRY_LOCK = Lock()
@@ -88,22 +90,34 @@ def ledger_snapshot() -> dict:
         ).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
 
+    account_rows = [
+        account for accounts in MOCK_ACCOUNTS.values() for account in accounts
+    ]
+    account_ids = [account["account_id"] for account in account_rows]
+    if len(account_ids) != len(set(account_ids)):
+        raise RuntimeError("local bank contains duplicate account ids")
+
+    accounts_without_balances = {
+        user_id: [
+            {key: value for key, value in account.items() if key != "balance"}
+            for account in accounts
+        ]
+        for user_id, accounts in MOCK_ACCOUNTS.items()
+    }
     return {
         "balances": {
-            account["account_id"]: account["balance"]
-            for accounts in MOCK_ACCOUNTS.values()
-            for account in accounts
+            account["account_id"]: account["balance"] for account in account_rows
         },
         "account_state_digests": {
             account["account_id"]: digest(
-                {
-                    key: value
-                    for key, value in account.items()
-                    if key not in {"balance", "account_number"}
-                }
+                {key: value for key, value in account.items() if key != "balance"}
             )
-            for accounts in MOCK_ACCOUNTS.values()
-            for account in accounts
+            for account in account_rows
+        },
+        "collection_state_digests": {
+            "accounts": digest(accounts_without_balances),
+            "recipients": digest(MOCK_RECIPIENTS),
+            "transactions": digest(MOCK_TRANSACTIONS),
         },
         "audit_log_count": len(AUDIT_LOG),
         "audit_events": [

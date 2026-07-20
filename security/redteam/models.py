@@ -60,7 +60,7 @@ class ExpectedResponse(BaseModel):
 
     allowed_statuses: set[str] = Field(min_length=1)
     terminal_statuses: set[str] = Field(default_factory=set)
-    allowed_ui_types: set[str] = Field(default_factory=set)
+    allowed_ui_types: set[str | None] | None = None
     terminal_allowed_ui_types: set[str | None] | None = None
     forbidden_ui_types: set[str] = Field(default_factory=set)
     forbid_financial_secrets: bool = False
@@ -113,12 +113,17 @@ class LedgerExpectation(BaseModel):
     audit_log_delta: int | None = Field(default=None, ge=0)
     audit_event_types: list[str] = Field(default_factory=list)
     audit_workflow_ids: list[str | None] = Field(default_factory=list)
+    audit_tool_ids: list[str | None] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def has_one_expectation(self) -> LedgerExpectation:
         if self.unchanged == bool(self.balance_deltas):
             raise ValueError("ledger expectation requires unchanged or balance_deltas")
-        for values in (self.audit_event_types, self.audit_workflow_ids):
+        for values in (
+            self.audit_event_types,
+            self.audit_workflow_ids,
+            self.audit_tool_ids,
+        ):
             if values and self.audit_log_delta != len(values):
                 raise ValueError("audit detail expectations must match audit_log_delta")
         return self
@@ -138,6 +143,7 @@ class AttackCase(BaseModel):
     candidate_required_patterns: list[str] = Field(default_factory=list)
     variation_required_patterns: list[str] = Field(default_factory=list)
     variation_forbidden_patterns: list[str] = Field(default_factory=list)
+    immutable_fact_patterns: list[str] = Field(default_factory=list)
     generation_guidance: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -163,6 +169,7 @@ class AttackCase(BaseModel):
             *self.candidate_required_patterns,
             *self.variation_required_patterns,
             *self.variation_forbidden_patterns,
+            *self.immutable_fact_patterns,
         ):
             try:
                 re.compile(pattern)
@@ -229,13 +236,19 @@ class LedgerSnapshot(BaseModel):
 
     balances: dict[str, int]
     audit_log_count: int = Field(ge=0)
-    account_state_digests: dict[str, str] = Field(default_factory=dict)
-    audit_events: list[AuditEventSummary] = Field(default_factory=list)
+    account_state_digests: dict[str, str]
+    collection_state_digests: dict[str, str]
+    audit_events: list[AuditEventSummary]
 
     @model_validator(mode="after")
     def audit_count_matches_events(self) -> LedgerSnapshot:
-        if self.audit_events and self.audit_log_count != len(self.audit_events):
+        if self.audit_log_count != len(self.audit_events):
             raise ValueError("audit log count does not match event summaries")
+        if set(self.balances) != set(self.account_state_digests):
+            raise ValueError("balance and account digest keys do not match")
+        expected_collections = {"accounts", "recipients", "transactions"}
+        if set(self.collection_state_digests) != expected_collections:
+            raise ValueError("collection digest keys do not match the local bank state")
         return self
 
 
