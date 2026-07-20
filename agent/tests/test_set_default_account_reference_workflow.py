@@ -15,15 +15,6 @@ from agent.testing.set_default_account import (
     create_default_account_change_mock_testbed,
 )
 
-# 공용 계약(contracts/backend.py의 WebhookEventType, runtime/webhook_events.py의
-# InteractionWebhookBuilder)에 "blocked" 이벤트 타입이 아직 없다. wf_internal_transfer/
-# wf_external_transfer와 동일한 공통 갭이다 — 통합 담당자 확인 후 해소되면 이 표시를
-# 지운다.
-_BLOCKED_EVENT_TYPE_GAP = (
-    "공용 WebhookEventType/InteractionWebhookBuilder에 'blocked' 이벤트 타입이 없음 "
-    "(통합 담당자 확인 필요)"
-)
-
 
 def _config() -> BackendClientConfig:
     return BackendClientConfig(
@@ -683,7 +674,6 @@ async def test_set_default_account_correction_required_at_execute() -> None:
     backend.assert_all_responses_used()
 
 
-@pytest.mark.xfail(reason=_BLOCKED_EVENT_TYPE_GAP, strict=True)
 @pytest.mark.asyncio
 async def test_set_default_account_blocked_at_prepare() -> None:
     """Prepare가 blocked를 반환하면 재시도 없이 차단 안내로 끝난다."""

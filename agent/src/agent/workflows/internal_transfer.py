@@ -858,12 +858,11 @@ def build_internal_transfer_graph(
         state: AgentState, config: RunnableConfig
     ) -> dict[str, Any]:
         view = _data(state).get("blocked_view") or {}
-        event = dependencies.webhook_builder.component(
+        event = dependencies.webhook_builder.blocked(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
             step_id="emit_internal_transfer_blocked",
             ui_contract_id="UI-TRANSFER-BLOCKED",
-            ui_type="blocked_message",
             content=str(view.get("title") or "이체를 진행할 수 없습니다."),
             payload=dict(view),
         )

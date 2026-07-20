@@ -46,6 +46,7 @@ WebhookEventType = Literal[
     "authentication_required",
     "done",
     "error",
+    "blocked",
 ]
 InputUiType = Literal[
     "text_input",

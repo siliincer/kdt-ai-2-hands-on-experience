@@ -289,12 +289,11 @@ def build_set_default_account_graph(
         state: AgentState, config: RunnableConfig
     ) -> dict[str, Any]:
         view = _data(state).get("blocked_view") or {}
-        event = dependencies.webhook_builder.component(
+        event = dependencies.webhook_builder.blocked(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
             step_id="emit_default_account_blocked",
             ui_contract_id="UI-SETTING-BLOCKED",
-            ui_type="blocked_message",
             content=str(view.get("title") or "기본 출금 계좌를 변경할 수 없습니다."),
             payload=dict(view),
         )

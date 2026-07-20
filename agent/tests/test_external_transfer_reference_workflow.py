@@ -16,14 +16,6 @@ from agent.workflows.external_transfer import (
     extract_external_transfer_slots_from_text,
 )
 
-# 공용 계약(contracts/backend.py의 WebhookEventType, runtime/webhook_events.py의
-# InteractionWebhookBuilder)에 "blocked" 이벤트 타입이 아직 없다 — 본인이체와 동일한
-# 공통 갭이라 test_internal_transfer_reference_workflow.py와 같은 이유로 xfail한다.
-_BLOCKED_EVENT_TYPE_GAP = (
-    "공용 WebhookEventType/InteractionWebhookBuilder에 'blocked' 이벤트 타입이 없음 "
-    "(통합 담당자 확인 필요)"
-)
-
 
 def _config() -> BackendClientConfig:
     return BackendClientConfig(
@@ -729,7 +721,6 @@ async def test_external_transfer_correction_multiple_targets_user_selects() -> N
     backend.assert_all_responses_used()
 
 
-@pytest.mark.xfail(reason=_BLOCKED_EVENT_TYPE_GAP, strict=True)
 @pytest.mark.asyncio
 async def test_external_transfer_blocked_at_prepare() -> None:
     """Prepare가 blocked를 반환하면 재시도 없이 차단 안내로 끝난다."""

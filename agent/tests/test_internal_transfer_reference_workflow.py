@@ -13,17 +13,6 @@ from agent.runtime.hitl import ExecutionResumeRequest
 from agent.testing import MockBackend
 from agent.testing.internal_transfer import create_internal_transfer_mock_testbed
 
-# 공용 계약(contracts/backend.py의 WebhookEventType, runtime/webhook_events.py의
-# InteractionWebhookBuilder)에 "blocked" 이벤트 타입이 아직 없다. 관리시트/Manifest는
-# emit_*_blocked 스텝의 external_action을 "blocked · blocked_message"로 이미 정의해
-# 뒀는데, 공용 코드에는 component/error/need_input/need_approval/authentication_required
-# 뿐이라 차단 안내를 계약대로 보낼 방법이 없다 — wf_external_transfer도 동일하게 겪는다.
-# 통합 담당자 확인 후 공용 파일에 blocked 이벤트 타입을 추가하면 이 표시를 지운다.
-_BLOCKED_EVENT_TYPE_GAP = (
-    "공용 WebhookEventType/InteractionWebhookBuilder에 'blocked' 이벤트 타입이 없음 "
-    "(통합 담당자 확인 필요)"
-)
-
 
 def _config() -> BackendClientConfig:
     return BackendClientConfig(
@@ -657,7 +646,6 @@ async def test_internal_transfer_correction_multiple_targets_user_selects() -> N
     backend.assert_all_responses_used()
 
 
-@pytest.mark.xfail(reason=_BLOCKED_EVENT_TYPE_GAP, strict=True)
 @pytest.mark.asyncio
 async def test_internal_transfer_blocked_at_prepare() -> None:
     """Prepare가 blocked를 반환하면 재시도 없이 차단 안내로 끝난다."""
