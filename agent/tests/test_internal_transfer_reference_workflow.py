@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from pydantic import SecretStr
@@ -1266,3 +1267,144 @@ async def test_internal_transfer_correction_required_at_execute() -> None:
     ]
     assert events[-1]["metadata"]["step_id"] == "request_internal_transfer_amount"
     backend.assert_all_responses_used()
+
+
+@pytest.mark.asyncio
+async def test_internal_transfer_state_has_no_sensitive_data() -> None:
+    """완료된 State에 인증 토큰이나 마스킹 안 된 계좌번호가 남지 않는다."""
+
+    backend = MockBackend()
+    backend.add_success(
+        "GET",
+        "/api/v1/agent-tools/accounts",
+        {
+            "account_resolution_outcome": "resolved",
+            "accounts": [_account("acc_001", "생활비")],
+            "account_ids": ["acc_001"],
+        },
+    )
+    backend.add_success(
+        "GET",
+        "/api/v1/agent-tools/accounts",
+        {
+            "account_resolution_outcome": "resolved",
+            "accounts": [_account("acc_002", "저축")],
+            "account_ids": ["acc_002"],
+        },
+    )
+    backend.add_success(
+        "POST",
+        "/api/v1/agent-tools/transfers/internal:prepare",
+        {
+            "outcome": "ready_for_confirmation",
+            "confirmation_id": "confirm_sensitive",
+            "confirmation_view": _confirmation_view(),
+        },
+    )
+    backend.add_success(
+        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_sensitive"}
+    )
+    backend.add_success(
+        "POST",
+        "/api/v1/agent-tools/auth-contexts",
+        {
+            "outcome": "authentication_required",
+            "auth_context_id": "auth_sensitive",
+            "auth_request_view": {
+                "title": "본인 인증이 필요합니다.",
+                "available_methods": ["biometric"],
+                "expires_at": "2026-07-17T10:10:00+09:00",
+            },
+        },
+    )
+    backend.add_success(
+        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_sensitive"}
+    )
+    backend.add_success(
+        "POST",
+        "/api/v1/agent-tools/transfers/internal",
+        {
+            "outcome": "completed",
+            "transaction_id": "txn_sensitive",
+            "completed_at": "2026-07-17T10:11:00+09:00",
+        },
+    )
+    backend.add_success(
+        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_sensitive"}
+    )
+
+    async with create_internal_transfer_mock_testbed(
+        backend, _config(), thread_id="thread_sensitive"
+    ) as testbed:
+        waiting_approval = await testbed.start(
+            message="생활비통장에서 저축통장으로 10만원 이체해줘",
+            request_id="req_1",
+            chat_session_id="chat_1",
+            execution_context_id="exec_1",
+        )
+        assert waiting_approval.pending_interaction is not None
+        confirmation_id = waiting_approval.pending_interaction["confirmation_id"]
+
+        waiting_auth = await testbed.resume(
+            "thread_sensitive",
+            ExecutionResumeRequest.model_validate(
+                {
+                    "request_id": "req_2",
+                    "chat_session_id": "chat_1",
+                    "execution_context_id": "exec_1",
+                    "resume": {
+                        "type": "approval",
+                        "confirmation_id": confirmation_id,
+                        "approval_outcome": "approved",
+                    },
+                }
+            ),
+        )
+        assert waiting_auth.pending_interaction is not None
+        auth_context_id = waiting_auth.pending_interaction["auth_context_id"]
+
+        completed = await testbed.resume(
+            "thread_sensitive",
+            ExecutionResumeRequest.model_validate(
+                {
+                    "request_id": "req_3",
+                    "chat_session_id": "chat_1",
+                    "execution_context_id": "exec_1",
+                    "resume": {
+                        "type": "authentication",
+                        "auth_context_id": auth_context_id,
+                        "auth_status": "verified",
+                    },
+                }
+            ),
+        )
+        state = await testbed.state("thread_sensitive")
+
+    assert completed.status == "completed"
+
+    state_json = json.dumps(state, ensure_ascii=False, default=str)
+    assert "agent-service-token" not in state_json
+    assert "agent-webhook-secret" not in state_json
+
+    masked_numbers: list[str] = []
+
+    def _collect_masked_numbers(value: object) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "masked_account_number" and isinstance(item, str):
+                    masked_numbers.append(item)
+                else:
+                    _collect_masked_numbers(item)
+        elif isinstance(value, list):
+            for item in value:
+                _collect_masked_numbers(item)
+
+    _collect_masked_numbers(state)
+    assert masked_numbers, (
+        "검증 대상 계좌번호가 State에 하나도 없으면 이 테스트는 의미가 없다."
+    )
+    for number in masked_numbers:
+        assert "*" in number, f"마스킹되지 않은 계좌번호가 State에 남아있다: {number}"
+    assert not re.search(r"\d{9,}", state_json), (
+        "마스킹 없는 긴 숫자열(원문 계좌번호로 추정)이 State에 있다."
+    )
