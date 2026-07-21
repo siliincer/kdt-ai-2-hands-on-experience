@@ -106,9 +106,9 @@ def test_transfer_confirm_card_appears_with_real_agent_flow(
     # 정보를 되묻거나(수취인/금액) 확인 카드를 띄운다. 최소한 자연어 응답이나
     # 확인 카드 중 하나는 대화창에 나타나야 한다.
     page.get_by_role("button", name="송금하기").click()
-    expect(
-        page.get_by_text("송금").or_(page.get_by_text("누구"))
-    ).to_be_visible(timeout=20_000)
+    expect(page.get_by_text("송금").or_(page.get_by_text("누구"))).to_be_visible(
+        timeout=20_000
+    )
 
 
 def test_transfer_completes_after_confirmation(
@@ -139,9 +139,7 @@ def test_logout_returns_to_login_screen(
 
     page.get_by_role("button", name="로그아웃").click()
 
-    expect(page.get_by_placeholder("example@email.com")).to_be_visible(
-        timeout=10_000
-    )
+    expect(page.get_by_placeholder("example@email.com")).to_be_visible(timeout=10_000)
     # sessionStorage.rf_access_token/rf_logged_in 정리 확인
     # (frontend/src/entities/user/model/store.ts logout())
     token = page.evaluate("() => sessionStorage.getItem('rf_access_token')")
@@ -175,9 +173,7 @@ def test_expired_session_redirects_to_login(
 
     page.get_by_role("button", name="잔액 확인").click()
 
-    expect(page.get_by_placeholder("example@email.com")).to_be_visible(
-        timeout=10_000
-    )
+    expect(page.get_by_placeholder("example@email.com")).to_be_visible(timeout=10_000)
 
 
 def test_signup_duplicate_email_shows_error(
