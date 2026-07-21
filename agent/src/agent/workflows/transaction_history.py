@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -32,9 +31,13 @@ from agent.workflows.query_slot_extraction import (
 )
 from agent.workflows.workflow_support import build_tool_error_update
 from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import (
+    new_input_request_id as _default_input_request_id,
+)
 from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
+from agent.workflows.workflow_support import step_request_id as _default_tool_request_id
 from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
@@ -42,14 +45,6 @@ WORKFLOW_ID = "wf_transaction_history"
 _tool_error_update = build_tool_error_update(
     "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
 )
-
-
-def _default_input_request_id() -> str:
-    return f"input_{uuid.uuid4().hex}"
-
-
-def _default_tool_request_id(parent_request_id: str, step_id: str) -> str:
-    return f"{parent_request_id}:{step_id}"
 
 
 def _default_now() -> datetime:

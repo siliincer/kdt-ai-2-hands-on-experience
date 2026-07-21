@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable, Mapping
 from typing import Any, Literal, Protocol
 
@@ -40,6 +41,18 @@ class WebhookDependencies(Protocol):
 
 
 ToolErrorUpdate = Callable[[str, Exception], dict[str, Any]]
+
+
+def new_input_request_id() -> str:
+    """사용자 입력 대기 단위를 식별하는 새 요청 ID를 만든다."""
+
+    return f"input_{uuid.uuid4().hex}"
+
+
+def step_request_id(parent_request_id: str, step_id: str) -> str:
+    """부모 실행 요청과 Workflow Step을 연결하는 Tool 요청 ID를 만든다."""
+
+    return f"{parent_request_id}:{step_id}"
 
 
 def state_data(state: AgentState) -> dict[str, Any]:

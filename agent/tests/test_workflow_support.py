@@ -14,9 +14,11 @@ from agent.state import AgentState
 from agent.workflows.workflow_support import (
     build_tool_error_update,
     config_context,
+    new_input_request_id,
     publish_event,
     route_key,
     state_data,
+    step_request_id,
     terminal_update,
     tool_call,
 )
@@ -58,6 +60,18 @@ def test_state_data_returns_copy_without_mutating_state() -> None:
     copied["account_id"] = "account_456"
 
     assert state["data"] == {"account_id": "account_123"}
+
+
+def test_common_request_id_factories_preserve_trace_format() -> None:
+    first = new_input_request_id()
+    second = new_input_request_id()
+
+    assert first.startswith("input_")
+    assert second.startswith("input_")
+    assert first != second
+    assert step_request_id("request_123", "query_accounts") == (
+        "request_123:query_accounts"
+    )
 
 
 def test_route_key_defaults_to_error() -> None:
