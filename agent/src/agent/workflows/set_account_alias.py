@@ -18,7 +18,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from agent.clients.backend import BackendWebhookClient
-from agent.clients.backend.client import AgentToolApiError, AgentToolIntegrationError
+from agent.clients.backend.client import AgentToolIntegrationError
 from agent.runtime import InteractionPauseRuntime, InteractionWebhookBuilder
 from agent.state import AgentState
 from agent.tools.contract_registry import (
@@ -30,6 +30,7 @@ from agent.workflows.setting_slot_extraction import (
     extract_account_alias_slots_by_rule,
     extract_account_alias_slots_llm_first,
 )
+from agent.workflows.workflow_support import build_tool_error_update
 from agent.workflows.workflow_support import config_context as _config_context
 from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import route_key as _route_key
@@ -38,6 +39,9 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_set_account_alias"
+_tool_error_update = build_tool_error_update(
+    "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
+)
 
 # 승인·정정 화면의 수정 대상 2종 — prepare_account_alias_change,
 # request_account_alias_approval, execute_account_alias_change가 공유한다.
@@ -701,18 +705,6 @@ def build_set_account_alias_graph(
     graph.add_edge("emit_account_alias_error", END)
 
     return graph.compile(checkpointer=checkpointer)
-
-
-def _tool_error_update(step_id: str, error: Exception) -> dict[str, Any]:
-    if isinstance(error, AgentToolApiError):
-        message = error.safe_message
-    else:
-        message = "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
-    return {
-        "current_step_id": step_id,
-        "route_key": "error",
-        "data": {"safe_error_message": message},
-    }
 
 
 def _account_options(raw_accounts: Any) -> list[dict[str, Any]]:
