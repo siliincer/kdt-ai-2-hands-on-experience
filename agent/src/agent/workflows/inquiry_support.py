@@ -9,9 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-_ACCOUNT_HINT = re.compile(
-    r"([가-힣A-Za-z0-9]+)\s*(은행|통장|계좌)"
-)
+_ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+)\s*(은행|통장|계좌)")
 _EXPLICIT_DATES = re.compile(
     r"(?P<start>\d{4}-\d{2}-\d{2}).*?(?P<end>\d{4}-\d{2}-\d{2})"
 )
@@ -158,14 +156,10 @@ def extract_transaction_type(message: str) -> str | None:
 
 def extract_summary_type(message: str) -> str | None:
     if any(
-        marker in message
-        for marker in ("지출", "썼", "쓴", "사용", "결제", "출금")
+        marker in message for marker in ("지출", "썼", "쓴", "사용", "결제", "출금")
     ):
         return "spending"
-    if any(
-        marker in message
-        for marker in ("수입", "입금", "들어온", "벌었", "받은")
-    ):
+    if any(marker in message for marker in ("수입", "입금", "들어온", "벌었", "받은")):
         return "income"
     return None
 

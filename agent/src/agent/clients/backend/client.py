@@ -155,9 +155,7 @@ class BackendToolClient:
             raise ValueError("동적 외부 URL이나 상위 경로는 호출할 수 없습니다.")
 
     @staticmethod
-    def _parse_response(
-        response: httpx.Response, *, request_id: str
-    ) -> dict[str, Any]:
+    def _parse_response(response: httpx.Response, *, request_id: str) -> dict[str, Any]:
         try:
             raw_payload = response.json()
             envelope = AgentToolEnvelope.model_validate(raw_payload)

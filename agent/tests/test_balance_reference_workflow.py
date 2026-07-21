@@ -118,8 +118,9 @@ async def test_balance_reference_workflow_auto_resolves_and_emits_result() -> No
 
 
 @pytest.mark.asyncio
-async def test_balance_reference_workflow_resumes_without_revalidating_selection(
-) -> None:
+async def test_balance_reference_workflow_resumes_without_revalidating_selection() -> (
+    None
+):
     backend = MockBackend()
     backend.add_success(
         "GET",
@@ -175,15 +176,16 @@ async def test_balance_reference_workflow_resumes_without_revalidating_selection
     assert interrupted.pending_interaction is not None
     assert interrupted.pending_interaction["input_request_id"] == "input_balance_123"
     assert completed.status == "completed"
-    assert len(
-        backend.requests_to("GET", "/api/v1/agent-tools/accounts")
-    ) == 1
-    assert len(
-        backend.requests_to(
-            "POST",
-            "/api/v1/agent-tools/accounts/balances:query",
+    assert len(backend.requests_to("GET", "/api/v1/agent-tools/accounts")) == 1
+    assert (
+        len(
+            backend.requests_to(
+                "POST",
+                "/api/v1/agent-tools/accounts/balances:query",
+            )
         )
-    ) == 1
+        == 1
+    )
     assert state["data"]["account_ids"] == ["acc_002"]
     assert state["data"]["input_request_id"] is None
 

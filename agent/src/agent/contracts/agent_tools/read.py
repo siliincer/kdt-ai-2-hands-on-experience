@@ -210,9 +210,7 @@ class RecipientResolveResult(ReadToolContract):
     def validate_outcome_shape(self) -> Self:
         if self.outcome == "resolved":
             if self.to_recipient_id is None or self.selection_reason is not None:
-                raise ValueError(
-                    "resolved 응답에는 to_recipient_id만 포함해야 합니다."
-                )
+                raise ValueError("resolved 응답에는 to_recipient_id만 포함해야 합니다.")
         elif self.to_recipient_id is not None or self.selection_reason is None:
             raise ValueError(
                 "selection_required 응답에는 selection_reason만 포함해야 합니다."

@@ -256,9 +256,7 @@ async def test_period_summary_resumes_account_selection_without_requery() -> Non
 
     assert waiting.status == "waiting"
     assert completed.status == "completed"
-    assert len(
-        backend.requests_to("GET", "/api/v1/agent-tools/accounts")
-    ) == 1
+    assert len(backend.requests_to("GET", "/api/v1/agent-tools/accounts")) == 1
     query = json.loads(
         backend.requests_to(
             "POST",

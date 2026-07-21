@@ -62,9 +62,7 @@ class ResumeStateMapper:
                 pending.step_id,
                 direction="output",
             )
-            if str(mapping.get("contract_field_path") or "").startswith(
-                "resume.value."
-            )
+            if str(mapping.get("contract_field_path") or "").startswith("resume.value.")
         )
         if not mappings:
             raise ResumeStateMappingError(

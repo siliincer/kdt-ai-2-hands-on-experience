@@ -8,9 +8,7 @@ from agent.runtime.webhook_events import InteractionWebhookBuilder
 GLOBAL_WORKFLOW_ID = "wf_global_agent_entry"
 FAILURE_STEP_ID = "emit_workflow_dispatch_error"
 FAILURE_UI_CONTRACT_ID = "UI-COMMON-ERROR"
-SAFE_FAILURE_MESSAGE = (
-    "요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
-)
+SAFE_FAILURE_MESSAGE = "요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
 
 
 class WebhookExecutionFailureReporter:

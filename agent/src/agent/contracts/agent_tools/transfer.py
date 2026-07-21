@@ -164,9 +164,7 @@ class AuthContextCreateRequest(TransferToolContract):
 class AuthRequestView(TransferToolContract):
     title: NonEmptyString
     description: str | None = None
-    available_methods: Annotated[
-        list[AuthenticationMethod], Field(min_length=1)
-    ]
+    available_methods: Annotated[list[AuthenticationMethod], Field(min_length=1)]
     expires_at: datetime
 
     @field_validator("available_methods")

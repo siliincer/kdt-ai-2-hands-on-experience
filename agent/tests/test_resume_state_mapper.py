@@ -201,9 +201,7 @@ def test_all_manifest_resume_paths_use_supported_mapping_grammar() -> None:
         workflow = store.get_workflow(workflow_id)
         for mapping in workflow["step_data_mappings"]:
             path = str(mapping.get("contract_field_path") or "")
-            if mapping["direction"] != "output" or not path.startswith(
-                "resume.value."
-            ):
+            if mapping["direction"] != "output" or not path.startswith("resume.value."):
                 continue
             field = path.removeprefix("resume.value.").split("[", maxsplit=1)[0]
             value: Any = ["value"] if "[" in path else "value"

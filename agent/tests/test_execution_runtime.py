@@ -239,9 +239,7 @@ async def test_start_resume_maps_state_and_publishes_interrupt_once() -> None:
             resume_accepted.request_id,
         )
         replayed = await runtime.resume("thread_123", _resume_request())
-        snapshot = await graph.aget_state(
-            {"configurable": {"thread_id": "thread_123"}}
-        )
+        snapshot = await graph.aget_state({"configurable": {"thread_id": "thread_123"}})
 
     assert interrupted.status == "waiting"
     assert interrupted.pending_interaction is not None

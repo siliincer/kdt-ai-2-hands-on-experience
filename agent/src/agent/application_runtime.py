@@ -61,9 +61,7 @@ async def create_agent_runtime_resources() -> AgentRuntimeResources:
     try:
         contract_store = WorkflowContractStore()
         tool_registry = ContractToolRegistry(contract_store)
-        backend_tools = BackendAgentTools(
-            BackendToolClient(config, client=http_client)
-        )
+        backend_tools = BackendAgentTools(BackendToolClient(config, client=http_client))
         register_backend_agent_tools(tool_registry, backend_tools)
         tool_registry.validate_workflow_contracts()
         webhook_client = BackendWebhookClient(config, client=http_client)

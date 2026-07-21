@@ -111,9 +111,7 @@ async def test_default_account_prepare_and_execute_use_confirmation_contract() -
         "/api/v1/agent-tools/settings/default-account",
     ]
     assert json.loads(captured[0].content) == {"account_id": "acc_002"}
-    assert json.loads(captured[1].content) == {
-        "confirmation_id": "confirm_default_123"
-    }
+    assert json.loads(captured[1].content) == {"confirmation_id": "confirm_default_123"}
     assert captured[1].headers["idempotency-key"] == (
         "default_account_execute:confirm_default_123"
     )
