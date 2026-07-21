@@ -12,6 +12,7 @@ import { approveAgentAction } from '../api/approve';
 import { authenticateAgentAction } from '../api/authenticate';
 import { sendChat } from '../api/sendChat';
 import { submitAgentInput } from '../api/submitInput';
+import { verifyRecipientCandidate } from '../api/verifyRecipientCandidate';
 import { convertMessage } from './chatMessage';
 import { useChatStore } from './chatStore';
 import { extractText } from '../utils/extractText';
@@ -74,6 +75,18 @@ export function useChatRuntime(): ChatRuntime {
         vars.chatSessionId,
         vars.authContextId,
         vars.password,
+      ),
+  });
+  const verifyRecipientMutation = useMutation({
+    mutationFn: (vars: {
+      chatSessionId: string;
+      accountNumber: string;
+      bankName?: string | null;
+    }) =>
+      verifyRecipientCandidate(
+        vars.chatSessionId,
+        vars.accountNumber,
+        vars.bankName,
       ),
   });
 
@@ -157,6 +170,23 @@ export function useChatRuntime(): ChatRuntime {
     [authenticateMutation],
   );
 
+  const verifyRecipient = useCallback(
+    async (accountNumber: string, bankName?: string | null) => {
+      const chatSessionId = chatSessionIdRef.current;
+      if (!chatSessionId) {
+        throw new Error('세션이 없어 수취 계좌를 검증할 수 없습니다.');
+      }
+      const { recipient_candidate_id } =
+        await verifyRecipientMutation.mutateAsync({
+          chatSessionId,
+          accountNumber,
+          bankName,
+        });
+      return recipient_candidate_id;
+    },
+    [verifyRecipientMutation],
+  );
+
   const isRunning =
     agent.status === 'connecting' ||
     agent.status === 'streaming' ||
@@ -170,5 +200,5 @@ export function useChatRuntime(): ChatRuntime {
     convertMessage,
   });
 
-  return { runtime, approve, submitInput, authenticate };
+  return { runtime, approve, submitInput, authenticate, verifyRecipient };
 }

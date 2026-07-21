@@ -88,4 +88,13 @@ export interface ChatRuntime {
    * 비밀번호는 Backend 까지만 전달되고 후속은 SSE 로 흘러온다. 반환값은 검증 상태.
    */
   authenticate: (authContextId: string, password: string) => Promise<string>;
+  /**
+   * recipient_select UI 의 신규 계좌 입력 시 호출(계약 부록 29.2).
+   * 은행·계좌번호 원문을 Backend 로 검증해 recipient_candidate_id 를 받는다.
+   * 이후 submitInput 은 이 참조만 제출한다(원문은 Agent State 를 통과하지 않는다).
+   */
+  verifyRecipient: (
+    accountNumber: string,
+    bankName?: string | null,
+  ) => Promise<string>;
 }
