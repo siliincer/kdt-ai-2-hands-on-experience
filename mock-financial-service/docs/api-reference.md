@@ -30,13 +30,12 @@ HTTP 401
 
 ## 엔드포인트 목록
 
-| Method | Path                                                   | 설명                                         | 인증    |
-| ------ | ------------------------------------------------------- | -------------------------------------------- | ------- |
-| GET    | `/api/v1/analytics/accounts/{id}/balance`                | 계좌 잔액 조회 (canonical, 계정계와 동일 값) | ✅ 필요 |
-| GET    | `/api/v1/analytics/accounts/{id}/ledger`                 | 원장 항목 목록 (상대방 정보·타입 포함)       | ✅ 필요 |
-| GET    | `/api/v1/analytics/accounts/{id}/reconcile`               | 저장된 잔액 vs 원장 재계산 정합성 검증       | ✅ 필요 |
-| GET    | `/api/v1/analytics/accounts/{id}/audit-logs`              | 계좌 관련 감사로그 조회                      | ✅ 필요 |
-| GET    | `/api/v1/analytics/accounts/{id}/transfers/daily-total`   | 계좌 기준 당일 송금 합계                     | ✅ 필요 |
+| Method | Path                                         | 설명                                         | 인증    |
+| ------ | -------------------------------------------- | -------------------------------------------- | ------- |
+| GET    | `/api/v1/analytics/accounts/{id}/balance`    | 계좌 잔액 조회 (canonical, 계정계와 동일 값) | ✅ 필요 |
+| GET    | `/api/v1/analytics/accounts/{id}/ledger`     | 원장 항목 목록                               | ✅ 필요 |
+| GET    | `/api/v1/analytics/accounts/{id}/reconcile`  | 저장된 잔액 vs 원장 재계산 정합성 검증       | ✅ 필요 |
+| GET    | `/api/v1/analytics/accounts/{id}/audit-logs` | 계좌 관련 감사로그 조회                      | ✅ 필요 |
 
 ---
 
@@ -84,18 +83,16 @@ X-Analytics-Key: <key>
 ### Request
 
 ```
-GET /api/v1/analytics/accounts/{account_id}/ledger?limit=50&offset=0&start_date=2026-07-01&end_date=2026-07-31
+GET /api/v1/analytics/accounts/{account_id}/ledger?limit=50&offset=0
 X-Analytics-Key: <key>
 ```
 
 ### Query Parameters
 
-| 파라미터     | 타입    | 기본값 | 범위  | 설명                                          |
-| ------------ | ------- | ------ | ----- | --------------------------------------------- |
-| `limit`      | integer | 50     | 1–200 | 반환할 최대 항목 수                            |
-| `offset`     | integer | 0      | ≥ 0   | 건너뛸 항목 수                                 |
-| `start_date` | date    | (없음) | -     | `created_at` 하한(UTC, 포함). 생략 시 제한 없음 |
-| `end_date`   | date    | (없음) | -     | `created_at` 상한(UTC, 포함). 생략 시 제한 없음 |
+| 파라미터 | 타입    | 기본값 | 범위  | 설명                |
+| -------- | ------- | ------ | ----- | ------------------- |
+| `limit`  | integer | 50     | 1–200 | 반환할 최대 항목 수 |
+| `offset` | integer | 0      | ≥ 0   | 건너뛸 항목 수      |
 
 ### Response 200
 
@@ -104,25 +101,19 @@ X-Analytics-Key: <key>
   {
     "entry_id": "a1b2c3d4-...",
     "transaction_id": "f0e1d2c3-...",
+    "account_id": "550e8400-...",
     "entry_type": "CREDIT",
     "amount": 100000,
     "running_balance": 100000,
-    "transaction_type": "TRANSFER",
-    "counterparty_account_id": "660e8400-...",
-    "counterparty_account_number": "111-222-333444",
-    "counterparty_owner": "김철수",
     "created_at": "2026-07-01T09:05:00Z"
   },
   {
     "entry_id": "b2c3d4e5-...",
     "transaction_id": "e1f0d2c3-...",
+    "account_id": "550e8400-...",
     "entry_type": "DEBIT",
     "amount": 30000,
     "running_balance": 70000,
-    "transaction_type": "TRANSFER",
-    "counterparty_account_id": "770e8400-...",
-    "counterparty_account_number": "555-666-777888",
-    "counterparty_owner": "박영희",
     "created_at": "2026-07-02T14:20:00Z"
   }
 ]
@@ -130,20 +121,17 @@ X-Analytics-Key: <key>
 
 ### Response Fields (per item)
 
-| 필드                           | 타입           | 설명                                                                    |
-| ------------------------------ | -------------- | ------------------------------------------------------------------------- |
-| `entry_id`                     | string         | 원장 항목 UUID                                                          |
-| `transaction_id`               | string         | 연결된 트랜잭션 UUID                                                    |
-| `entry_type`                   | string         | `CREDIT` (입금) 또는 `DEBIT` (출금)                                     |
-| `amount`                       | integer        | 항목 금액 (항상 양수)                                                   |
-| `running_balance`              | integer        | 이 항목 기록 시점의 잔액 스냅샷                                         |
-| `transaction_type`             | string         | `TRANSFER`(일반 송금) \| `CARD_SETTLEMENT`(카드 정산)                   |
-| `counterparty_account_id`      | string \| null | 상대 계좌 UUID. 계좌 개설 초기입금(seed, 상대가 자기 자신)이면 `null`   |
-| `counterparty_account_number`  | string \| null | 상대 계좌번호                                                           |
-| `counterparty_owner`           | string \| null | 상대 계좌 예금주명                                                      |
-| `created_at`                   | datetime       | 기록 시각 (UTC ISO8601)                                                 |
+| 필드              | 타입     | 설명                                |
+| ----------------- | -------- | ----------------------------------- |
+| `entry_id`        | string   | 원장 항목 UUID                      |
+| `transaction_id`  | string   | 연결된 트랜잭션 UUID                |
+| `account_id`      | string   | 계좌 UUID                           |
+| `entry_type`      | string   | `CREDIT` (입금) 또는 `DEBIT` (출금) |
+| `amount`          | integer  | 항목 금액 (항상 양수)               |
+| `running_balance` | integer  | 이 항목 기록 시점의 잔액 스냅샷     |
+| `created_at`      | datetime | 기록 시각 (UTC ISO8601)             |
 
-정렬: `created_at` 내림차순 (최신 먼저). `/api/v1/accounts/{id}/transactions`(계정계) 도 동일 필드·동일 파라미터를 지원 — 두 경로는 항상 같은 데이터를 반환해야 한다.
+정렬: `created_at` 내림차순 (최신 먼저).
 
 ---
 
@@ -280,41 +268,6 @@ X-Analytics-Key: <key>
 
 ---
 
-## 5. GET `/api/v1/analytics/accounts/{id}/transfers/daily-total`
-
-이 계좌가 **sender** 로 실행한 당일(business_date, UTC) 일반 송금 합계. 일일 이체 한도 판정 등에 사용. 카드 정산(`CARD_SETTLEMENT`)·실패 거래·계좌 개설 초기입금(sender==receiver인 seed 거래)은 합계에서 제외.
-
-### Request
-
-```
-GET /api/v1/analytics/accounts/{account_id}/transfers/daily-total?business_date=2026-07-19
-X-Analytics-Key: <key>
-```
-
-### Query Parameters
-
-| 파라미터        | 타입 | 기본값        | 설명                              |
-| --------------- | ---- | ------------- | --------------------------------- |
-| `business_date` | date | 오늘(UTC)     | 집계 대상 영업일                  |
-
-### Response 200
-
-```json
-{
-  "account_id": "550e8400-e29b-41d4-a716-446655440000",
-  "business_date": "2026-07-19",
-  "total_sent": 50000
-}
-```
-
-### Response 404
-
-```json
-{ "error_code": "ACCOUNT_NOT_FOUND", "message": "Account {id} not found" }
-```
-
----
-
 ## 에러 코드 전체 목록
 
 | error_code          | HTTP | 발생 상황                        |
@@ -325,18 +278,16 @@ X-Analytics-Key: <key>
 
 ---
 
-## 계정계 기존 엔드포인트 (참고)
+## 계정계 기존 5개 엔드포인트 (참고)
 
 이 엔드포인트들은 인증 없음. 계정계 owner-side API.
 
-| Method | Path                                  | 설명                                             |
-| ------ | -------------------------------------- | ------------------------------------------------ |
-| POST   | `/api/v1/accounts`                     | 계좌 생성 (201)                                  |
-| GET    | `/api/v1/accounts/{id}`                | 계좌 조회 (200/404)                              |
-| GET    | `/api/v1/accounts/by-number/{number}`  | 계좌번호로 조회, 예금주명 확인용 (200/404)       |
-| PATCH  | `/api/v1/accounts/{id}/alias`          | 계좌 별칭 변경 (200/404)                         |
-| GET    | `/api/v1/accounts/{id}/balance`        | 저장된 잔액 조회 (200/404)                       |
-| GET    | `/api/v1/accounts/{id}/transactions`   | 원장 이력 조회, 상대방 정보 포함 (200/404)       |
-| POST   | `/api/v1/transfers`                    | 송금 (200, Idempotency-Key 필수)                 |
+| Method | Path                                 | 설명                             |
+| ------ | ------------------------------------ | -------------------------------- |
+| POST   | `/api/v1/accounts`                   | 계좌 생성 (201)                  |
+| GET    | `/api/v1/accounts/{id}`              | 계좌 조회 (200/404)              |
+| GET    | `/api/v1/accounts/{id}/balance`      | 저장된 잔액 조회 (200/404)       |
+| GET    | `/api/v1/accounts/{id}/transactions` | 원장 이력 조회 (200/404)         |
+| POST   | `/api/v1/transfers`                  | 송금 (200, Idempotency-Key 필수) |
 
 계정계 잔액 (`GET /accounts/{id}/balance`) 과 정보계 잔액 (`GET /analytics/accounts/{id}/balance`) 은 동일한 저장 컬럼(`Account.balance`)을 읽으므로 같은 값을 반환해야 함.

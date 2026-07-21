@@ -5,7 +5,6 @@ Existing 계정계 endpoints remain unauthenticated (out-of-scope for auth retro
 """
 
 import os
-from datetime import date, datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -17,9 +16,7 @@ from .crud import (
     get_balance,
     get_card,
     get_card_ledger_entries,
-    get_daily_transferred_amount,
     get_ledger_entries,
-    ledger_entry_counterparty_fields,
     reconcile_balance,
 )
 from .database import get_db
@@ -28,7 +25,6 @@ from .schemas import (
     BalanceResponse,
     CardLedgerEntryResponse,
     CardResponse,
-    DailyTransferredResponse,
     ErrorResponse,
     LedgerEntryResponse,
     ReconciliationResponse,
@@ -122,25 +118,16 @@ def get_analytics_ledger(
     _auth: AnalyticsAuth,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    start_date: date | None = Query(default=None),
-    end_date: date | None = Query(default=None),
 ):
     """Return ledger entries for an account in descending creation order.
 
     Identical data to /api/v1/accounts/{id}/transactions but protected
-    by X-Analytics-Key. start_date/end_date filter by created_at (UTC, inclusive).
+    by X-Analytics-Key.
     """
     acct = get_account(db, account_id)
     if acct is None:
         throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
-    entries = get_ledger_entries(
-        db,
-        account_id,
-        limit=limit,
-        offset=offset,
-        start_date=start_date,
-        end_date=end_date,
-    )
+    entries = get_ledger_entries(db, account_id, limit=limit, offset=offset)
     return [
         LedgerEntryResponse(
             entry_id=e.entry_id,
@@ -149,38 +136,9 @@ def get_analytics_ledger(
             amount=e.amount,
             running_balance=e.running_balance,
             created_at=e.created_at,
-            **ledger_entry_counterparty_fields(e),
         )
         for e in entries
     ]
-
-
-# ── GET /analytics/accounts/{account_id}/transfers/daily-total ───────────────
-# TODO(계정계) 해소: 사용자(계좌) 기준 일일 이체 합계 API.
-
-
-@analytics_router.get(
-    "/accounts/{account_id}/transfers/daily-total",
-    response_model=DailyTransferredResponse,
-    responses={404: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
-    summary="Daily sent-transfer total for an account (정보계)",
-)
-def get_analytics_daily_transferred(
-    account_id: str,
-    db: DbDep,
-    _auth: AnalyticsAuth,
-    business_date: date | None = Query(default=None),
-):
-    """business_date(UTC, 생략 시 오늘) 하루 동안 이 계좌가 sender 로 실행한
-    일반 송금(TRANSFER) 합계. 카드 정산·실패 거래는 제외. 일일 한도 판정 등에 사용."""
-    acct = get_account(db, account_id)
-    if acct is None:
-        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
-    resolved_date = business_date or datetime.now(timezone.utc).date()
-    total = get_daily_transferred_amount(db, account_id, resolved_date)
-    return DailyTransferredResponse(
-        account_id=account_id, business_date=resolved_date, total_sent=total
-    )
 
 
 # ── GET /analytics/accounts/{account_id}/audit-logs ──────────────────────────

@@ -153,5 +153,5 @@ def reconcile_balance(db, account_id) -> dict:
 | 데이터 원천 | `ledger_entries`, `accounts`(`balance` 포함), `transactions`, `audit_logs` | `v_infobank_account_balances`/`v_infobank_ledger_entries` (뷰) |
 | 쓰기 권한 | 있음 | 없음 (읽기 전용) |
 | 잔액 계산 | 저장된 `accounts.balance` 컬럼 (원장 쓰기와 원자적으로 동기화) | 뷰 집계 (저장된 컬럼과 항상 동일한 값) |
-| 인증 | 없음 (데모 범위) | X-Analytics-Key 헤더 (GET 5개) |
-| 엔드포인트 수 | 7개 (계좌번호 조회·별칭 변경 추가) | GET 5개 (reconcile/balance/ledger/audit-logs/daily-total) |
+| 인증 | 없음 (데모 범위) | X-Analytics-Key 헤더 (GET 4개) |
+| 엔드포인트 수 | 5개 | GET 4개 (reconcile/balance/ledger/audit-logs) |

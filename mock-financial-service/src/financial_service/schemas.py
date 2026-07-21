@@ -25,16 +25,11 @@ class AccountResponse(BaseModel):
     owner: str
     bank_name: str
     account_number: str
-    alias: str | None = None
     balance: int
     currency: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class AccountAliasUpdate(BaseModel):
-    alias: str = Field(..., min_length=1, max_length=100)
 
 
 # ── Balance ───────────────────────────────────────────────────────────────────
@@ -55,13 +50,6 @@ class LedgerEntryResponse(BaseModel):
     entry_type: str  # DEBIT / CREDIT
     amount: int
     running_balance: int
-    # TRANSFER(일반 송금) / CARD_SETTLEMENT(카드 정산) — settlement_type 파생값.
-    transaction_type: str
-    # 같은 거래의 상대 계좌. CARD_SETTLEMENT는 카드 정산용 내부 계좌라 owner 표기가
-    # 사람 이름이 아닐 수 있음 — 그대로 노출(별도 마스킹 없음, 계정계 계약 밖).
-    counterparty_account_id: str | None = None
-    counterparty_account_number: str | None = None
-    counterparty_owner: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -109,12 +97,6 @@ class TransferResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class DailyTransferredResponse(BaseModel):
-    account_id: str
-    business_date: date
-    total_sent: int  # sender 기준 성공한 일반 송금(TRANSFER) 합계. 카드 정산 제외.
 
 
 # ── Balance reconciliation / 정보계 ────────────────────────────────────────────
