@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 import pytest
@@ -17,11 +18,13 @@ from agent.workflows.workflow_support import (
     masked_account_options,
     new_input_request_id,
     publish_event,
+    required_input_request_id,
     route_key,
     state_data,
     step_request_id,
     terminal_update,
     tool_call,
+    valid_iso_date,
 )
 
 
@@ -103,6 +106,17 @@ def test_masked_account_options_excludes_sensitive_and_unknown_fields() -> None:
             "is_default": True,
         }
     ]
+
+
+def test_resume_input_id_and_date_values_are_validated() -> None:
+    assert required_input_request_id({"input_request_id": "input_123"}) == "input_123"
+    with pytest.raises(ValueError, match="입력 요청 ID"):
+        required_input_request_id({"input_request_id": ""})
+
+    assert valid_iso_date(date(2026, 7, 21)) == "2026-07-21"
+    assert valid_iso_date("2026-07-21") == "2026-07-21"
+    assert valid_iso_date("2026-02-31") is None
+    assert valid_iso_date(123) is None
 
 
 def test_route_key_defaults_to_error() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable, Mapping
+from datetime import date
 from typing import Any, Literal, Protocol
 
 from langchain_core.runnables import RunnableConfig
@@ -73,6 +74,28 @@ def masked_account_options(raw_accounts: Any) -> list[dict[str, Any]]:
         for account in accounts
         if isinstance(account, Mapping)
     ]
+
+
+def required_input_request_id(data: Mapping[str, Any]) -> str:
+    """Resume 대상과 연결할 비어 있지 않은 입력 요청 ID를 반환한다."""
+
+    value = data.get("input_request_id")
+    if not isinstance(value, str) or not value:
+        raise ValueError("입력 요청 ID가 없습니다.")
+    return value
+
+
+def valid_iso_date(value: Any) -> str | None:
+    """날짜 값이 유효할 때 ISO 날짜 문자열로 정규화한다."""
+
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value).isoformat()
+        except ValueError:
+            return None
+    return None
 
 
 def state_data(state: AgentState) -> dict[str, Any]:

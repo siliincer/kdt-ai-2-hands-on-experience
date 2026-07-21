@@ -35,11 +35,15 @@ from agent.workflows.workflow_support import (
     new_input_request_id as _default_input_request_id,
 )
 from agent.workflows.workflow_support import publish_event as _publish
+from agent.workflows.workflow_support import (
+    required_input_request_id as _required_input_request_id,
+)
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
 from agent.workflows.workflow_support import step_request_id as _default_tool_request_id
 from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
+from agent.workflows.workflow_support import valid_iso_date as _valid_date
 
 WORKFLOW_ID = "wf_transaction_history"
 _tool_error_update = build_tool_error_update(
@@ -422,21 +426,3 @@ def build_transaction_history_graph(
     graph.add_edge("emit_transaction_result", END)
     graph.add_edge("emit_transaction_error", END)
     return graph.compile(checkpointer=checkpointer)
-
-
-def _required_input_request_id(data: Mapping[str, Any]) -> str:
-    value = data.get("input_request_id")
-    if not isinstance(value, str) or not value:
-        raise ValueError("입력 요청 ID가 없습니다.")
-    return value
-
-
-def _valid_date(value: Any) -> str | None:
-    if isinstance(value, date):
-        return value.isoformat()
-    if isinstance(value, str):
-        try:
-            return date.fromisoformat(value).isoformat()
-        except ValueError:
-            return None
-    return None
