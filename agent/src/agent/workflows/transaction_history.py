@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from agent.clients.backend import BackendWebhookClient
-from agent.clients.backend.client import AgentToolApiError, AgentToolIntegrationError
+from agent.clients.backend.client import AgentToolIntegrationError
 from agent.runtime import InteractionPauseRuntime, InteractionWebhookBuilder
 from agent.state import AgentState
 from agent.tools.contract_registry import (
@@ -30,6 +30,7 @@ from agent.workflows.query_slot_extraction import (
     extract_transaction_slots_by_rule,
     extract_transaction_slots_llm_first,
 )
+from agent.workflows.workflow_support import build_tool_error_update
 from agent.workflows.workflow_support import config_context as _config_context
 from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import route_key as _route_key
@@ -38,6 +39,9 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_transaction_history"
+_tool_error_update = build_tool_error_update(
+    "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
+)
 
 
 def _default_input_request_id() -> str:
@@ -441,15 +445,3 @@ def _valid_date(value: Any) -> str | None:
         except ValueError:
             return None
     return None
-
-
-def _tool_error_update(step_id: str, error: Exception) -> dict[str, Any]:
-    if isinstance(error, AgentToolApiError):
-        message = error.safe_message
-    else:
-        message = "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
-    return {
-        "current_step_id": step_id,
-        "route_key": "error",
-        "data": {"safe_error_message": message},
-    }

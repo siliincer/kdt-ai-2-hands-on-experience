@@ -7,6 +7,7 @@ from typing import Any, Literal, Protocol
 
 from langchain_core.runnables import RunnableConfig
 
+from agent.clients.backend.client import AgentToolApiError
 from agent.contracts.backend import AgentWebhookRequest
 from agent.state import AgentState
 from agent.tools.contract_registry import ContractToolCall
@@ -32,6 +33,9 @@ class WorkflowIoDependencies(Protocol):
 
     @property
     def webhook_client(self) -> WebhookPublisher: ...
+
+
+ToolErrorUpdate = Callable[[str, Exception], dict[str, Any]]
 
 
 def state_data(state: AgentState) -> dict[str, Any]:
@@ -87,6 +91,24 @@ async def publish_event(
         execution_context_id=config_context(config, "execution_context_id"),
         request_id=config_context(config, "request_id"),
     )
+
+
+def build_tool_error_update(default_message: str) -> ToolErrorUpdate:
+    """업무별 기본 문구를 보존하는 공통 Tool 오류 State 생성기를 만든다."""
+
+    def update(step_id: str, error: Exception) -> dict[str, Any]:
+        message = (
+            error.safe_message
+            if isinstance(error, AgentToolApiError)
+            else default_message
+        )
+        return {
+            "current_step_id": step_id,
+            "route_key": "error",
+            "data": {"safe_error_message": message},
+        }
+
+    return update
 
 
 def terminal_update(

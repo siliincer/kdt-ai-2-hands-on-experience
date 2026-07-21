@@ -8,9 +8,11 @@ from typing import Any
 import pytest
 from langchain_core.runnables import RunnableConfig
 
-from agent.contracts.backend import AgentWebhookRequest
+from agent.clients.backend.client import AgentToolApiError
+from agent.contracts.backend import AgentToolErrorData, AgentWebhookRequest
 from agent.state import AgentState
 from agent.workflows.workflow_support import (
+    build_tool_error_update,
     config_context,
     publish_event,
     route_key,
@@ -119,6 +121,35 @@ async def test_publish_event_preserves_execution_and_request_context() -> None:
             "request_id": "request_123",
         }
     ]
+
+
+def test_tool_error_update_prefers_safe_api_message() -> None:
+    update = build_tool_error_update("기본 오류 안내")
+    error = AgentToolApiError(
+        status_code=409,
+        request_id="request_123",
+        error=AgentToolErrorData(
+            category="business",
+            code="ACCOUNT_NOT_AVAILABLE",
+            message="선택한 계좌를 사용할 수 없습니다.",
+        ),
+    )
+
+    assert update("query_accounts", error) == {
+        "current_step_id": "query_accounts",
+        "route_key": "error",
+        "data": {"safe_error_message": "선택한 계좌를 사용할 수 없습니다."},
+    }
+
+
+def test_tool_error_update_uses_workflow_default_for_internal_error() -> None:
+    update = build_tool_error_update("기본 오류 안내")
+
+    assert update("query_accounts", RuntimeError("내부 상세")) == {
+        "current_step_id": "query_accounts",
+        "route_key": "error",
+        "data": {"safe_error_message": "기본 오류 안내"},
+    }
 
 
 def test_terminal_update_uses_requested_status() -> None:

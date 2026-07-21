@@ -10,7 +10,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from agent.clients.backend import BackendWebhookClient
-from agent.clients.backend.client import AgentToolApiError, AgentToolIntegrationError
+from agent.clients.backend.client import AgentToolIntegrationError
 from agent.runtime import InteractionWebhookBuilder
 from agent.state import AgentState
 from agent.tools.contract_registry import (
@@ -22,6 +22,7 @@ from agent.workflows.query_slot_extraction import (
     extract_account_list_slots_by_rule,
     extract_account_list_slots_llm_first,
 )
+from agent.workflows.workflow_support import build_tool_error_update
 from agent.workflows.workflow_support import config_context as _config_context
 from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import route_key as _route_key
@@ -30,6 +31,9 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_account_list"
+_tool_error_update = build_tool_error_update(
+    "계좌 목록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
+)
 
 
 def _default_tool_request_id(parent_request_id: str, step_id: str) -> str:
@@ -160,18 +164,6 @@ def build_account_list_graph(
     graph.add_edge("emit_account_list_result", END)
     graph.add_edge("emit_account_list_error", END)
     return graph.compile(checkpointer=checkpointer)
-
-
-def _tool_error_update(step_id: str, error: Exception) -> dict[str, Any]:
-    if isinstance(error, AgentToolApiError):
-        message = error.safe_message
-    else:
-        message = "계좌 목록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
-    return {
-        "current_step_id": step_id,
-        "route_key": "error",
-        "data": {"safe_error_message": message},
-    }
 
 
 def _account_options(raw_accounts: Any) -> list[dict[str, Any]]:
