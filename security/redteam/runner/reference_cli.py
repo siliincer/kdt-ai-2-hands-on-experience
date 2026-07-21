@@ -57,6 +57,16 @@ def _commit(value: str) -> str:
     return value
 
 
+def _iteration_count(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("iterations must be an integer") from exc
+    if not 1 <= parsed <= 10:
+        raise argparse.ArgumentTypeError("iterations must be between 1 and 10")
+    return parsed
+
+
 def _source_commit() -> str:
     completed = subprocess.run(
         ["git", "rev-parse", "origin/main"],
@@ -109,6 +119,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--generator-model", type=_model_name)
     parser.add_argument("--judgment-model", type=_model_name)
     parser.add_argument(
+        "--max-iterations",
+        type=_iteration_count,
+        help=(
+            "maximum generated-input iterations per reference case (defaults to config)"
+        ),
+    )
+    parser.add_argument(
         "--agent-source-commit",
         "--source-commit",
         dest="agent_source_commit",
@@ -131,11 +148,17 @@ def _error_stage(error: Exception) -> str:
 
 
 def _load_reference_config(args: argparse.Namespace) -> RedTeamConfig:
-    return _with_model_overrides(
+    config = _with_model_overrides(
         load_config(args.config),
         generator_model=args.generator_model,
         judgment_model=args.judgment_model,
     )
+    max_iterations = getattr(args, "max_iterations", None)
+    if max_iterations is None:
+        return config
+    raw = config.model_dump(mode="python")
+    raw["adaptive_attack"]["max_iterations_per_attack"] = max_iterations
+    return RedTeamConfig.model_validate(raw)
 
 
 async def _run(
@@ -187,6 +210,9 @@ async def _run(
                 scenarios,
                 config.safety.redact_fields,
                 budget,
+                max_iterations_per_generated_case=(
+                    config.adaptive_attack.max_iterations_per_attack
+                ),
             )
             if executor.agent_source_commit != agent_source_commit:
                 raise ValueError(
@@ -213,6 +239,9 @@ async def _run(
                     generator_model_digest=model_digests[config.adaptive_attack.model],
                     judgment_model=config.judgment.model,
                     judgment_model_digest=model_digests[config.judgment.model],
+                    max_iterations_per_generated_case=(
+                        config.adaptive_attack.max_iterations_per_attack
+                    ),
                     generator_telemetry=generator.telemetry(),
                     judgment_telemetry=judge.telemetry(),
                 ),

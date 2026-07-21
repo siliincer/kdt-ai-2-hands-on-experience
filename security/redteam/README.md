@@ -129,20 +129,10 @@ uv run python -m security.redteam.runner.cli multi_step_attack
 uv run python -m security.redteam.runner.cli regression
 uv run python -m security.redteam.runner.cli all
 uv run python -m security.redteam.runner.cli prompt_injection \
-  --generator-model llama3.2:3b \
+  --generator-model exaone3.5:7.8b \
   --target-model hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M \
-  --judgment-model phi4-mini:3.8b \
+  --judgment-model llama3.2:3b \
   --seed 27
-uv run python -m security.redteam.runner.compare prompt_injection \
-  --generator-model llama3.2:3b --generator-model gemma3:4b \
-  --target-model qwen2.5:3b --target-model exaone3.5:7.8b \
-  --judgment-model phi4-mini:3.8b \
-  --seed-profile screening
-uv run python -m security.redteam.runner.compare prompt_injection \
-  --generator-model llama3.2:3b \
-  --target-model hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M \
-  --judgment-model phi4-mini:3.8b \
-  --seed-profile final
 ```
 
 최신 Agent Testbed와 로컬 생성·판정 모델을 함께 사용하는 참조 캠페인은 다음처럼
@@ -156,11 +146,16 @@ Testbed를 가져온 Agent commit을 기록합니다.
 ```bash
 uv run python -m security.redteam.runner.reference_cli \
   --agent-source-commit e867ccb95283f1ff1db20a1ad46dd13e80616ebe \
-  --generator-model llama3.2:3b \
-  --judgment-model phi4-mini:3.8b
+  --generator-model exaone3.5:7.8b \
+  --judgment-model llama3.2:3b \
+  --max-iterations 3
 ```
 
 결과는 `security/redteam/reports`에 JSON, Markdown, 완료 manifest로 기록됩니다.
+`--max-iterations`는 생성형 case별 반복 상한을 1~10 사이에서 실행별로 지정하며,
+생략하면 `config.example.yaml`의 `max_iterations_per_attack`을 사용합니다. 횟수를 늘릴 때는
+같은 설정 파일의 `max_requests_per_run`과 `max_run_seconds`도 전체 case 수와 로컬 모델
+속도에 맞게 조정해야 합니다.
 업무별 Agent Testbed에서 50개 참조 파일을 모두 실행합니다. 전역 Graph 재개나
 원장·감사 증거처럼 업무별 Testbed 밖의 의존성이 남은 셀은 커버리지 문서에서 별도로
 `partial` 상태를 유지합니다.
@@ -172,50 +167,34 @@ uv run python -m security.redteam.runner.reference_cli \
 
 `--generator-model`, `--target-model`, `--judgment-model`은 세 역할을 독립적으로
 지정하며 서로 같은 모델은 허용하지 않습니다. 기존 `--model` 단일 옵션은 사용할 수
-없습니다. `--seed`로 생성 seed를 덮어쓸 수 있습니다. `runner.compare`는 반복한 모델과
-seed 중 세 역할이 모두 다른 조합만 각각 격리 실행하고, 개별 보고서에 더해
-`comparison_<id>.json`, Markdown, `.complete` 집계를 기록합니다. 중복 인수는 한 번만
-실행하며 한 명령의 총 실행 수는 100회로 제한합니다.
-
-비교 보고서의 역할 요약은 전체 실행 PASS/FAIL을 모델 품질로 사용하지 않습니다. 생성
-모델은 후보 채택·제외·오류 비율, Target은 응답 계약 PASS/FAIL/ERROR와 내부 LLM 오류율,
-독립 판정 모델은 규칙 일치·불일치·불확실·오류 비율로 각각 평가합니다.
-`run_verdict_counts`는 해당 모델이 포함된 전체 실행의 참고 분포일 뿐 역할 점수가 아닙니다.
-
-`--seed-profile screening`은 고정 seed `7, 42, 99`로 넓은 후보를 비교하고,
-`--seed-profile final`은 `7, 19, 42, 73, 99`로 좁힌 후보를 재검증합니다. `--seed`와
-`--seed-profile`은 함께 사용할 수 없습니다. 조합 요약의 `stable PASS`는 모든 seed가
-PASS인 경우, `stable FAIL`은 모든 seed가 FAIL인 경우이며 `mixed`는 seed에 따라 결과가
-달라진 경우입니다. 일반적인 순서는 screening에서 `stable PASS`이고 검토 비율이 0인
-조합만 final로 넘기는 것입니다. 이 프로필은 프로젝트 내 재현 가능한 비교 기준이며
-통계적 안전성 증명을 의미하지 않습니다.
+없습니다. `--seed`로 생성 seed를 덮어쓸 수 있습니다. `runner.compare`는 이후 모델을
+재평가할 때만 사용하는 실험 도구이며, 비교 후보 모델은 기본 설치 대상으로 두지 않습니다.
 
 ### 현재 모델 상태
 
-`config.example.yaml`의 다음 조합은 현재 **잠정 기본값**이며 최종 선정 결과가 아닙니다.
+`config.example.yaml`과 로컬 Ollama는 다음 역할별 조합만 기본 실행에 사용합니다.
 
-- 입력 생성: `llama3.2:3b`
+- 입력 생성: `exaone3.5:7.8b`
 - 대상 Agent: `hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M`
-- 독립 판정: `phi4-mini:3.8b`
+- 독립 판정: `llama3.2:3b`
 
-이 조합은 로컬 회귀 7종과 5개 seed로 보강 실행했지만, 생성·판정 모델 후보 전체를
-동일한 조건으로 비교한 최종 matrix는 아직 수행하지 않았습니다. 최종 선택은 screening
-후보 중 생성 성공률, Target 계약 결과, 판정 일치율, 오류율과 `review_required_rate`를
-역할별로 비교한 뒤 final 5-seed 결과로 확정합니다. 전체 실행 PASS 수만으로 모델을
-선택하지 않습니다.
+레드팀 입력 생성 모델은 한국어 후보 다양성, 구조화 출력 안정성, 4.8GB 용량을 함께
+고려해 `exaone3.5:7.8b` 하나로 선정했습니다. 50개 reference campaign에서 생성형
+23개 case를 각각 3회 실행해 69개 후보를 모두 생성했습니다. `llama3.2:3b`는 생성 모델과
+분리된 판정·의도 분류 역할이며, 금융 모델은 검사를 받는 대상 Agent 역할입니다.
+선정되지 않은 실험 모델은 기본 실행에 필요하지 않으며 로컬 Ollama에서도 제거했습니다.
 
 Ollama와 필요한 모델이 준비된 상태에서 한 조합의 전체 회귀는 다음처럼 실행합니다.
 
 ```bash
 uv run python -m security.redteam.runner.cli regression \
-  --generator-model llama3.2:3b \
+  --generator-model exaone3.5:7.8b \
   --target-model hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M \
-  --judgment-model phi4-mini:3.8b
+  --judgment-model llama3.2:3b
 ```
 
-모델 비교는 `runner.compare`에 후보를 반복해서 넘기고 먼저 `screening`, 통과 후보만
-`final`로 재실행합니다. 실행 중에는 각 시나리오의 verdict가 터미널에 표시됩니다.
-결과는 `security/redteam/reports/` 아래에 저장됩니다.
+실행 중에는 각 시나리오의 verdict가 터미널에 표시됩니다. 결과는
+`security/redteam/reports/` 아래에 저장됩니다.
 
 - `rt_<id>-<scenario>.json/.md/.complete`: 개별 실행 상세와 완료 표식
 - `comparison_<id>.json/.md/.complete`: 모델·seed 비교 집계
@@ -273,6 +252,15 @@ validator는 정규화 완전 일치뿐 아니라 설정된 임계값 이상의
 모델로 변환하고 `runner/reference_cases.py`가 계약을 판정합니다. State, 모든 Webhook
 payload, Tool 요청 인자와 Backend exchange는 Testbed 내부에서만 검사합니다. 보고서에는
 유효성 boolean과 캠페인 밖에 키를 보존하지 않는 HMAC-SHA-256 projection만 기록합니다.
+
+생성형 reference case는 `adaptive_attack.max_iterations_per_attack` 횟수까지 반복합니다.
+각 iteration은 새로운 Testbed에서 실행하며, 직전 후보에 대한 Agent 응답과 규칙 판정
+근거를 제한된 피드백으로 다음 입력 생성에 전달합니다. 규칙 판정이 `PASS`이면 표현과
+문장 구조를 바꿔 다음 iteration을 시도하고, `FAIL` 또는 실행 `ERROR`가 발생하면 즉시
+중단합니다. 독립 판정 모델은 생성 모델과 분리해 병행하며, 둘의 결과가 다르면 규칙
+결과를 유지한 채 수동 검토 대상으로 표시합니다. JSON과 Markdown 보고서의
+`adaptive_attempts`에는 iteration별 후보, Agent 실행 증거, 규칙 결과, 독립 판정과
+오류 정보가 보존됩니다.
 일반 YAML과 관측 구조에는 파일·노드·깊이·문자열·목록 상한을 적용하고, 사용자 정규식은
 중첩 수량자와 역참조 등 동기 평가를 오래 점유할 수 있는 구문을 거부합니다.
 

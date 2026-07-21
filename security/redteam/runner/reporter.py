@@ -695,6 +695,10 @@ def _markdown_reference_campaign(data: dict) -> str:
             f"`{judgment_telemetry['successes']}` / "
             f"`{judgment_telemetry['failures']}`"
         ),
+        (
+            "- Maximum adaptive iterations per generated case: "
+            f"`{metadata['max_iterations_per_generated_case']}`"
+        ),
         f"- Started: `{_markdown_code(data['started_at'])}`",
         f"- Completed: `{_markdown_code(data['completed_at'])}`",
         f"- Requested cases: `{data['requested_cases']}`",
@@ -719,15 +723,19 @@ def _markdown_reference_campaign(data: dict) -> str:
         [
             "## Cases",
             "",
-            "| Case | Workflow | Status | Result | Rule | Model | Steps | Rejections "
-            "| Error stage | Error reason | Review |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| Case | Workflow | Status | Result | Rule | Model | Iterations | Steps "
+            "| Rejections | Error stage | Error reason | Review |",
+            "| --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- "
+            "| --- | --- |",
         ]
     )
     for entry in data["entries"]:
         evaluation = entry.get("evaluation") or {}
         rule_evaluation = entry.get("rule_evaluation") or evaluation
         judgment = entry.get("model_judgment") or {}
+        adaptive_attempts = entry.get("adaptive_attempts") or []
+        generated = (entry.get("case_contract") or {}).get("generation") is not None
+        iteration_count = len(adaptive_attempts) if generated else "n/a"
         steps = entry.get("steps") or []
         operations = ", ".join(step["operation"] for step in steps)
         rejections = ", ".join(
@@ -742,12 +750,51 @@ def _markdown_reference_campaign(data: dict) -> str:
             f"| `{_markdown_code(evaluation.get('verdict', 'n/a'))}` "
             f"| `{_markdown_code(rule_evaluation.get('verdict', 'n/a'))}` "
             f"| `{_markdown_code(judgment.get('outcome', 'n/a'))}` "
+            f"| {iteration_count} "
             f"| `{_markdown_code(operations or 'n/a')}` "
             f"| `{_markdown_code(rejections or 'n/a')}` "
             f"| `{_markdown_code(entry.get('error_stage') or 'n/a')}` "
             f"| {_markdown_safe(entry.get('error_reason') or 'n/a')} "
             f"| `{entry['review_required']}` |"
         )
+    adaptive_entries = [
+        entry for entry in data["entries"] if entry.get("adaptive_attempts")
+    ]
+    if adaptive_entries:
+        lines.extend(
+            [
+                "",
+                "## Adaptive Iterations",
+                "",
+                (
+                    "Each iteration uses a fresh Agent testbed. The next candidate "
+                    "receives the prior response and evaluation as bounded feedback."
+                ),
+                "",
+                "| Case | Iteration | Candidate | Style | Strategy | Rule | Score "
+                "| Model | Review | Error |",
+                "| --- | ---: | --- | --- | --- | --- | ---: | --- | --- | --- |",
+            ]
+        )
+        for entry in adaptive_entries:
+            for attempt in entry["adaptive_attempts"]:
+                candidate = attempt.get("candidate") or {}
+                rule_evaluation = (
+                    attempt.get("rule_evaluation") or attempt["evaluation"]
+                )
+                judgment = attempt.get("model_judgment") or {}
+                lines.append(
+                    f"| `{_markdown_code(entry['case_id'])}` "
+                    f"| {attempt['iteration']} "
+                    f"| {_markdown_safe(candidate.get('message') or 'n/a')} "
+                    f"| {_markdown_safe(candidate.get('style') or 'n/a')} "
+                    f"| {_markdown_safe(candidate.get('strategy') or 'n/a')} "
+                    f"| `{_markdown_code(rule_evaluation.get('verdict', 'n/a'))}` "
+                    f"| {attempt['boundary_score']:.3f} "
+                    f"| `{_markdown_code(judgment.get('outcome', 'n/a'))}` "
+                    f"| `{attempt['review_required']}` "
+                    f"| {_markdown_safe(attempt.get('error_reason') or 'n/a')} |"
+                )
     lines.append("")
     return "\n".join(lines)
 
@@ -767,7 +814,7 @@ def write_reference_campaign_report(
         ),
         redact_fields,
     )
-    data["report_schema_version"] = 2
+    data["report_schema_version"] = 3
     check_deadline()
     markdown = _markdown_reference_campaign(data)
     check_deadline()

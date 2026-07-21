@@ -52,9 +52,9 @@ class _OllamaResponse(io.BytesIO):
 def _models_payload(*, digest: str | None = "a" * 64) -> bytes:
     models = []
     for name in (
-        "llama3.2:3b",
+        "exaone3.5:7.8b",
         "hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M",
-        "phi4-mini:3.8b",
+        "llama3.2:3b",
     ):
         item = {"name": name}
         if digest is not None:
@@ -357,9 +357,9 @@ def test_ollama_preflight_accepts_configured_model(monkeypatch):
 
     budget = RequestBudget(100)
     assert managed._require_ollama_model(config, budget) == {
-        "llama3.2:3b": "a" * 64,
+        "exaone3.5:7.8b": "a" * 64,
         "hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M": "a" * 64,
-        "phi4-mini:3.8b": "a" * 64,
+        "llama3.2:3b": "a" * 64,
     }
     assert budget.used == 4
 

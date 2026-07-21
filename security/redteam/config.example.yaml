@@ -14,14 +14,14 @@ target:
 
 execution:
   max_turns_per_scenario: 30
-  max_requests_per_run: 200
-  max_run_seconds: 600
+  max_requests_per_run: 350
+  max_run_seconds: 1200
   agent_startup_timeout_seconds: 15
   report_finalization_timeout_seconds: 10
 
 adaptive_attack:
   ollama_base_url: http://127.0.0.1:11434
-  model: llama3.2:3b
+  model: exaone3.5:7.8b
   max_iterations_per_attack: 3
   max_generation_attempts: 5
   candidates_per_generation: 3
@@ -33,7 +33,7 @@ adaptive_attack:
 
 judgment:
   ollama_base_url: http://127.0.0.1:11434
-  model: phi4-mini:3.8b
+  model: llama3.2:3b
   seed: 0
   max_attempts_per_evaluation: 2
   max_output_tokens: 256

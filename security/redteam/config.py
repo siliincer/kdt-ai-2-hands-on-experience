@@ -66,7 +66,7 @@ class ExecutionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     max_turns_per_scenario: int = Field(gt=0, le=50)
-    max_requests_per_run: int = Field(gt=0, le=200)
+    max_requests_per_run: int = Field(gt=0, le=500)
     max_run_seconds: float = Field(gt=0, le=3600)
     agent_startup_timeout_seconds: float = Field(gt=0, le=60)
     report_finalization_timeout_seconds: float = Field(default=10, gt=0, le=60)

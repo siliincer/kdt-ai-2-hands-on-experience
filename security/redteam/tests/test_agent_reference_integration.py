@@ -239,6 +239,70 @@ async def test_reference_execution_semantics_do_not_depend_on_case_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generated_reference_case_adapts_from_previous_agent_results() -> None:
+    class HistoryGenerator(_Generator):
+        def __init__(self) -> None:
+            super().__init__()
+            self.history_lengths: list[int] = []
+
+        def generate(
+            self,
+            scenario: Scenario,
+            attack: AttackCase,
+            history: Sequence[AttackResult],
+        ) -> GeneratedCandidate:
+            self.history_lengths.append(len(history))
+            candidate = super().generate(scenario, attack, history)
+            return candidate.model_copy(
+                update={
+                    "variation": f"adaptive variation {len(history) + 1}",
+                    "strategy": f"adaptive strategy {len(history) + 1}",
+                    "style": f"adaptive style {len(history) + 1}",
+                    "seed": len(history) + 1,
+                }
+            )
+
+    generator = HistoryGenerator()
+    judge = _Judge()
+    executor = AgentReferenceExecutor(
+        generator,
+        judge,
+        {
+            name: load_scenario(ROOT / "scenarios" / f"{name}.yaml")
+            for name in (
+                "prompt_injection",
+                "tool_governance",
+                "data_confidentiality",
+            )
+        },
+        {"token"},
+        max_iterations_per_generated_case=3,
+    )
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
+    )
+
+    entry = await executor(case)
+
+    assert generator.history_lengths == [0, 1, 2]
+    assert generator.successes == 3
+    assert judge.successes == 3
+    assert len(entry.adaptive_attempts) == 3
+    assert [attempt.iteration for attempt in entry.adaptive_attempts] == [1, 2, 3]
+    assert [
+        attempt.candidate.strategy
+        for attempt in entry.adaptive_attempts
+        if attempt.candidate is not None
+    ] == [
+        "adaptive strategy 1",
+        "adaptive strategy 2",
+        "adaptive strategy 3",
+    ]
+    assert entry.candidate == entry.adaptive_attempts[-1].candidate
+    assert entry.evaluation == entry.adaptive_attempts[-1].evaluation
+
+
+@pytest.mark.asyncio
 async def test_agent_reference_isolates_one_generator_failure() -> None:
     class FailingGenerator(_Generator):
         def generate(

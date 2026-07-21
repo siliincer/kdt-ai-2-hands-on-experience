@@ -19,6 +19,25 @@ def test_reference_cli_rejects_invalid_source_commit(value: str) -> None:
         reference_cli._commit(value)
 
 
+@pytest.mark.parametrize("value", ["0", "11", "1.5", "many"])
+def test_reference_cli_rejects_invalid_iteration_count(value: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError):
+        reference_cli._iteration_count(value)
+
+
+def test_reference_cli_overrides_iteration_count() -> None:
+    args = argparse.Namespace(
+        config=ROOT / "config.example.yaml",
+        generator_model=None,
+        judgment_model=None,
+        max_iterations=7,
+    )
+
+    config = reference_cli._load_reference_config(args)
+
+    assert config.adaptive_attack.max_iterations_per_attack == 7
+
+
 def test_reference_cli_resolves_existing_commit_and_rejects_missing_commit() -> None:
     expected = subprocess.run(
         ["git", "rev-parse", "HEAD"],

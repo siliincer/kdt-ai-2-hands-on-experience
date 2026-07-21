@@ -40,16 +40,16 @@ def test_example_config_allows_only_local_agent():
     assert config.safety.required_ollama_model == (
         "hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M"
     )
-    assert config.adaptive_attack.model == "llama3.2:3b"
-    assert config.judgment.model == "phi4-mini:3.8b"
+    assert config.adaptive_attack.model == "exaone3.5:7.8b"
+    assert config.judgment.model == "llama3.2:3b"
     assert config.judgment.max_attempts_per_evaluation == 2
     assert config.adaptive_attack.max_iterations_per_attack == 3
     assert config.adaptive_attack.max_generation_attempts == 5
     assert config.adaptive_attack.candidates_per_generation == 3
     assert config.adaptive_attack.duplicate_similarity_threshold == 0.88
     assert config.adaptive_attack.seed == 42
-    assert config.execution.max_requests_per_run == 200
-    assert config.execution.max_run_seconds == 600
+    assert config.execution.max_requests_per_run == 350
+    assert config.execution.max_run_seconds == 1200
     assert config.execution.report_finalization_timeout_seconds == 10
 
 

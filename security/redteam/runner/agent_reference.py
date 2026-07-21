@@ -18,17 +18,20 @@ from pydantic import SecretStr
 
 from security.redteam.models import (
     AgentResponse,
+    AttackResult,
     BusinessWorkflow,
     ExpectedResponse,
     GeneratedCandidate,
     JudgmentOutcome,
     Scenario,
+    TurnResult,
     Verdict,
 )
 from security.redteam.runner.attacker import AttackGenerator
 from security.redteam.runner.client import RequestBudget, RequestBudgetError
 from security.redteam.runner.judge import ResponseJudge
 from security.redteam.runner.reference_campaign import (
+    ReferenceAdaptiveAttempt,
     ReferenceCampaignEntry,
     ReferenceExecutionStep,
     ReferenceOperationKind,
@@ -158,16 +161,21 @@ class AgentReferenceExecutor:
         scenarios: dict[str, Scenario],
         redact_fields: set[str],
         request_budget: RequestBudget | None = None,
+        max_iterations_per_generated_case: int = 1,
     ) -> None:
+        if not 1 <= max_iterations_per_generated_case <= 10:
+            raise ValueError("reference adaptive iterations must be between 1 and 10")
         self._generator = generator
         self._judge = judge
         self._scenarios = scenarios
         self._redact_fields = redact_fields
         self._request_budget = request_budget
+        self._max_iterations_per_generated_case = max_iterations_per_generated_case
         self._api = _load_agent_api()
         self._active_case_id: str | None = None
         self._active_candidate: GeneratedCandidate | None = None
         self._active_step_groups: list[list[ReferenceExecutionStep]] = []
+        self._generation_history: list[AttackResult] = []
         self._digest_key = secrets.token_bytes(32)
 
     @property
@@ -180,6 +188,12 @@ class AgentReferenceExecutor:
 
     async def __call__(self, case: ReferenceCase) -> ReferenceCampaignEntry:
         self._active_case_id = case.id
+        self._generation_history = []
+        if case.generation is not None and self._max_iterations_per_generated_case > 1:
+            return await self._adaptive(case)
+        return await self._execute_once(case)
+
+    async def _execute_once(self, case: ReferenceCase) -> ReferenceCampaignEntry:
         self._active_candidate = None
         self._active_step_groups = []
         try:
@@ -221,6 +235,94 @@ class AgentReferenceExecutor:
                 candidate=self._active_candidate,
                 steps=[step for group in self._active_step_groups for step in group],
             )
+
+    async def _adaptive(self, case: ReferenceCase) -> ReferenceCampaignEntry:
+        attempts: list[ReferenceAdaptiveAttempt] = []
+        history: list[AttackResult] = []
+        final_entry: ReferenceCampaignEntry | None = None
+        for iteration in range(1, self._max_iterations_per_generated_case + 1):
+            self._generation_history = history
+            entry = await self._execute_once(case)
+            attempts.append(self._adaptive_attempt(iteration, entry))
+            final_entry = entry
+            if entry.evaluation is None or entry.evaluation.verdict != Verdict.PASS:
+                break
+            history.append(self._feedback_result(case, iteration, entry))
+
+        if final_entry is None:
+            raise RuntimeError("adaptive reference execution produced no result")
+        payload = final_entry.model_dump(mode="python")
+        payload["adaptive_attempts"] = attempts
+        payload["review_required"] = any(item.review_required for item in attempts)
+        return ReferenceCampaignEntry.model_validate(payload)
+
+    @staticmethod
+    def _adaptive_attempt(
+        iteration: int,
+        entry: ReferenceCampaignEntry,
+    ) -> ReferenceAdaptiveAttempt:
+        if entry.evaluation is None:
+            raise ValueError("adaptive reference entry is missing an evaluation")
+        rule_result = entry.rule_evaluation or entry.evaluation
+        return ReferenceAdaptiveAttempt(
+            iteration=iteration,
+            candidate=entry.candidate,
+            evaluation=entry.evaluation,
+            rule_evaluation=entry.rule_evaluation,
+            steps=entry.steps,
+            model_judgment=entry.model_judgment,
+            judgment_agrees_with_rules=entry.judgment_agrees_with_rules,
+            review_required=entry.review_required,
+            boundary_score=(1.0 if rule_result.verdict == Verdict.FAIL else 0.0),
+            error_stage=entry.error_stage,
+            error_type=entry.error_type,
+            error_reason=entry.error_reason,
+        )
+
+    @staticmethod
+    def _feedback_result(
+        case: ReferenceCase,
+        iteration: int,
+        entry: ReferenceCampaignEntry,
+    ) -> AttackResult:
+        candidate = entry.candidate
+        generation = case.generation
+        if candidate is None or entry.evaluation is None or generation is None:
+            raise ValueError("adaptive feedback requires a generated result")
+        rule_result = entry.rule_evaluation or entry.evaluation
+        response = entry.responses[-1] if entry.responses else None
+        boundary_score = 1.0 if rule_result.verdict == Verdict.FAIL else 0.0
+        turn = TurnResult(
+            turn=1,
+            message=candidate.message,
+            response=response,
+            verdict=rule_result.verdict,
+            boundary_score=boundary_score,
+            reason=rule_result.reason,
+            evidence=rule_result.evidence,
+            model_judgment=entry.model_judgment,
+            judgment_agrees_with_rules=entry.judgment_agrees_with_rules,
+        )
+        return AttackResult(
+            attack_id=generation.id,
+            target_workflow_id=case.target_workflow_id,
+            iteration=iteration,
+            generated_by_llm=True,
+            generation_variation=candidate.variation,
+            generation_strategy=candidate.strategy,
+            generation_style=candidate.style,
+            generation_seed=candidate.seed,
+            generation_requested_action=candidate.requested_action,
+            generation_target=candidate.target,
+            generation_polarity=candidate.polarity,
+            generation_reported_speech=candidate.reported_speech,
+            generation_business_fact_mentions=candidate.business_fact_mentions,
+            verdict=rule_result.verdict,
+            boundary_score=boundary_score,
+            reason=rule_result.reason,
+            evidence=rule_result.evidence,
+            turns=[turn],
+        )
 
     def timeout_entry(
         self,
@@ -1274,7 +1376,7 @@ class AgentReferenceExecutor:
         candidate = self._generator.generate(
             self._scenario(case),
             case.generation,
-            [],
+            self._generation_history,
         )
         self._active_candidate = candidate
         return candidate

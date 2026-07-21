@@ -46,8 +46,8 @@ def test_legacy_helper_updates_only_generator_model():
     assert updated.safety.required_ollama_model == (
         "hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M"
     )
-    assert updated.judgment.model == "phi4-mini:3.8b"
-    assert config.adaptive_attack.model == "llama3.2:3b"
+    assert updated.judgment.model == "llama3.2:3b"
+    assert config.adaptive_attack.model == "exaone3.5:7.8b"
 
 
 def test_model_name_rejects_shell_metacharacters():

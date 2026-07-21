@@ -145,7 +145,7 @@ async def test_reference_campaign_sorts_and_counts_explicit_results(tmp_path) ->
     assert "Custom case sets are exploratory" not in markdown
     payload = json_path.read_text(encoding="utf-8")
     assert '"case_contract"' in payload
-    assert '"report_schema_version": 2' in payload
+    assert '"report_schema_version": 3' in payload
     assert '"responses"' not in payload
     assert '"runner_git_dirty": true' in payload
 

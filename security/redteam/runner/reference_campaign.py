@@ -56,6 +56,47 @@ class ReferenceExecutionStep(BaseModel):
         return self
 
 
+class ReferenceAdaptiveAttempt(BaseModel):
+    """One isolated generation, Agent execution, and evaluation cycle."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    iteration: int = Field(ge=1, le=10)
+    candidate: GeneratedCandidate | None = None
+    evaluation: ReferenceCaseEvaluation
+    rule_evaluation: ReferenceCaseEvaluation | None = None
+    steps: list[ReferenceExecutionStep] = Field(default_factory=list, max_length=8)
+    model_judgment: ModelJudgment | None = None
+    judgment_agrees_with_rules: bool | None = None
+    review_required: bool = False
+    boundary_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    error_stage: str | None = Field(default=None, min_length=1, max_length=100)
+    error_type: str | None = Field(default=None, min_length=1, max_length=100)
+    error_reason: str | None = Field(default=None, min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def result_is_consistent(self) -> ReferenceAdaptiveAttempt:
+        error_fields = (self.error_stage, self.error_type, self.error_reason)
+        has_error = self.evaluation.verdict == Verdict.ERROR
+        if has_error != all(value is not None for value in error_fields):
+            raise ValueError("adaptive ERROR requires complete error metadata")
+        if any(value is not None for value in error_fields) != all(
+            value is not None for value in error_fields
+        ):
+            raise ValueError("adaptive error metadata must be complete")
+        if self.model_judgment is not None:
+            uncertain = self.model_judgment.outcome.value == "uncertain"
+            if uncertain != (self.judgment_agrees_with_rules is None):
+                raise ValueError("adaptive judgment agreement is inconsistent")
+        if (
+            self.model_judgment is not None
+            and self.judgment_agrees_with_rules is not True
+            and not self.review_required
+        ):
+            raise ValueError("adaptive judgment disagreement requires review")
+        return self
+
+
 class ReferenceCampaignEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -70,6 +111,10 @@ class ReferenceCampaignEntry(BaseModel):
     steps: list[ReferenceExecutionStep] = Field(default_factory=list, max_length=8)
     model_judgment: ModelJudgment | None = None
     judgment_agrees_with_rules: bool | None = None
+    adaptive_attempts: list[ReferenceAdaptiveAttempt] = Field(
+        default_factory=list,
+        max_length=10,
+    )
     review_required: bool = False
     note: str | None = Field(default=None, max_length=500)
     error_stage: str | None = Field(default=None, min_length=1, max_length=100)
@@ -197,6 +242,32 @@ class ReferenceCampaignEntry(BaseModel):
             and not self.review_required
         ):
             raise ValueError("judgment disagreement requires review")
+        if self.adaptive_attempts:
+            if not generated:
+                raise ValueError("only generated entries can have adaptive attempts")
+            if [item.iteration for item in self.adaptive_attempts] != list(
+                range(1, len(self.adaptive_attempts) + 1)
+            ):
+                raise ValueError("adaptive attempt iterations are out of sequence")
+            final = self.adaptive_attempts[-1]
+            if (
+                self.candidate != final.candidate
+                or self.evaluation != final.evaluation
+                or self.rule_evaluation != final.rule_evaluation
+                or self.steps != final.steps
+                or self.model_judgment != final.model_judgment
+                or self.judgment_agrees_with_rules != final.judgment_agrees_with_rules
+                or self.error_stage != final.error_stage
+                or self.error_type != final.error_type
+                or self.error_reason != final.error_reason
+            ):
+                raise ValueError("entry result must match its final adaptive attempt")
+            if self.review_required != any(
+                item.review_required for item in self.adaptive_attempts
+            ):
+                raise ValueError(
+                    "entry review status must include every adaptive attempt"
+                )
         return self
 
 
@@ -282,6 +353,7 @@ class ReferenceCampaignMetadata(BaseModel):
     generator_model_digest: Sha256Digest
     judgment_model: str
     judgment_model_digest: Sha256Digest
+    max_iterations_per_generated_case: int = Field(default=1, ge=1, le=10)
     generator_telemetry: AttackerTelemetry
     judgment_telemetry: JudgmentTelemetry
 
@@ -314,8 +386,22 @@ class ReferenceCampaignResult(BaseModel):
         expected = _totals(self.entries)
         if self.totals != expected:
             raise ValueError("reference campaign totals do not match entries")
-        candidate_count = sum(entry.candidate is not None for entry in self.entries)
-        judgment_count = sum(entry.model_judgment is not None for entry in self.entries)
+        candidate_count = sum(
+            (
+                sum(item.candidate is not None for item in entry.adaptive_attempts)
+                if entry.adaptive_attempts
+                else int(entry.candidate is not None)
+            )
+            for entry in self.entries
+        )
+        judgment_count = sum(
+            (
+                sum(item.model_judgment is not None for item in entry.adaptive_attempts)
+                if entry.adaptive_attempts
+                else int(entry.model_judgment is not None)
+            )
+            for entry in self.entries
+        )
         if candidate_count != self.metadata.generator_telemetry.successes:
             raise ValueError("generator telemetry does not match preserved candidates")
         if judgment_count != self.metadata.judgment_telemetry.successes:
