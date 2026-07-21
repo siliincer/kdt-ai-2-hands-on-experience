@@ -20,16 +20,15 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
       - name: Sync dependencies
-        run: uv sync --frozen --python 3.11
+        run: uv sync --frozen --python 3.11 --all-packages --all-groups
       - name: Check lockfile
         run: uv lock --check
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format check
         run: uv run ruff format --check .
-      - name: pyright type check
-        run: uv run pyright
-      # 저희 Type 에러가 많아서 넣어봤으니 가능하면 수정 부탁드립니다.
+      - name: Pyright regression check
+        run: uv run python scripts/check_pyright_baseline.py
       - name: Backend tests or import check
         run: |
           if find backend -path "*/tests/test_*.py" -print -quit | grep -q .; then

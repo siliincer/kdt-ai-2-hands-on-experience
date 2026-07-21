@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "description": "Known Pyright errors on main. New errors above these per-file rule counts fail CI.",
+  "errors": [
+    {"path": "agent/scripts/build_agent_management_sheet_v3.py", "rule": "reportArgumentType", "count": 6},
+    {"path": "agent/scripts/build_agent_management_sheet_v3.py", "rule": "reportCallIssue", "count": 3},
+    {"path": "agent/scripts/build_agent_management_sheet_v3.py", "rule": "reportUnhashable", "count": 3},
+    {"path": "agent/src/agent/graph.py", "rule": "reportArgumentType", "count": 6},
+    {"path": "agent/src/agent/graph.py", "rule": "reportReturnType", "count": 1},
+    {"path": "agent/src/agent/policy/guardrail_engine.py", "rule": "reportOperatorIssue", "count": 4},
+    {"path": "agent/src/agent/service.py", "rule": "reportArgumentType", "count": 4},
+    {"path": "agent/src/agent/service.py", "rule": "reportCallIssue", "count": 1},
+    {"path": "agent/src/agent/subgraph_builder.py", "rule": "reportArgumentType", "count": 1},
+    {"path": "agent/src/agent/tools/bank_tools.py", "rule": "reportArgumentType", "count": 35},
+    {"path": "agent/src/agent/tools/bank_tools.py", "rule": "reportAttributeAccessIssue", "count": 15},
+    {"path": "agent/src/agent/tools/bank_tools.py", "rule": "reportCallIssue", "count": 4},
+    {"path": "agent/src/agent/tools/bank_tools.py", "rule": "reportOptionalMemberAccess", "count": 2},
+    {"path": "agent/src/agent/workflow_matcher.py", "rule": "reportAttributeAccessIssue", "count": 2},
+    {"path": "agent/tests/test_guardrail_engine.py", "rule": "reportOptionalSubscript", "count": 2},
+    {"path": "agent/tests/test_transfer_tools.py", "rule": "reportArgumentType", "count": 14},
+    {"path": "agent/tests/test_transfer_tools.py", "rule": "reportOptionalSubscript", "count": 5},
+    {"path": "e2e/tests/conftest.py", "rule": "reportInvalidTypeForm", "count": 1},
+    {"path": "e2e/tests/conftest.py", "rule": "reportReturnType", "count": 1},
+    {"path": "mock-financial-service/models.py", "rule": "reportAttributeAccessIssue", "count": 1},
+    {"path": "mock-financial-service/src/financial_service/mock_data.py", "rule": "reportPossiblyUnboundVariable", "count": 3}
+  ]
+}
