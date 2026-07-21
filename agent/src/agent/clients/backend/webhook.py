@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import httpx
 
+from agent.clients.backend.base import BackendHttpClientBase
 from agent.clients.backend.client import (
     AgentToolProtocolError,
     AgentToolTransportError,
-    BackendClientConfig,
 )
+from agent.clients.backend.client_config import BackendClientConfig
 from agent.contracts.backend import AgentWebhookRequest
 
 WEBHOOK_PATH = "/api/v1/webhooks/agent"
@@ -24,7 +23,7 @@ RETRYABLE_EVENT_TYPES = {
 }
 
 
-class BackendWebhookClient:
+class BackendWebhookClient(BackendHttpClientBase):
     """Webhook 인증과 제한된 읽기 이벤트 재시도를 공통 처리한다."""
 
     def __init__(
@@ -33,15 +32,7 @@ class BackendWebhookClient:
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._config = config
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            base_url=config.base_url.rstrip("/"),
-            timeout=httpx.Timeout(
-                timeout=config.request_timeout_seconds,
-                connect=config.connect_timeout_seconds,
-            ),
-        )
+        super().__init__(config, client=client)
 
     async def publish(
         self,
@@ -50,13 +41,15 @@ class BackendWebhookClient:
         execution_context_id: str,
         request_id: str,
     ) -> str:
-        headers = {
-            "X-Agent-Secret": self._config.agent_webhook_secret.get_secret_value(),
-            "X-Execution-Context-Id": execution_context_id,
-            "X-Request-Id": request_id,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
+        headers = self._headers(
+            authentication_header=(
+                "X-Agent-Secret",
+                self._config.agent_webhook_secret.get_secret_value(),
+            ),
+            execution_context_id=execution_context_id,
+            request_id=request_id,
+            json_content=True,
+        )
         retry_allowed = event.event_type in RETRYABLE_EVENT_TYPES
         attempts = self._config.max_retries + 1 if retry_allowed else 1
         response: httpx.Response | None = None
@@ -100,17 +93,3 @@ class BackendWebhookClient:
                 reason="Webhook message_id 형식 오류",
             )
         return message_id
-
-    async def _backoff(self) -> None:
-        if self._config.retry_backoff_seconds:
-            await asyncio.sleep(self._config.retry_backoff_seconds)
-
-    async def aclose(self) -> None:
-        if self._owns_client:
-            await self._client.aclose()
-
-    async def __aenter__(self) -> BackendWebhookClient:
-        return self
-
-    async def __aexit__(self, *_: object) -> None:
-        await self.aclose()
