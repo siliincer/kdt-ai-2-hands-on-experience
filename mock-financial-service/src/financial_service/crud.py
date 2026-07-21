@@ -8,7 +8,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, joinedload
 
 from .models import (
-    BANK_CATALOG,
+    BANK_NAME,
     Account,
     AuditLog,
     Card,
@@ -79,7 +79,7 @@ def _append_audit(
 
 
 def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
-    acct = Account(owner=payload.owner, bank_name=payload.bank_name)
+    acct = Account(owner=payload.owner)
     db.add(acct)
     db.flush()  # get account_id before ledger entry
 
@@ -345,12 +345,11 @@ def transfer(
         if payload.sender_account_number == payload.receiver_account_number:
             raise ValidationError("SELF_TRANSFER", "Sender and receiver must differ")
 
-        # 카탈로그 기반 검증 — 카탈로그 내 타행 송금은 허용, 카탈로그 밖 은행만 거절
-        if payload.receiver_bank_name not in BANK_CATALOG:
+        # 이 mock 서비스는 단일 은행만 표현 — receiver_bank_name이 그 은행이 아니면 거절
+        if payload.receiver_bank_name != BANK_NAME:
             raise ValidationError(
-                "BANK_NOT_IN_CATALOG",
-                f"Unsupported bank: {payload.receiver_bank_name}. "
-                f"Supported banks: {sorted(BANK_CATALOG)}",
+                "BANK_NOT_SUPPORTED",
+                f"Unsupported bank: {payload.receiver_bank_name} (only {BANK_NAME})",
             )
 
         sender = get_account_by_number(db, payload.sender_account_number)

@@ -276,8 +276,6 @@ def get_analytics_card_ledger(
             card_ledger_entry_id=e.card_ledger_entry_id,
             card_id=e.card_id,
             amount=e.amount,
-            merchant_name=e.merchant_name,
-            category=e.category,
             created_at=e.created_at,
         )
         for e in entries

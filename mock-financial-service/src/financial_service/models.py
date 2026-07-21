@@ -18,12 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
 
-# 지원 가능한 고정 은행 카탈로그 — 자유입력 불가, 이 집합 내 값만 허용
-BANK_CATALOG: frozenset[str] = frozenset(
-    ["KDT은행", "신한은행", "국민은행", "하나은행", "우리은행"]
-)
-
-# 기본 은행명 — 계좌 생성 시 bank_name 생략 시 사용(하위호환)
+# 이 mock 서비스가 표현하는 단일 은행명 — 모든 계좌에 고정 부여
 BANK_NAME = "KDT은행"
 
 
@@ -117,10 +112,6 @@ class CardLedgerEntry(Base):
     # this app's POST /cards/{id}/charges doesn't collect one from the client,
     # so it stays null unless set directly (mock data always sets it).
     merchant_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    # 소비 카테고리(예: "외식", "쇼핑") — merchant_catalog.category_for_merchant()로
-    # merchant_name에서 파생. merchant_name과 동일하게 mock 데이터만 채움(라이브 결제는
-    # merchant_name을 안 받으므로 null 유지). 실제 은행엔 없는 개념 — 소비 분석 목적.
-    category: Mapped[str | None] = mapped_column(String(30), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

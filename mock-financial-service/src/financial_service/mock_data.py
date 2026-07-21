@@ -17,7 +17,6 @@ import json
 import random
 from datetime import date, datetime, timezone
 
-from .merchant_catalog import MERCHANTS_BY_CATEGORY, category_for_merchant
 from .models import (
     Account,
     Card,
@@ -741,16 +740,21 @@ for _row in MOCK_CARDS:
 
 # Merchant name pools per spending category — picked via the same seeded
 # random.Random used for amounts/dates, so merchant assignment stays
-# deterministic too. Source of truth: merchant_catalog.MERCHANTS_BY_CATEGORY
-# (shared with category_for_merchant() so seed data and any future live-charge
-# categorization never drift apart).
-_MERCHANTS_DINING = MERCHANTS_BY_CATEGORY["외식"]
-_MERCHANTS_MART = MERCHANTS_BY_CATEGORY["마트/편의점"]
-_MERCHANTS_SHOPPING = MERCHANTS_BY_CATEGORY["쇼핑"]
-_MERCHANTS_TRAVEL = MERCHANTS_BY_CATEGORY["여행"]
-_MERCHANTS_DELIVERY = MERCHANTS_BY_CATEGORY["배달"]
-_MERCHANTS_TRANSIT = MERCHANTS_BY_CATEGORY["교통"]
-_MERCHANTS_HOBBY = MERCHANTS_BY_CATEGORY["취미/문화"]
+# deterministic too.
+_MERCHANTS_DINING = [
+    "연남동 파스타",
+    "김밥천국",
+    "교촌치킨",
+    "스타벅스",
+    "새마을식당",
+    "본죽",
+]
+_MERCHANTS_MART = ["이마트", "홈플러스", "롯데마트", "GS25", "CU편의점", "세븐일레븐"]
+_MERCHANTS_SHOPPING = ["쿠팡", "무신사", "29CM", "네이버쇼핑", "올리브영"]
+_MERCHANTS_TRAVEL = ["대한항공", "아고다", "야놀자", "여기어때"]
+_MERCHANTS_DELIVERY = ["배달의민족", "쿠팡이츠", "요기요"]
+_MERCHANTS_TRANSIT = ["티머니", "카카오T", "SRT"]
+_MERCHANTS_HOBBY = ["교보문고", "다이소", "네이버페이 - 굿즈샵", "스팀"]
 
 
 def _dt(year: int, month: int, day: int, hour: int = 9, minute: int = 0) -> datetime:
@@ -1050,7 +1054,6 @@ def _build_transaction_dataset() -> tuple[
                     "amount": amount,
                     "idempotency_key": f"mock-card-{n:06d}",
                     "merchant_name": merchant,
-                    "category": category_for_merchant(merchant),
                     "created_at": created_at,
                 }
             )

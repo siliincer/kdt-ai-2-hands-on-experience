@@ -4,8 +4,6 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from .models import BANK_CATALOG, BANK_NAME
-
 # ── Error schema (fixed contract) ────────────────────────────────────────────
 
 
@@ -20,17 +18,6 @@ class ErrorResponse(BaseModel):
 class AccountCreate(BaseModel):
     owner: str = Field(..., min_length=1, max_length=255)
     initial_balance: int = Field(default=0, ge=0)
-    # 생략 시 KDT은행(기본값) — 하위호환 보장; BANK_CATALOG 외 값은 422 반환
-    bank_name: str = Field(default=BANK_NAME, min_length=1, max_length=50)
-
-    @field_validator("bank_name")
-    @classmethod
-    def bank_must_be_in_catalog(cls, v: str) -> str:
-        if v not in BANK_CATALOG:
-            raise ValueError(
-                f"Unsupported bank: {v}. Supported banks: {sorted(BANK_CATALOG)}"
-            )
-        return v
 
 
 class AccountResponse(BaseModel):
@@ -200,9 +187,6 @@ class CardLedgerEntryResponse(BaseModel):
     card_ledger_entry_id: str
     card_id: str
     amount: int
-    # 소비 분석용 — 실제 은행엔 없는 필드. mock 데이터만 채움, 라이브 결제는 둘 다 null.
-    merchant_name: str | None = None
-    category: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
