@@ -29,9 +29,11 @@ from ..core.load_environment_var import settings
 _EXECUTIONS_PATH = "/internal/v1/executions"
 
 # FE 승인 decision → Agent approval_outcome(agent/runtime/hitl.py ApprovalResume).
-# "approve" 만 이름이 다르고 나머지는 동일하다.
+# "approve"→"approved" 만 이름이 다르다. 레거시 "reject" 는 의미상 취소이므로
+# Agent outcome 에 없는 값이라 "cancelled" 로 접는다(_apply 도 invalidate 처리).
 _APPROVAL_OUTCOME_BY_DECISION = {
     "approve": "approved",
+    "reject": "cancelled",
     "change_requested": "change_requested",
     "cancelled": "cancelled",
 }
