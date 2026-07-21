@@ -171,10 +171,33 @@ class InteractionWebhookBuilder:
             payload=payload,
         )
 
+    def blocked(
+        self,
+        *,
+        chat_session_id: str,
+        workflow_id: str,
+        step_id: str,
+        ui_contract_id: str,
+        content: str,
+        payload: Mapping[str, Any],
+    ) -> AgentWebhookRequest:
+        """사용자 회신을 기다리지 않는 차단 안내 UI 이벤트를 만든다."""
+
+        return self._non_interactive_event(
+            event_type="blocked",
+            chat_session_id=chat_session_id,
+            workflow_id=workflow_id,
+            step_id=step_id,
+            ui_contract_id=ui_contract_id,
+            ui_type="blocked_message",
+            content=content,
+            payload=payload,
+        )
+
     def _non_interactive_event(
         self,
         *,
-        event_type: Literal["component", "error"],
+        event_type: Literal["component", "error", "blocked"],
         chat_session_id: str,
         workflow_id: str,
         step_id: str,
@@ -249,7 +272,7 @@ class InteractionWebhookBuilder:
     def _validate_non_interactive_step(
         self,
         *,
-        event_type: Literal["component", "error"],
+        event_type: Literal["component", "error", "blocked"],
         workflow_id: str,
         step_id: str,
         ui_contract_id: str,
