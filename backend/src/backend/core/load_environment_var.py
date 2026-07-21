@@ -72,6 +72,21 @@ class Settings(BaseSettings):
             "Bearer 토큰. Webhook Secret과 반드시 분리한다(서비스 간 인증 전용)."
         ),
     )
+    AGENT_SERVICE_URL: str = Field(
+        default="http://localhost:8001",
+        description=(
+            "Backend → Agent 내부 실행 API(/internal/v1/executions*) base URL. "
+            "실 Agent 연동(agent_client) 시 실행 시작·재개 요청에 사용한다."
+        ),
+    )
+    BACKEND_SERVICE_TOKEN: SecretStr = Field(
+        default=SecretStr("change-me-backend-service-token"),
+        description=(
+            "Backend → Agent 내부 실행 API 호출 시 서비스 인증 Bearer 토큰. "
+            "Agent 가 os.getenv('BACKEND_SERVICE_TOKEN') 로 검증하므로 값을 공유한다. "
+            "방향이 반대인 AGENT_SERVICE_TOKEN(Agent→BE)과 반드시 분리한다."
+        ),
+    )
     EXECUTION_CONTEXT_TTL_SECONDS: int = Field(
         default=1800,
         description="Execution Context 발급 시 기본 유효시간(초). 만료 후 재발급 필요.",

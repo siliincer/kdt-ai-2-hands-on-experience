@@ -15,6 +15,7 @@ from .core.config import CORS_OPTIONS, configure_app
 from .core.exceptions import exception_handlers
 from .db.redis import close_redis_pools
 from .migration.migration import run_migrations
+from .services.agent_client import close_agent_client
 from .services.financial import close_financial_client
 
 
@@ -28,7 +29,8 @@ async def lifespan(app: FastAPI):
     # 종료 시: Redis 커넥션 풀 + 계정계 HTTP 클라이언트 graceful shutdown
     await close_redis_pools()
     await close_financial_client()
-    print("레디스 풀 종료 완료, 계정계 HTTP 클라이언트 종료 완료")
+    await close_agent_client()
+    print("레디스 풀 종료 완료, 계정계·Agent HTTP 클라이언트 종료 완료")
 
 
 app = FastAPI(
