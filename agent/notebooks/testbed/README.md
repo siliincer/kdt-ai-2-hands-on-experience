@@ -30,11 +30,19 @@ uv run --with jupyter jupyter lab
 
 Notebook Kernel 이름은 공용 `python3`로 저장한다. 각 개발자는 자신의 `.venv`를 선택하며 개인 PC의 Kernel 이름이나 절대경로를 Notebook에 저장하지 않는다.
 
-## 잔액조회 기준 Notebook
+## Workflow Notebook
 
-`01_balance_inquiry_testbed.ipynb`을 위에서부터 실행한다.
+| Notebook | Workflow | 기본 검증 Scenario |
+| --- | --- | --- |
+| `01_balance_inquiry_testbed.ipynb` | `wf_balance_inquiry` | 계좌 선택 후 잔액 조회 |
+| `04_account_list_testbed.ipynb` | `wf_account_list` | 별칭 힌트로 계좌 목록 조회 |
+| `05_transaction_history_testbed.ipynb` | `wf_transaction_history` | 계좌 선택 Resume 후 첫 페이지 조회 |
+| `06_period_amount_summary_testbed.ipynb` | `wf_period_amount_summary` | 이번 달 배민 지출 합계 조회 |
+
+각 Notebook을 위에서부터 실행한다.
 
 - 기본 실행은 외부 통신이 없는 Mock Backend Mode다.
+- Slot 추출은 설정된 LLM을 우선 사용하며, LLM을 사용할 수 없으면 같은 Cell에서 결정적 규칙 폴백 결과를 확인할 수 있다.
 - 실제 Backend를 호출할 때만 마지막 Cell의 `RUN_REAL_BACKEND`를 `True`로 변경한다.
 - 실제 Token, Secret과 전체 금융 Payload는 Notebook 출력이나 Git에 저장하지 않는다.
 - Notebook 출력은 커밋하지 않는다. 재현 여부는 pytest로 보장한다.
