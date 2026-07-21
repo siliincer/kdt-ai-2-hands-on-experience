@@ -17,9 +17,7 @@ def api_base_url() -> str:
 
 
 @pytest.fixture()
-def api_request_context(
-    playwright: Playwright, api_base_url: str
-) -> APIRequestContext:
+def api_request_context(playwright: Playwright, api_base_url: str) -> APIRequestContext:
     """실제 backend에 REST로 직접 요청하는 컨텍스트(브라우저 없이)."""
     context = playwright.request.new_context(base_url=api_base_url)
     yield context

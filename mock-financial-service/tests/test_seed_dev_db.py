@@ -119,9 +119,7 @@ def test_card_products_no_fk_to_cards(mem_url):
     inspector = inspect(engine)
     fks = inspector.get_foreign_keys("card_products")
     for fk in fks:
-        assert fk.get("referred_table") != "cards", (
-            "card_products must not have a FK to cards"
-        )
+        assert fk.get("referred_table") != "cards", "card_products must not have a FK to cards"
     engine.dispose()
 
 
@@ -135,9 +133,10 @@ def test_seed_category_distribution(tmp_path):
     db_path = tmp_path / "cat_test.db"
     db_url = f"sqlite:///{db_path}"
 
-    from scripts.seed_dev_db import seed  # noqa: PLC0415
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
+
+    from scripts.seed_dev_db import seed  # noqa: PLC0415
 
     seed(db_url, reset=True)
 
