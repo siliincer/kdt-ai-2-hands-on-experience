@@ -6,7 +6,6 @@ Backend 응답의 `outcome`을 다시 판단하지 않고 route_key로 그대로
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -29,9 +28,13 @@ from agent.workflows.transfer_slot_extraction import (
 )
 from agent.workflows.workflow_support import build_tool_error_update
 from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import (
+    new_input_request_id as _default_input_request_id,
+)
 from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
+from agent.workflows.workflow_support import step_request_id as _default_tool_request_id
 from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
@@ -47,14 +50,6 @@ _RESET_STEP_BY_TARGET = {
     "to_account": "reset_internal_to_account",
     "amount": "reset_internal_transfer_amount",
 }
-
-
-def _default_input_request_id() -> str:
-    return f"input_{uuid.uuid4().hex}"
-
-
-def _default_tool_request_id(parent_request_id: str, step_id: str) -> str:
-    return f"{parent_request_id}:{step_id}"
 
 
 def extract_internal_transfer_slots_from_text(message: str) -> Mapping[str, Any]:
