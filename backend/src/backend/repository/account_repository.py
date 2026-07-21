@@ -41,17 +41,13 @@ async def get_mapped_accounts(session: AsyncSession, user_id: UUID) -> list[Acco
     return list(result.scalars().all())
 
 
-async def get_primary_mapped_account(
-    session: AsyncSession, user_id: UUID
-) -> Account | None:
+async def get_primary_mapped_account(session: AsyncSession, user_id: UUID) -> Account | None:
     """user 의 첫 매핑 계좌(송금 sender). 없으면 None."""
     accounts = await get_mapped_accounts(session, user_id)
     return accounts[0] if accounts else None
 
 
-async def get_owned_accounts_by_ids(
-    session: AsyncSession, user_id: UUID, account_ids: list[UUID]
-) -> list[Account]:
+async def get_owned_accounts_by_ids(session: AsyncSession, user_id: UUID, account_ids: list[UUID]) -> list[Account]:
     """user 소유이면서 요청한 로컬 Account.id 목록에 속하는 계좌만 반환한다.
 
     소유권 검증용. 다른 사용자 계좌 id 를 섞어 보내도 결과에 포함되지 않으므로,
@@ -71,9 +67,7 @@ async def get_owned_accounts_by_ids(
     return list(result.scalars().all())
 
 
-async def get_owned_account(
-    session: AsyncSession, user_id: UUID, account_id: UUID
-) -> Account | None:
+async def get_owned_account(session: AsyncSession, user_id: UUID, account_id: UUID) -> Account | None:
     """user 소유의 단일 계좌를 조회한다(설정 변경 대상 검증용). 없으면 None."""
     stmt = select(Account).where(
         Account.user_id == user_id,
@@ -95,9 +89,7 @@ async def get_account_by_id(session: AsyncSession, account_id: UUID) -> Account 
     return result.scalar_one_or_none()
 
 
-async def get_account_by_number(
-    session: AsyncSession, account_number: str
-) -> Account | None:
+async def get_account_by_number(session: AsyncSession, account_number: str) -> Account | None:
     """계좌번호로 계좌를 조회한다(신규 수취 계좌 검증 전용, D5).
 
     Frontend 검증 API 에서만 사용한다. 검증 성공 시 원문 대신
@@ -119,18 +111,14 @@ async def get_default_account(session: AsyncSession, user_id: UUID) -> Account |
     return result.scalars().first()
 
 
-async def set_default_account(
-    session: AsyncSession, user_id: UUID, account: Account
-) -> Account:
+async def set_default_account(session: AsyncSession, user_id: UUID, account: Account) -> Account:
     """기존 기본계좌를 해제하고 대상 계좌를 기본으로 설정한다(한 트랜잭션).
 
     사용자당 기본계좌가 동시에 하나만 존재하도록 보장한다(계약 20.5). 해제를 먼저
     수행해야 부분 유니크 인덱스(ux_accounts_user_default) 와 충돌하지 않는다.
     """
     await session.execute(
-        update(Account)
-        .where(Account.user_id == user_id, Account.is_default.is_(True))
-        .values(is_default=False)
+        update(Account).where(Account.user_id == user_id, Account.is_default.is_(True)).values(is_default=False)
     )
     account.is_default = True
     await session.commit()
@@ -138,9 +126,7 @@ async def set_default_account(
     return account
 
 
-async def set_account_alias(
-    session: AsyncSession, account: Account, alias: str
-) -> Account:
+async def set_account_alias(session: AsyncSession, account: Account, alias: str) -> Account:
     """계좌 별칭을 변경한다(로컬이 정본, D4)."""
     account.alias = alias
     await session.commit()
@@ -148,9 +134,7 @@ async def set_account_alias(
     return account
 
 
-async def alias_exists_for_user(
-    session: AsyncSession, user_id: UUID, alias: str, exclude_account_id: UUID
-) -> bool:
+async def alias_exists_for_user(session: AsyncSession, user_id: UUID, alias: str, exclude_account_id: UUID) -> bool:
     """같은 사용자의 다른 계좌가 이미 같은 별칭을 쓰는지(중복 정책)."""
     stmt = select(Account.id).where(
         Account.user_id == user_id,
@@ -179,8 +163,14 @@ async def create_mapped_account(
     bank_name: str | None = None,
     balance: int = 0,
     currency: str = "KRW",
+    account_type: str = "checking",
 ) -> Account:
-    """계정계 계좌를 로컬 Account 행으로 매핑 저장(프로비저닝)."""
+    """계정계 계좌를 로컬 Account 행으로 매핑 저장(프로비저닝).
+
+    account_type 은 기본 "checking"(입출금). null 로 두면 agent-tools 계좌 목록 응답의
+    account_type 이 null 이 되어 Agent 계약(AccountSummary.account_type=non-null)과
+    어긋나 잔액/조회 워크플로우가 실패한다(계약 정합).
+    """
     account = Account(
         user_id=user_id,
         account_number=account_number,
@@ -188,6 +178,7 @@ async def create_mapped_account(
         balance=balance,
         currency=currency,
         external_account_id=external_account_id,
+        account_type=account_type,
     )
     session.add(account)
     await session.commit()

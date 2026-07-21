@@ -22,9 +22,12 @@ sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psyco
 config.set_main_option("sqlalchemy.url", sync_url)
 
 # Interpret the config file for Python logging.
-# this is basically a fileConfig object
+# this is basically a fileConfig object.
+# disable_existing_loggers=False: run_migrations() 는 앱 lifespan(startup)에서도
+# 호출되는데, 기본값(True)이면 이미 설정된 uvicorn.access 로거까지 꺼뜨려 접근 로그
+# (200 라인)가 사라진다. 마이그레이션 로깅만 설정하고 기존 로거는 보존한다.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
