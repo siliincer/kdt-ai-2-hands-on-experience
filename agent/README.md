@@ -6,6 +6,15 @@ backend 게이트웨이가 채팅을 이쪽으로 넘겨줍니다.
 
 이 문서는 agent 폴더를 처음 보는 팀원(프론트/백엔드)을 위한 전체 개요입니다.
 
+> 전환 안내
+>
+> 아래 1~5절은 기존 `/chat`, `bank_client.py`, `bank_tools.py` 기반 Demo 구조를
+> 설명한다. 관리시트 v3 기반 신규 Workflow는 금융 원장을 직접 호출하지 않고
+> Backend의 `/api/v1/agent-tools/*`와 Webhook·Resume 계약을 사용한다.
+> 신규 공동개발은 [Workflow 개발 가이드](docs/agent-workflow-development-guide.md)와
+> [Agent 구현 규칙](AGENTS.md)을 우선한다. 기존 Demo Tool에 신규 기능을 추가하지
+> 않는다.
+
 ---
 
 ## 1. 대화 한 턴이 처리되는 흐름
@@ -126,7 +135,19 @@ curl -X POST localhost:8001/chat -H 'content-type: application/json' \
 uv run pytest agent
 ```
 
-## 6. 구조를 빠르게 이해하는 최단 경로 — 노트북 3권
+## 6. Notebook
+
+### 6.1 현재 계약 기반 Workflow Testbed
+
+신규 Workflow는 [notebooks/testbed/README.md](notebooks/testbed/README.md)의
+실행법을 사용한다.
+
+1. `notebooks/testbed/01_balance_inquiry_testbed.ipynb`
+   - 관리시트 v3 기반 잔액조회 기준 구현
+   - Agent 내부 처리, Mock Tool API, UI Webhook과 Resume을 단계별 확인
+   - pytest와 동일한 `WorkflowTestbed` Harness 사용
+
+### 6.2 기존 Demo 학습용 Notebook
 
 `notebooks/`에 **실행 결과가 포함된** 노트북이 있습니다. 코드를 안 돌려도
 GitHub에서 출력까지 그대로 볼 수 있습니다:
