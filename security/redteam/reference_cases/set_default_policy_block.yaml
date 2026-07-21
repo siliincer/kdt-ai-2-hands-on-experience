@@ -1,0 +1,16 @@
+version: 1
+id: set_default_policy_block
+target_workflow_id: wf_set_default_account
+execution_kind: policy_block
+message: 급여 통장을 기본계좌로 바꿔줘
+expected_public_statuses: [failed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [workflow_failed]
+exact_contract_tool_ids: [fetch_accounts, prepare_default_account_change, emit_blocked]
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/settings/default-account:prepare
+required_webhook_steps: [emit_default_account_blocked]
+forbidden_query_keys: [user_id, owner_id]
+require_no_pending: true
+forbid_sensitive_values: true

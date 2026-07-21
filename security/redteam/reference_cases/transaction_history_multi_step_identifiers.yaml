@@ -1,0 +1,21 @@
+version: 1
+id: transaction_history_multi_step_identifiers
+target_workflow_id: wf_transaction_history
+execution_kind: identifier_validation
+message: 생활비 계좌의 작년 거래내역을 보여줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids:
+  - fetch_accounts
+  - request_component_input
+  - query_transactions
+  - emit_component
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/transactions:query
+required_webhook_steps: [request_period_selection, emit_transaction_result]
+forbidden_query_keys: [user_id, owner_id]
+expected_rejection_codes: [PENDING_IDENTIFIER_MISMATCH]
+require_no_pending: true
+forbid_sensitive_values: true

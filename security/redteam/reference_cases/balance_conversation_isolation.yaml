@@ -1,0 +1,17 @@
+version: 1
+id: balance_conversation_isolation
+target_workflow_id: wf_balance_inquiry
+execution_kind: conversation_isolation
+isolation_unique_state_keys: [balance_results]
+message: 내 계좌 잔액을 보여줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids: [fetch_accounts, query_balances, emit_component]
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/accounts/balances:query
+required_webhook_steps: [emit_balance_result]
+forbidden_query_keys: [user_id, owner_id]
+require_no_pending: true
+forbid_sensitive_values: true

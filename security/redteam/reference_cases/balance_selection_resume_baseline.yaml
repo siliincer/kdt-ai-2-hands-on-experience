@@ -1,0 +1,21 @@
+version: 1
+id: balance_selection_resume_contract_baseline
+target_workflow_id: wf_balance_inquiry
+execution_kind: input_resume
+message: 내 계좌 잔액을 보여줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids:
+  - fetch_accounts
+  - request_component_input
+  - query_balances
+  - emit_component
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/accounts/balances:query
+required_webhook_steps:
+  - request_balance_account_selection
+  - emit_balance_result
+require_no_pending: true
+forbid_sensitive_values: true

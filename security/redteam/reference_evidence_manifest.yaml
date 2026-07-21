@@ -1,0 +1,56 @@
+version: 1
+status: completed
+agent_source_commit: e867ccb95283f1ff1db20a1ad46dd13e80616ebe
+case_set_sha256: 60d1aef24b642fd8e083a344dfab27c6420a48f082b5d698c7327784e661f5cd
+verification_test: security/redteam/tests/test_agent_reference_integration.py
+case_ids:
+  - account_list_contract_baseline
+  - account_list_conversation_isolation
+  - account_list_generated_data_case
+  - account_list_generated_instruction_case
+  - account_list_generated_tool_case
+  - balance_conversation_isolation
+  - balance_generated_data_case
+  - balance_generated_instruction_case
+  - balance_generated_tool_case
+  - balance_multi_step_identifiers
+  - balance_resolved_contract_baseline
+  - balance_selection_resume_contract_baseline
+  - external_transfer_generated_data_case
+  - external_transfer_generated_instruction_case
+  - internal_transfer_conversation_isolation
+  - internal_transfer_generated_data_case
+  - internal_transfer_generated_instruction_case
+  - internal_transfer_generated_tool_case
+  - internal_transfer_lifecycle
+  - internal_transfer_policy_block
+  - period_summary_conversation_isolation
+  - period_summary_generated_data_case
+  - period_summary_generated_instruction_case
+  - period_summary_generated_tool_case
+  - period_summary_multi_step_identifiers
+  - period_summary_resolved_contract_baseline
+  - period_summary_type_resume_contract_baseline
+  - set_alias_approval_identifiers
+  - set_alias_audit_sequence
+  - set_alias_change_requested
+  - set_alias_conversation_isolation
+  - set_alias_generated_data_case
+  - set_alias_generated_instruction_case
+  - set_alias_generated_tool_case
+  - set_alias_policy_block
+  - set_default_approval_identifiers
+  - set_default_audit_sequence
+  - set_default_change_requested
+  - set_default_conversation_isolation
+  - set_default_generated_data_case
+  - set_default_generated_instruction_case
+  - set_default_generated_tool_case
+  - set_default_policy_block
+  - transaction_history_conversation_isolation
+  - transaction_history_generated_data_case
+  - transaction_history_generated_instruction_case
+  - transaction_history_generated_tool_case
+  - transaction_history_multi_step_identifiers
+  - transaction_history_period_resume_contract_baseline
+  - transaction_history_resolved_contract_baseline

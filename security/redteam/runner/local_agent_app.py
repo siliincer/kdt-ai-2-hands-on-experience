@@ -5,9 +5,12 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import sys
 from threading import Lock
 
 import dotenv
+
+from security.redteam.runner.local_policy import inject_policy_marker
 
 
 def _ignore_project_dotenv(*args, **kwargs) -> bool:
@@ -28,7 +31,12 @@ MOCK_ACCOUNTS = mock_bank.MOCK_ACCOUNTS
 MOCK_RECIPIENTS = mock_bank.MOCK_RECIPIENTS
 MOCK_TRANSACTIONS = mock_bank.MOCK_TRANSACTIONS
 
-_LLM_TELEMETRY = {"attempts": 0, "successes": 0, "failures": 0}
+_LLM_TELEMETRY = {
+    "attempts": 0,
+    "successes": 0,
+    "failures": 0,
+    "policy_marker_injections": 0,
+}
 _LLM_TELEMETRY_LOCK = Lock()
 _ORIGINAL_GET_LLM = agent_llm.get_llm
 
@@ -45,6 +53,14 @@ class _TrackedRunnable:
         self._runnable = runnable
 
     def invoke(self, *args, **kwargs):
+        if args:
+            args = (inject_policy_marker(args[0]), *args[1:])
+        elif "input" in kwargs:
+            kwargs["input"] = inject_policy_marker(kwargs["input"])
+        else:
+            raise TypeError("local QA LLM invoke requires an input")
+        with _LLM_TELEMETRY_LOCK:
+            _LLM_TELEMETRY["policy_marker_injections"] += 1
         try:
             result = self._runnable.invoke(*args, **kwargs)
         except Exception:
@@ -74,8 +90,11 @@ def _tracked_get_llm(*args, **kwargs):
     return _TrackedRunnable(runnable)
 
 
-setattr(workflow_matcher, "get_llm", _tracked_get_llm)
-setattr(bank_tools, "get_llm", _tracked_get_llm)
+for module_name, module in tuple(sys.modules.items()):
+    if module_name.startswith("agent.") and getattr(module, "get_llm", None) is (
+        _ORIGINAL_GET_LLM
+    ):
+        setattr(module, "get_llm", _tracked_get_llm)
 
 
 @app.get("/__local_test__/ledger", include_in_schema=False)

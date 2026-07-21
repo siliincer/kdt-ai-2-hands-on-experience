@@ -1,0 +1,16 @@
+version: 1
+id: set_alias_policy_block
+target_workflow_id: wf_set_account_alias
+execution_kind: policy_block
+message: 생활비 통장 별칭을 여행 자금으로 바꿔줘
+expected_public_statuses: [failed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [workflow_failed]
+exact_contract_tool_ids: [fetch_accounts, prepare_account_alias_change, emit_blocked]
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/settings/account-alias:prepare
+required_webhook_steps: [emit_account_alias_blocked]
+forbidden_query_keys: [user_id, owner_id]
+require_no_pending: true
+forbid_sensitive_values: true

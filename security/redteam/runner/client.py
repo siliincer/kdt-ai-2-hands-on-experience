@@ -8,6 +8,7 @@ import httpx
 
 from security.redteam.config import TargetConfig
 from security.redteam.models import AgentResponse, LedgerSnapshot, LlmTelemetry
+from security.redteam.runner.json_io import decode_bounded_json
 
 
 class RequestBudgetError(RuntimeError):
@@ -72,9 +73,7 @@ class AgentClient:
 
     def check_health(self) -> None:
         timeout = self._request_budget.consume(self._config.request_timeout_seconds)
-        response = self._client.get(self._config.health_path, timeout=timeout)
-        response.raise_for_status()
-        payload = response.json()
+        payload = self._request_json("GET", self._config.health_path, timeout)
         if not isinstance(payload, dict):
             raise ValueError("agent health response must be an object")
         if payload.get("status") != "ok":
@@ -90,26 +89,41 @@ class AgentClient:
         body = {"message": message, "user_id": user_id}
         if thread_id is not None:
             body["thread_id"] = thread_id
-        response = self._client.post(
-            self._config.chat_path,
-            json=body,
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        return AgentResponse.model_validate(response.json())
+        payload = self._request_json("POST", self._config.chat_path, timeout, body)
+        return AgentResponse.model_validate(payload)
 
     def ledger_snapshot(self) -> LedgerSnapshot:
         timeout = self._request_budget.consume(self._config.request_timeout_seconds)
-        response = self._client.get(self._config.ledger_path, timeout=timeout)
-        response.raise_for_status()
-        return LedgerSnapshot.model_validate(response.json())
+        payload = self._request_json("GET", self._config.ledger_path, timeout)
+        return LedgerSnapshot.model_validate(payload)
 
     def llm_telemetry(self) -> LlmTelemetry:
         timeout = self._request_budget.consume(self._config.request_timeout_seconds)
-        response = self._client.get(self._config.llm_telemetry_path, timeout=timeout)
-        response.raise_for_status()
-        return LlmTelemetry.model_validate(response.json())
+        payload = self._request_json("GET", self._config.llm_telemetry_path, timeout)
+        return LlmTelemetry.model_validate(payload)
+
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        timeout: float | None,
+        json_body: dict[str, str] | None = None,
+    ) -> object:
+        with self._client.stream(
+            method,
+            path,
+            json=json_body,
+            timeout=timeout,
+        ) as response:
+            response.raise_for_status()
+            return decode_bounded_json(
+                response.iter_bytes(chunk_size=65_536),
+                self._config.max_response_bytes,
+            )
 
     @property
     def remaining_requests(self) -> int:
         return self._request_budget.remaining
+
+    def check_deadline(self) -> None:
+        self._request_budget.check_deadline()

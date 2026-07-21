@@ -13,8 +13,10 @@ from security.redteam.models import (
     AttackCase,
     AttackResult,
     CandidateAction,
+    CandidateBusinessFact,
     CandidatePolarity,
     CandidateTarget,
+    JudgmentOutcome,
     Scenario,
     ScenarioResult,
     TurnResult,
@@ -23,6 +25,7 @@ from security.redteam.models import (
 from security.redteam.runner.attacker import AttackGenerator
 from security.redteam.runner.client import AgentClient, RequestBudgetError
 from security.redteam.runner.evaluator import evaluate_ledger, evaluate_response
+from security.redteam.runner.judge import ResponseJudge
 from security.redteam.runner.loop import AdaptiveLoopState
 
 
@@ -45,6 +48,7 @@ def _error_result(
     error: Exception,
     *,
     turns=None,
+    extra_evidence: list[str] | None = None,
 ) -> AttackResult:
     preserved_turns = list(turns or [])
     has_failure = any(turn.verdict == Verdict.FAIL for turn in preserved_turns)
@@ -62,6 +66,7 @@ def _error_result(
     )
     return AttackResult(
         attack_id=attack.id,
+        target_workflow_id=attack.target_workflow_id,
         iteration=iteration,
         verdict=Verdict.FAIL if has_failure else Verdict.ERROR,
         reason=reason,
@@ -69,7 +74,10 @@ def _error_result(
         boundary_score=max(
             (turn.boundary_score for turn in preserved_turns), default=0.0
         ),
-        evidence=[item for turn in preserved_turns for item in turn.evidence],
+        evidence=[
+            *(item for turn in preserved_turns for item in turn.evidence),
+            *(extra_evidence or []),
+        ],
         turns=preserved_turns,
     )
 
@@ -80,6 +88,18 @@ def _aggregate_verdict(results: list[AttackResult]) -> Verdict:
     if any(result.verdict == Verdict.ERROR for result in results):
         return Verdict.ERROR
     return Verdict.PASS
+
+
+def _aggregate_workflow_verdicts(
+    results: list[AttackResult],
+) -> dict:
+    grouped = {}
+    for result in results:
+        grouped.setdefault(result.target_workflow_id, []).append(result)
+    return {
+        workflow_id: _aggregate_verdict(workflow_results)
+        for workflow_id, workflow_results in grouped.items()
+    }
 
 
 def validate_runtime(config: RedTeamConfig, user_id: str) -> None:
@@ -104,6 +124,7 @@ def _execute_attack(
     scenario: Scenario,
     attack: AttackCase,
     user_id: str,
+    redact_fields: set[str],
     *,
     first_message: str | None,
     generation_variation: str | None,
@@ -111,10 +132,12 @@ def _execute_attack(
     generation_style: str | None,
     generation_seed: int | None,
     iteration: int,
+    judge: ResponseJudge | None = None,
     generation_requested_action: CandidateAction | None = None,
     generation_target: CandidateTarget | None = None,
     generation_polarity: CandidatePolarity | None = None,
     generation_reported_speech: bool | None = None,
+    generation_business_fact_mentions: set[CandidateBusinessFact] | None = None,
 ) -> AttackResult:
     turns = attack.expanded_turns()
     if first_message is not None:
@@ -134,6 +157,7 @@ def _execute_attack(
     for index, turn in enumerate(turns, start=1):
         requested_thread_id = thread_id
         try:
+            client.check_deadline()
             response = client.chat(turn.message, user_id, thread_id)
         except _BOUNDED_EXECUTION_ERRORS as exc:
             turn_results.append(
@@ -152,7 +176,67 @@ def _execute_attack(
                 turns=turn_results,
             )
         expected = turn.expected_response or scenario.expected_response
-        turn_result = evaluate_response(index, turn.message, response, expected)
+        turn_result = evaluate_response(
+            index,
+            turn.message,
+            response,
+            expected,
+            redact_fields,
+        )
+        execution_evidence = response.execution_evidence
+        if (
+            execution_evidence is not None
+            and execution_evidence.observed_workflow_id != attack.target_workflow_id
+        ):
+            routing_error = ValueError("reference workflow routing mismatch")
+            turn_result = turn_result.model_copy(
+                update={
+                    "verdict": Verdict.ERROR,
+                    "reason": "reference workflow routing mismatch",
+                    "evidence": [
+                        *turn_result.evidence,
+                        "workflow:routing_mismatch",
+                    ],
+                }
+            )
+            return _error_result(
+                attack,
+                iteration,
+                "workflow routing",
+                routing_error,
+                turns=[*turn_results, turn_result],
+            )
+        if judge is not None:
+            try:
+                judgment = judge.evaluate(
+                    scenario,
+                    expected,
+                    turn.message,
+                    response,
+                    turn_result.verdict,
+                )
+            except _BOUNDED_EXECUTION_ERRORS as exc:
+                return _error_result(
+                    attack,
+                    iteration,
+                    "independent judgment",
+                    exc,
+                    turns=[*turn_results, turn_result],
+                )
+            agreement = (
+                None
+                if judgment.outcome == JudgmentOutcome.UNCERTAIN
+                else (
+                    (judgment.outcome == JudgmentOutcome.VIOLATION)
+                    == (turn_result.verdict == Verdict.FAIL)
+                )
+            )
+            turn_result = turn_result.model_copy(
+                update={
+                    "model_judgment": judgment,
+                    "judgment_agrees_with_rules": agreement,
+                }
+            )
         if (
             requested_thread_id is not None
             and response.thread_id != requested_thread_id
@@ -173,6 +257,16 @@ def _execute_attack(
                 }
             )
         turn_results.append(turn_result)
+        try:
+            client.check_deadline()
+        except RequestBudgetError as exc:
+            return _error_result(
+                attack,
+                iteration,
+                "response evaluation",
+                exc,
+                turns=turn_results,
+            )
         if (
             requested_thread_id is not None
             and response.thread_id != requested_thread_id
@@ -202,6 +296,7 @@ def _execute_attack(
                 "ledger verification",
                 exc,
                 turns=turn_results,
+                extra_evidence=["ledger_state:integrity_unknown"],
             )
         ledger_verdict, ledger_reason, ledger_evidence = evaluate_ledger(
             before_ledger,
@@ -209,6 +304,17 @@ def _execute_attack(
             attack.expected_ledger,
         )
         evidence.extend(ledger_evidence)
+        try:
+            client.check_deadline()
+        except RequestBudgetError as exc:
+            return _error_result(
+                attack,
+                iteration,
+                "ledger evaluation",
+                exc,
+                turns=turn_results,
+                extra_evidence=ledger_evidence,
+            )
         if ledger_verdict == Verdict.FAIL:
             attack_verdict = Verdict.FAIL
             boundary_score = 1.0
@@ -221,6 +327,7 @@ def _execute_attack(
         reason = f"{reason}; {ledger_reason}"
     return AttackResult(
         attack_id=attack.id,
+        target_workflow_id=attack.target_workflow_id,
         iteration=iteration,
         generated_by_llm=first_message is not None,
         generation_variation=generation_variation,
@@ -231,6 +338,7 @@ def _execute_attack(
         generation_target=generation_target,
         generation_polarity=generation_polarity,
         generation_reported_speech=generation_reported_speech,
+        generation_business_fact_mentions=generation_business_fact_mentions or set(),
         verdict=attack_verdict,
         boundary_score=boundary_score,
         reason=reason,
@@ -245,6 +353,7 @@ def run_scenario(
     client: AgentClient,
     user_id: str,
     attacker: AttackGenerator | None = None,
+    judge: ResponseJudge | None = None,
     *,
     run_started_at: datetime | None = None,
     run_started_monotonic: float | None = None,
@@ -254,6 +363,7 @@ def run_scenario(
         run_started_monotonic if run_started_monotonic is not None else time.monotonic()
     )
     validate_runtime(config, user_id)
+    client.check_deadline()
     if any(attack.adaptive for attack in scenario.attacks) and attacker is None:
         raise SafetyPolicyError("adaptive LLM execution requires an input generator")
     attempt_counts = [
@@ -275,12 +385,22 @@ def run_scenario(
     )
     generation_requests = sum(
         attempts
-        * config.adaptive_attack.max_generation_attempts
-        * (1 + config.adaptive_attack.candidates_per_generation)
+        * (
+            1
+            + config.adaptive_attack.candidates_per_generation
+            + 2 * (config.adaptive_attack.max_generation_attempts - 1)
+        )
         for attack, attempts in zip(scenario.attacks, attempt_counts, strict=True)
         if attack.adaptive
     )
-    required_requests = 2 + turn_count + ledger_checks + generation_requests
+    judgment_requests = (
+        turn_count * config.judgment.max_attempts_per_evaluation
+        if judge is not None
+        else 0
+    )
+    required_requests = (
+        2 + turn_count + ledger_checks + generation_requests + judgment_requests
+    )
     if client.remaining_requests < required_requests:
         raise SafetyPolicyError(
             f"scenario needs up to {required_requests} HTTP requests including health, "
@@ -290,13 +410,16 @@ def run_scenario(
     client.check_health()
     results: list[AttackResult] = []
     loop_summaries = []
-    state_integrity_failed = False
+    state_integrity_failure: str | None = None
+    run_deadline_exhausted = False
     for attack, attempts in zip(scenario.attacks, attempt_counts, strict=True):
         loop = AdaptiveLoopState(attack_id=attack.id, max_iterations=attempts)
         while loop.can_continue:
             if attack.adaptive and attacker is not None:
                 try:
+                    client.check_deadline()
                     generated = attacker.generate(scenario, attack, loop.history)
+                    client.check_deadline()
                 except _BOUNDED_EXECUTION_ERRORS as exc:
                     result = _error_result(
                         attack,
@@ -306,6 +429,9 @@ def run_scenario(
                     )
                     results.append(result)
                     loop.record(result)
+                    if isinstance(exc, RequestBudgetError):
+                        run_deadline_exhausted = True
+                        break
                     continue
             else:
                 generated = None
@@ -314,6 +440,7 @@ def run_scenario(
                 scenario,
                 attack,
                 user_id,
+                config.safety.redact_fields,
                 first_message=generated.message if generated is not None else None,
                 generation_variation=(
                     generated.variation if generated is not None else None
@@ -333,7 +460,11 @@ def run_scenario(
                 generation_reported_speech=(
                     generated.reported_speech if generated is not None else None
                 ),
+                generation_business_fact_mentions=(
+                    generated.business_fact_mentions if generated is not None else None
+                ),
                 iteration=loop.next_iteration,
+                judge=judge,
             )
             if result.execution_error is not None and generated is not None:
                 result = result.model_copy(
@@ -347,15 +478,31 @@ def run_scenario(
                         "generation_target": generated.target,
                         "generation_polarity": generated.polarity,
                         "generation_reported_speech": generated.reported_speech,
+                        "generation_business_fact_mentions": (
+                            generated.business_fact_mentions
+                        ),
                     }
                 )
             results.append(result)
             loop.record(result)
-            if "ledger_state:unexpected_mutation" in result.evidence:
-                state_integrity_failed = True
+            if result.execution_error and result.execution_error.endswith(
+                ":RequestBudgetError"
+            ):
+                run_deadline_exhausted = True
+                break
+            integrity_markers = {
+                "ledger_state:unexpected_mutation",
+                "ledger_state:integrity_unknown",
+            }
+            if marker := next(
+                (item for item in result.evidence if item in integrity_markers),
+                None,
+            ):
+                state_integrity_failure = marker
+                break
         if attack.adaptive:
             loop_summaries.append(loop.summary())
-        if state_integrity_failed:
+        if state_integrity_failure is not None or run_deadline_exhausted:
             break
 
     verdict = _aggregate_verdict(results)
@@ -367,15 +514,47 @@ def run_scenario(
         telemetry_error = exc
         if verdict != Verdict.FAIL:
             verdict = Verdict.ERROR
-    attacker_telemetry = attacker.telemetry() if attacker is not None else None
+    attacker_telemetry_error = None
+    try:
+        attacker_telemetry = attacker.telemetry() if attacker is not None else None
+    except _BOUNDED_EXECUTION_ERRORS as exc:
+        attacker_telemetry = None
+        attacker_telemetry_error = exc
+        if verdict != Verdict.FAIL:
+            verdict = Verdict.ERROR
+    judgment_telemetry_error = None
+    try:
+        judgment_telemetry = judge.telemetry() if judge is not None else None
+    except _BOUNDED_EXECUTION_ERRORS as exc:
+        judgment_telemetry = None
+        judgment_telemetry_error = exc
+        if verdict != Verdict.FAIL:
+            verdict = Verdict.ERROR
+    review_required = bool(
+        judgment_telemetry
+        and (judgment_telemetry.disagreements or judgment_telemetry.uncertain)
+    )
     adaptive_enabled = any(attack.adaptive for attack in scenario.attacks)
     if adaptive_enabled:
-        if state_integrity_failed:
+        if state_integrity_failure == "ledger_state:unexpected_mutation":
             execution_reason = "scenario stopped after an unexpected ledger mutation"
+        elif state_integrity_failure == "ledger_state:integrity_unknown":
+            execution_reason = "scenario stopped because ledger integrity is unknown"
         elif any(result.execution_error for result in results):
             execution_reason = "adaptive execution ended with a bounded runtime error"
+        elif attacker_telemetry_error is not None:
+            execution_reason = "attacker telemetry collection failed"
+        elif judgment_telemetry_error is not None:
+            execution_reason = "independent judgment telemetry collection failed"
         elif telemetry_error is not None:
             execution_reason = "target LLM telemetry collection failed"
+        elif (
+            llm_telemetry is not None
+            and llm_telemetry.policy_marker_injections != llm_telemetry.attempts
+        ):
+            if verdict != Verdict.FAIL:
+                verdict = Verdict.ERROR
+            execution_reason = "target LLM policy marker coverage is incomplete"
         elif attacker_telemetry is None or attacker_telemetry.attempts == 0:
             if verdict != Verdict.FAIL:
                 verdict = Verdict.ERROR
@@ -393,6 +572,13 @@ def run_scenario(
     else:
         if telemetry_error is not None:
             execution_reason = "target LLM telemetry collection failed"
+        elif (
+            llm_telemetry is not None
+            and llm_telemetry.policy_marker_injections != llm_telemetry.attempts
+        ):
+            if verdict != Verdict.FAIL:
+                verdict = Verdict.ERROR
+            execution_reason = "target LLM policy marker coverage is incomplete"
         elif llm_telemetry is not None and llm_telemetry.attempts == 0:
             if verdict != Verdict.FAIL:
                 verdict = Verdict.ERROR
@@ -411,14 +597,22 @@ def run_scenario(
         completed_at=completed_at,
         duration_seconds=max(0.0, time.monotonic() - started_monotonic),
         target_origin=config.target.base_url.rstrip("/"),
+        config_version=config.version,
+        scenario_version=scenario.version,
+        scenario_type=scenario.type,
+        scenario_category=scenario.category,
+        scenario_coverage=scenario.coverage,
         scenario_id=scenario.id,
         scenario_name=scenario.name,
         severity=scenario.severity,
         execution_mode="adaptive_llm",
         execution_reason=execution_reason,
+        review_required=review_required,
         llm_telemetry=llm_telemetry,
         attacker_telemetry=attacker_telemetry,
+        judgment_telemetry=judgment_telemetry,
         loop_summaries=loop_summaries,
+        workflow_verdicts=_aggregate_workflow_verdicts(results),
         verdict=verdict,
         results=results,
     )

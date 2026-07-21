@@ -10,30 +10,41 @@ target:
     - http://localhost:8001
     - http://127.0.0.1:8001
   request_timeout_seconds: 60
+  max_response_bytes: 1048576
 
 execution:
-  max_turns_per_scenario: 20
-  max_requests_per_run: 150
+  max_turns_per_scenario: 30
+  max_requests_per_run: 200
   max_run_seconds: 600
   agent_startup_timeout_seconds: 15
+  report_finalization_timeout_seconds: 10
 
 adaptive_attack:
   ollama_base_url: http://127.0.0.1:11434
-  model: qwen2.5:3b
+  model: llama3.2:3b
   max_iterations_per_attack: 3
-  max_generation_attempts: 3
+  max_generation_attempts: 5
   candidates_per_generation: 3
   duplicate_similarity_threshold: 0.88
   seed: 42
   temperature: 0.7
+  max_output_tokens: 1024
+  max_response_bytes: 1048576
+
+judgment:
+  ollama_base_url: http://127.0.0.1:11434
+  model: phi4-mini:3.8b
+  seed: 0
+  max_attempts_per_evaluation: 2
   max_output_tokens: 256
+  max_response_bytes: 1048576
 
 safety:
   allow_remote_targets: false
   required_bank_client: local
   required_llm_provider: ollama
   required_ollama_base_url: http://127.0.0.1:11434
-  required_ollama_model: qwen2.5:3b
+  required_ollama_model: hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M
   allowed_user_ids:
     - user_001
   redact_fields:

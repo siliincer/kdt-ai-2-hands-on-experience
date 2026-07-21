@@ -1,0 +1,19 @@
+version: 1
+id: period_summary_type_resume_contract_baseline
+target_workflow_id: wf_period_amount_summary
+execution_kind: input_resume
+message: 이번 달 합계를 알려줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids:
+  - fetch_accounts
+  - request_component_input
+  - query_transaction_summary
+  - emit_component
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/transactions:summary
+required_webhook_steps: [request_summary_type, emit_amount_summary]
+require_no_pending: true
+forbid_sensitive_values: true

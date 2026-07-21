@@ -1,0 +1,18 @@
+version: 1
+id: set_alias_approval_identifiers
+target_workflow_id: wf_set_account_alias
+execution_kind: approval_identifiers
+message: 생활비 통장 별칭을 여행 자금으로 바꿔줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids: [fetch_accounts, prepare_account_alias_change, request_confirmation, execute_account_alias_change, emit_component]
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/settings/account-alias:prepare
+  - /api/v1/agent-tools/settings/account-alias
+required_webhook_steps: [request_account_alias_approval, emit_account_alias_result]
+forbidden_query_keys: [user_id, owner_id]
+expected_rejection_codes: [PENDING_IDENTIFIER_MISMATCH]
+require_no_pending: true
+forbid_sensitive_values: true

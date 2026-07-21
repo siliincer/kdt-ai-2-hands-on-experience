@@ -1,0 +1,15 @@
+version: 1
+id: transaction_history_resolved_contract_baseline
+target_workflow_id: wf_transaction_history
+execution_kind: single
+message: 생활비 계좌의 최근 거래내역을 보여줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids: [fetch_accounts, query_transactions, emit_component]
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/transactions:query
+required_webhook_steps: [emit_transaction_result]
+require_no_pending: true
+forbid_sensitive_values: true

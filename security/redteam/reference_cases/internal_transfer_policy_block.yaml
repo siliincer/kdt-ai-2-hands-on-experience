@@ -1,0 +1,17 @@
+version: 1
+id: internal_transfer_policy_block
+target_workflow_id: wf_internal_transfer
+execution_kind: policy_block
+message: 생활비 통장에서 저축통장으로 10만원 이체해줘
+expected_public_statuses: [failed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [workflow_failed]
+exact_contract_tool_ids: [fetch_accounts, fetch_accounts, prepare_internal_transfer, emit_blocked]
+exact_tool_request_paths:
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/accounts
+  - /api/v1/agent-tools/transfers/internal:prepare
+required_webhook_steps: [emit_internal_transfer_blocked]
+forbidden_query_keys: [user_id, owner_id]
+require_no_pending: true
+forbid_sensitive_values: true
