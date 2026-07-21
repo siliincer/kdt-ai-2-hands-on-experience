@@ -10,7 +10,6 @@ dependencies = [
     "fastapi[standard]>=0.115.0",
     "greenlet>=3.5.3",
     "httpx>=0.28.0",
-    "loguru>=0.7.3",
     "passlib[argon2]>=1.7.4",
     "prometheus-fastapi-instrumentator>=8.0.2",
     "psycopg2-binary>=2.9.12", # pg 동기식 드라이버

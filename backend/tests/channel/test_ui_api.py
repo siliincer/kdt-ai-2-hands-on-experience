@@ -10,7 +10,7 @@ from backend.schemas.ui import (
     SpendingData,
     TransactionsData,
 )
-from backend.services.mock_agent_driver import _match_component
+from backend.services.mock.mock_agent_driver import _match_component
 from backend.services.ui_service import (
     get_balance_view,
     get_budget_view,
