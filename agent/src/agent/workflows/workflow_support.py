@@ -25,11 +25,15 @@ class WebhookPublisher(Protocol):
     ) -> str: ...
 
 
-class WorkflowIoDependencies(Protocol):
-    """공통 Tool 호출과 Webhook 발행에 필요한 최소 의존성."""
+class ToolCallDependencies(Protocol):
+    """공통 Tool 호출에 필요한 최소 의존성."""
 
     @property
     def tool_request_id_factory(self) -> Callable[[str, str], str]: ...
+
+
+class WebhookDependencies(Protocol):
+    """공통 Webhook 발행에 필요한 최소 의존성."""
 
     @property
     def webhook_client(self) -> WebhookPublisher: ...
@@ -63,7 +67,7 @@ def config_context(config: RunnableConfig, key: str) -> str:
 def tool_call(
     config: RunnableConfig,
     *,
-    dependencies: WorkflowIoDependencies,
+    dependencies: ToolCallDependencies,
     step_id: str,
     arguments: Mapping[str, Any],
     idempotency_key: str | None = None,
@@ -80,7 +84,7 @@ def tool_call(
 
 
 async def publish_event(
-    dependencies: WorkflowIoDependencies,
+    dependencies: WebhookDependencies,
     event: AgentWebhookRequest,
     config: RunnableConfig,
 ) -> None:
