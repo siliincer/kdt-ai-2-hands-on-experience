@@ -62,6 +62,7 @@ def tool_call(
     dependencies: WorkflowIoDependencies,
     step_id: str,
     arguments: Mapping[str, Any],
+    idempotency_key: str | None = None,
 ) -> ContractToolCall:
     """공통 실행 Context와 Step별 ID를 사용해 Tool 호출 요청을 만든다."""
 
@@ -70,6 +71,7 @@ def tool_call(
         execution_context_id=config_context(config, "execution_context_id"),
         request_id=dependencies.tool_request_id_factory(parent_request_id, step_id),
         arguments=arguments,
+        idempotency_key=idempotency_key,
     )
 
 

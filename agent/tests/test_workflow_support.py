@@ -85,11 +85,13 @@ def test_tool_call_preserves_execution_and_request_context() -> None:
         dependencies=dependencies,
         step_id="query_accounts",
         arguments={"account_hint": "주거래"},
+        idempotency_key="test",
     )
 
     assert call.execution_context_id == "execution_123"
     assert call.request_id == "request_123:query_accounts"
     assert call.arguments == {"account_hint": "주거래"}
+    assert call.idempotency_key == "test"
 
 
 @pytest.mark.asyncio

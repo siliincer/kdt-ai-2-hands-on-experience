@@ -16,11 +16,9 @@ from langgraph.graph import END, StateGraph
 
 from agent.clients.backend import BackendWebhookClient
 from agent.clients.backend.client import AgentToolApiError, AgentToolIntegrationError
-from agent.contracts.backend import AgentWebhookRequest
 from agent.runtime import InteractionPauseRuntime, InteractionWebhookBuilder
 from agent.state import AgentState
 from agent.tools.contract_registry import (
-    ContractToolCall,
     ContractToolInputError,
     ContractToolRegistry,
 )
@@ -30,9 +28,11 @@ from agent.workflows.transfer_slot_extraction import (
     extract_internal_transfer_slots_llm_first,
 )
 from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
 from agent.workflows.workflow_support import terminal_update as _terminal_update
+from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_internal_transfer"
 
@@ -1089,35 +1089,6 @@ def build_internal_transfer_graph(
     graph.add_edge("emit_internal_transfer_error", END)
 
     return graph.compile(checkpointer=checkpointer)
-
-
-def _tool_call(
-    config: RunnableConfig,
-    *,
-    dependencies: InternalTransferDependencies,
-    step_id: str,
-    arguments: Mapping[str, Any],
-    idempotency_key: str | None = None,
-) -> ContractToolCall:
-    parent_request_id = _config_context(config, "request_id")
-    return ContractToolCall(
-        execution_context_id=_config_context(config, "execution_context_id"),
-        request_id=dependencies.tool_request_id_factory(parent_request_id, step_id),
-        arguments=arguments,
-        idempotency_key=idempotency_key,
-    )
-
-
-async def _publish(
-    dependencies: InternalTransferDependencies,
-    event: AgentWebhookRequest,
-    config: RunnableConfig,
-) -> None:
-    await dependencies.webhook_client.publish(
-        event,
-        execution_context_id=_config_context(config, "execution_context_id"),
-        request_id=_config_context(config, "request_id"),
-    )
 
 
 def _tool_error_update(step_id: str, error: Exception) -> dict[str, Any]:
