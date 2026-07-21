@@ -1,3 +1,4 @@
+import logging
 import secrets
 from uuid import UUID
 
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import limiter
 from ..core.load_environment_var import settings
+from ..core.request_context import bind_request_id
 from ..db.postgres import get_db
 from ..db.redis import get_redis_stream
 from ..schemas.response import CommonResponse
@@ -14,6 +16,8 @@ from ..schemas.sse import AgentStreamEvent, AgentStreamEventType, AgentWebhookPa
 from ..services.agent_stream_producer import publish_agent_event
 from ..services.pending_input_service import register_pending_input_from_event
 from ..utils.build_response import success_response
+
+logger = logging.getLogger(__name__)
 
 webhook_router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
@@ -48,6 +52,8 @@ async def receive_agent_webhook(
     redis_stream: aioredis.Redis = Depends(get_redis_stream),
     session: AsyncSession = Depends(get_db),
     x_execution_context_id: str = Header(default=""),
+    # X-Request-Id: Agent 로그와 대조하기 위한 추적 id(중복 방지 용도가 아니다).
+    request_id: str = Depends(bind_request_id),
 ):
     """Agent(또는 목 프로듀서)가 진행 이벤트를 보내면
     agent:stream:{chat_session_id} 스트림으로 XADD 하여 SSE로 중계되게 한다.
@@ -71,6 +77,15 @@ async def receive_agent_webhook(
         metadata=payload.metadata,
     )
     message_id = await publish_agent_event(redis_stream, payload.chat_session_id, event)
+    # Agent 로그의 같은 request_id 로 어떤 Webhook 이벤트가 처리됐는지 대조한다.
+    logger.info(
+        "agent webhook handled request_id=%s event_type=%s chat_session_id=%s "
+        "message_id=%s",
+        request_id,
+        payload.event_type.value,
+        payload.chat_session_id,
+        message_id,
+    )
     return success_response(
         message="Agent 이벤트가 스트림에 발행되었습니다.",
         data={"message_id": message_id},
