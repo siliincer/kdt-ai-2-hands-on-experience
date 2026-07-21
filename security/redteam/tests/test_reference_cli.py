@@ -21,7 +21,7 @@ def test_reference_cli_rejects_invalid_source_commit(value: str) -> None:
 
 def test_reference_cli_resolves_existing_commit_and_rejects_missing_commit() -> None:
     expected = subprocess.run(
-        ["git", "rev-parse", "origin/main"],
+        ["git", "rev-parse", "HEAD"],
         cwd=ROOT.parents[1],
         check=True,
         capture_output=True,
