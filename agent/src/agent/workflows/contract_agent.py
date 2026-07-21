@@ -52,6 +52,8 @@ from agent.workflows.transaction_history import (
     TransactionHistoryDependencies,
     build_transaction_history_graph,
 )
+from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import publish_event
 
 GLOBAL_WORKFLOW_ID = "wf_global_agent_entry"
 
@@ -266,14 +268,6 @@ def _matched_workflow_route(state: AgentState) -> str:
     return workflow_id if workflow_id != GLOBAL_WORKFLOW_ID else "no_match"
 
 
-def _config_context(config: RunnableConfig, key: str) -> str:
-    configurable = config.get("configurable") or {}
-    value = configurable.get(key)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"LangGraph 실행 Context가 없습니다: {key}")
-    return value
-
-
 async def _publish_notice(
     dependencies: ContractAgentDependencies,
     config: RunnableConfig,
@@ -294,11 +288,7 @@ async def _publish_notice(
             "ui": {"type": ui_type, "payload": {"message": content}},
         },
     )
-    await dependencies.webhook_client.publish(
-        event,
-        execution_context_id=_config_context(config, "execution_context_id"),
-        request_id=_config_context(config, "request_id"),
-    )
+    await publish_event(dependencies, event, config)
 
 
 def _terminal_update(step_id: str, *, status: str) -> dict[str, Any]:

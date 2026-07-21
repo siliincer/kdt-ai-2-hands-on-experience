@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
 from typing import cast
 
@@ -16,6 +15,12 @@ from agent.testing.workflow_testbed import (
     WorkflowTestbed,
     WorkflowTestbedDependencies,
     create_workflow_testbed,
+)
+from agent.testing.workflow_testbed import (
+    constant_factory as _constant_now,
+)
+from agent.testing.workflow_testbed import (
+    sequence_factory as _sequence_factory,
 )
 from agent.workflows.period_amount_summary import (
     PeriodAmountSummaryDependencies,
@@ -103,12 +108,3 @@ def _summary_graph_factory(
         )
 
     return factory
-
-
-def _sequence_factory(values: list[str]) -> Callable[[], str]:
-    iterator = iter(values)
-    return lambda: next(iterator)
-
-
-def _constant_now(value: datetime) -> Callable[[], datetime]:
-    return lambda: value

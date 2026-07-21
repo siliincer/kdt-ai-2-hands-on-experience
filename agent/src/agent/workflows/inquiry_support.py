@@ -164,24 +164,6 @@ def extract_summary_type(message: str) -> str | None:
     return None
 
 
-def account_options(raw_accounts: Any) -> list[dict[str, Any]]:
-    accounts = raw_accounts if isinstance(raw_accounts, list) else []
-    fields = (
-        "account_id",
-        "bank_name",
-        "account_alias",
-        "account_type",
-        "masked_account_number",
-        "currency",
-        "is_default",
-    )
-    return [
-        {field: account.get(field) for field in fields}
-        for account in accounts
-        if isinstance(account, Mapping)
-    ]
-
-
 def _subtract_one_month(value: date) -> date:
     year = value.year if value.month > 1 else value.year - 1
     month = value.month - 1 if value.month > 1 else 12

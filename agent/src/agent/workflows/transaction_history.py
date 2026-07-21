@@ -2,27 +2,23 @@
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from agent.clients.backend import BackendWebhookClient
-from agent.clients.backend.client import AgentToolApiError, AgentToolIntegrationError
-from agent.contracts.backend import AgentWebhookRequest
+from agent.clients.backend.client import AgentToolIntegrationError
 from agent.runtime import InteractionPauseRuntime, InteractionWebhookBuilder
 from agent.state import AgentState
 from agent.tools.contract_registry import (
-    ContractToolCall,
     ContractToolInputError,
     ContractToolRegistry,
 )
 from agent.workflows.inquiry_support import (
-    account_options,
     default_recent_month,
     period_was_mentioned,
     reference_date,
@@ -32,16 +28,27 @@ from agent.workflows.query_slot_extraction import (
     extract_transaction_slots_by_rule,
     extract_transaction_slots_llm_first,
 )
+from agent.workflows.workflow_support import build_tool_error_update
+from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import masked_account_options as account_options
+from agent.workflows.workflow_support import (
+    new_input_request_id as _default_input_request_id,
+)
+from agent.workflows.workflow_support import publish_event as _publish
+from agent.workflows.workflow_support import (
+    required_input_request_id as _required_input_request_id,
+)
+from agent.workflows.workflow_support import route_key as _route_key
+from agent.workflows.workflow_support import state_data as _data
+from agent.workflows.workflow_support import step_request_id as _default_tool_request_id
+from agent.workflows.workflow_support import terminal_update as _terminal_update
+from agent.workflows.workflow_support import tool_call as _tool_call
+from agent.workflows.workflow_support import valid_iso_date as _valid_date
 
 WORKFLOW_ID = "wf_transaction_history"
-
-
-def _default_input_request_id() -> str:
-    return f"input_{uuid.uuid4().hex}"
-
-
-def _default_tool_request_id(parent_request_id: str, step_id: str) -> str:
-    return f"{parent_request_id}:{step_id}"
+_tool_error_update = build_tool_error_update(
+    "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
+)
 
 
 def _default_now() -> datetime:
@@ -419,88 +426,3 @@ def build_transaction_history_graph(
     graph.add_edge("emit_transaction_result", END)
     graph.add_edge("emit_transaction_error", END)
     return graph.compile(checkpointer=checkpointer)
-
-
-def _data(state: AgentState) -> dict[str, Any]:
-    return dict(state.get("data") or {})
-
-
-def _route_key(state: AgentState) -> str:
-    return str(state.get("route_key") or "error")
-
-
-def _config_context(config: RunnableConfig, key: str) -> str:
-    configurable = config.get("configurable") or {}
-    value = configurable.get(key)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"LangGraph 실행 Context가 없습니다: {key}")
-    return value
-
-
-def _required_input_request_id(data: Mapping[str, Any]) -> str:
-    value = data.get("input_request_id")
-    if not isinstance(value, str) or not value:
-        raise ValueError("입력 요청 ID가 없습니다.")
-    return value
-
-
-def _valid_date(value: Any) -> str | None:
-    if isinstance(value, date):
-        return value.isoformat()
-    if isinstance(value, str):
-        try:
-            return date.fromisoformat(value).isoformat()
-        except ValueError:
-            return None
-    return None
-
-
-def _tool_call(
-    config: RunnableConfig,
-    *,
-    dependencies: TransactionHistoryDependencies,
-    step_id: str,
-    arguments: Mapping[str, Any],
-) -> ContractToolCall:
-    parent_request_id = _config_context(config, "request_id")
-    return ContractToolCall(
-        execution_context_id=_config_context(config, "execution_context_id"),
-        request_id=dependencies.tool_request_id_factory(parent_request_id, step_id),
-        arguments=arguments,
-    )
-
-
-async def _publish(
-    dependencies: TransactionHistoryDependencies,
-    event: AgentWebhookRequest,
-    config: RunnableConfig,
-) -> None:
-    await dependencies.webhook_client.publish(
-        event,
-        execution_context_id=_config_context(config, "execution_context_id"),
-        request_id=_config_context(config, "request_id"),
-    )
-
-
-def _tool_error_update(step_id: str, error: Exception) -> dict[str, Any]:
-    if isinstance(error, AgentToolApiError):
-        message = error.safe_message
-    else:
-        message = "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
-    return {
-        "current_step_id": step_id,
-        "route_key": "error",
-        "data": {"safe_error_message": message},
-    }
-
-
-def _terminal_update(
-    step_id: str,
-    *,
-    status: Literal["completed", "workflow_failed"] = "completed",
-) -> dict[str, Any]:
-    return {
-        "current_step_id": step_id,
-        "route_key": "completed",
-        "status": status,
-    }
