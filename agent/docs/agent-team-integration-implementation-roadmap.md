@@ -1628,7 +1628,14 @@ Step State Mapping은 다음과 같다.
 | `query_transaction_summary` | `input` | `summary_type` | `request.summary_type` |
 | `query_transaction_summary` | `input` | `keyword` | `request.keyword` |
 | `query_transaction_summary` | `output` | `summary_result` | `response.data.summary_result` |
-| `emit_amount_summary` | `input` | `summary_result` | `webhook.metadata.ui.payload.summary` |
+| `emit_amount_summary` | `input` | `account_ids` | `webhook.metadata.ui.payload.account_ids` |
+| `emit_amount_summary` | `input` | `keyword` | `webhook.metadata.ui.payload.keyword` |
+| `emit_amount_summary` | `input` | `summary_result` | `webhook.metadata.ui.payload.start_date` |
+| `emit_amount_summary` | `input` | `summary_result` | `webhook.metadata.ui.payload.end_date` |
+| `emit_amount_summary` | `input` | `summary_result` | `webhook.metadata.ui.payload.summary_type` |
+| `emit_amount_summary` | `input` | `summary_result` | `webhook.metadata.ui.payload.total_amount` |
+| `emit_amount_summary` | `input` | `summary_result` | `webhook.metadata.ui.payload.transaction_count` |
+| `emit_amount_summary` | `input` | `summary_result` | `webhook.metadata.ui.payload.currency` |
 
 계약 매핑은 다음과 같다.
 
@@ -1797,8 +1804,8 @@ Step State Mapping은 다음과 같다.
 | `execute_default_account_change` | `output` | `account_id` | `response.data.account_id` |
 | `execute_default_account_change` | `output` | `completed_at` | `response.data.completed_at` |
 | `execute_default_account_change` | `output` | `correction_view` | `response.data.correction_view` |
-| `emit_default_account_unchanged` | `input` | `account_id` | `webhook.metadata.ui.payload.account_id` |
-| `emit_default_account_result` | `input` | `account_id` | `webhook.metadata.ui.payload.account_id` |
+| `emit_default_account_unchanged` | `input` | `account_id` | `webhook.metadata.ui.payload.account.account_id` |
+| `emit_default_account_result` | `input` | `account_id` | `webhook.metadata.ui.payload.account.account_id` |
 
 계약 매핑은 다음과 같다.
 
@@ -2011,9 +2018,9 @@ Step State Mapping은 다음과 같다.
 | `execute_account_alias_change` | `output` | `alias` | `response.data.alias` |
 | `execute_account_alias_change` | `output` | `completed_at` | `response.data.completed_at` |
 | `execute_account_alias_change` | `output` | `correction_view` | `response.data.correction_view` |
-| `emit_account_alias_unchanged` | `input` | `account_id` | `webhook.metadata.ui.payload.account_id` |
+| `emit_account_alias_unchanged` | `input` | `account_id` | `webhook.metadata.ui.payload.account.account_id` |
 | `emit_account_alias_unchanged` | `input` | `alias` | `webhook.metadata.ui.payload.alias` |
-| `emit_account_alias_result` | `input` | `account_id` | `webhook.metadata.ui.payload.account_id` |
+| `emit_account_alias_result` | `input` | `account_id` | `webhook.metadata.ui.payload.account.account_id` |
 | `emit_account_alias_result` | `input` | `alias` | `webhook.metadata.ui.payload.alias` |
 
 계약 매핑은 다음과 같다.
