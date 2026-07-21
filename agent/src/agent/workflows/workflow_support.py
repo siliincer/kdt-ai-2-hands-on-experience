@@ -2,11 +2,36 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from collections.abc import Callable, Mapping
+from typing import Any, Literal, Protocol
 
 from langchain_core.runnables import RunnableConfig
 
+from agent.contracts.backend import AgentWebhookRequest
 from agent.state import AgentState
+from agent.tools.contract_registry import ContractToolCall
+
+
+class WebhookPublisher(Protocol):
+    """Workflow 공통 발행 함수가 사용하는 Webhook Client 최소 표면."""
+
+    async def publish(
+        self,
+        event: AgentWebhookRequest,
+        *,
+        execution_context_id: str,
+        request_id: str,
+    ) -> str: ...
+
+
+class WorkflowIoDependencies(Protocol):
+    """공통 Tool 호출과 Webhook 발행에 필요한 최소 의존성."""
+
+    @property
+    def tool_request_id_factory(self) -> Callable[[str, str], str]: ...
+
+    @property
+    def webhook_client(self) -> WebhookPublisher: ...
 
 
 def state_data(state: AgentState) -> dict[str, Any]:
@@ -29,6 +54,37 @@ def config_context(config: RunnableConfig, key: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"LangGraph 실행 Context가 없습니다: {key}")
     return value
+
+
+def tool_call(
+    config: RunnableConfig,
+    *,
+    dependencies: WorkflowIoDependencies,
+    step_id: str,
+    arguments: Mapping[str, Any],
+) -> ContractToolCall:
+    """공통 실행 Context와 Step별 ID를 사용해 Tool 호출 요청을 만든다."""
+
+    parent_request_id = config_context(config, "request_id")
+    return ContractToolCall(
+        execution_context_id=config_context(config, "execution_context_id"),
+        request_id=dependencies.tool_request_id_factory(parent_request_id, step_id),
+        arguments=arguments,
+    )
+
+
+async def publish_event(
+    dependencies: WorkflowIoDependencies,
+    event: AgentWebhookRequest,
+    config: RunnableConfig,
+) -> None:
+    """현재 실행 Context를 보존해 Workflow Webhook 이벤트를 발행한다."""
+
+    await dependencies.webhook_client.publish(
+        event,
+        execution_context_id=config_context(config, "execution_context_id"),
+        request_id=config_context(config, "request_id"),
+    )
 
 
 def terminal_update(

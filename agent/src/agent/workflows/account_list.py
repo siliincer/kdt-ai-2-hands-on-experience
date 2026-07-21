@@ -11,11 +11,9 @@ from langgraph.graph import END, StateGraph
 
 from agent.clients.backend import BackendWebhookClient
 from agent.clients.backend.client import AgentToolApiError, AgentToolIntegrationError
-from agent.contracts.backend import AgentWebhookRequest
 from agent.runtime import InteractionWebhookBuilder
 from agent.state import AgentState
 from agent.tools.contract_registry import (
-    ContractToolCall,
     ContractToolInputError,
     ContractToolRegistry,
 )
@@ -25,9 +23,11 @@ from agent.workflows.query_slot_extraction import (
     extract_account_list_slots_llm_first,
 )
 from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
 from agent.workflows.workflow_support import terminal_update as _terminal_update
+from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_account_list"
 
@@ -160,33 +160,6 @@ def build_account_list_graph(
     graph.add_edge("emit_account_list_result", END)
     graph.add_edge("emit_account_list_error", END)
     return graph.compile(checkpointer=checkpointer)
-
-
-def _tool_call(
-    config: RunnableConfig,
-    *,
-    dependencies: AccountListDependencies,
-    step_id: str,
-    arguments: Mapping[str, Any],
-) -> ContractToolCall:
-    parent_request_id = _config_context(config, "request_id")
-    return ContractToolCall(
-        execution_context_id=_config_context(config, "execution_context_id"),
-        request_id=dependencies.tool_request_id_factory(parent_request_id, step_id),
-        arguments=arguments,
-    )
-
-
-async def _publish(
-    dependencies: AccountListDependencies,
-    event: AgentWebhookRequest,
-    config: RunnableConfig,
-) -> None:
-    await dependencies.webhook_client.publish(
-        event,
-        execution_context_id=_config_context(config, "execution_context_id"),
-        request_id=_config_context(config, "request_id"),
-    )
 
 
 def _tool_error_update(step_id: str, error: Exception) -> dict[str, Any]:
