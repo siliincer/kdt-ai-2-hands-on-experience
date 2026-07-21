@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +26,22 @@ class ContractToolInputError(ValueError):
         super().__init__(f"{contract_id} 요청 계약 오류: {reason}")
         self.contract_id = contract_id
         self.reason = reason
+
+
+class ContractToolRegistrationError(RuntimeError):
+    """Workflow가 요구하는 Tool 계약 구현이 Registry에 누락된 경우."""
+
+    def __init__(self, missing_by_workflow: Mapping[str, set[str]]) -> None:
+        normalized = {
+            workflow_id: tuple(sorted(contract_ids))
+            for workflow_id, contract_ids in sorted(missing_by_workflow.items())
+        }
+        details = "; ".join(
+            f"{workflow_id}={','.join(contract_ids)}"
+            for workflow_id, contract_ids in normalized.items()
+        )
+        super().__init__("등록되지 않은 Agent Tool 계약이 있습니다: " + details)
+        self.missing_by_workflow = normalized
 
 
 ToolHandler = Callable[[ContractToolCall], Awaitable[Mapping[str, Any]]]
@@ -97,3 +113,18 @@ class ContractToolRegistry:
             contract_type="agent_tool_api",
         )
         return required - self._by_contract.keys()
+
+    def validate_workflow_contracts(
+        self,
+        workflow_ids: Iterable[str] | None = None,
+    ) -> None:
+        """서버 시작 전 Workflow별 Tool 계약 구현 누락을 한 번에 검출한다."""
+
+        targets = tuple(workflow_ids or self._contract_store.workflow_ids())
+        missing_by_workflow = {
+            workflow_id: missing
+            for workflow_id in targets
+            if (missing := self.missing_contracts_for_workflow(workflow_id))
+        }
+        if missing_by_workflow:
+            raise ContractToolRegistrationError(missing_by_workflow)

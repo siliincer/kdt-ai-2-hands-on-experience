@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from agent.tools.contract_registry import ContractToolCall, ContractToolRegistry
+from agent.tools.contract_registry import (
+    ContractToolCall,
+    ContractToolRegistrationError,
+    ContractToolRegistry,
+)
 from agent.workflow_contracts import WorkflowContractStore
 
 
@@ -63,4 +67,20 @@ def test_registry_reports_missing_workflow_contracts() -> None:
 
     assert registry.missing_contracts_for_workflow("wf_balance_inquiry") == {
         "API-BALANCE-QUERY"
+    }
+
+
+def test_registry_start_validation_fails_with_missing_contract_details() -> None:
+    registry = ContractToolRegistry(WorkflowContractStore())
+    registry.register(
+        contract_id="API-ACCOUNT-LIST",
+        tool_id="fetch_accounts",
+        handler=_handler,
+    )
+
+    with pytest.raises(ContractToolRegistrationError) as captured:
+        registry.validate_workflow_contracts(["wf_balance_inquiry"])
+
+    assert captured.value.missing_by_workflow == {
+        "wf_balance_inquiry": ("API-BALANCE-QUERY",)
     }

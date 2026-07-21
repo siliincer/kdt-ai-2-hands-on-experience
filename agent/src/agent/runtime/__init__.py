@@ -1,13 +1,17 @@
 """Agent Workflow 실행과 재개에 사용하는 공통 Runtime 모델."""
 
+from agent.runtime.completion_reporting import WebhookExecutionCompletionReporter
 from agent.runtime.execution import (
     ExecutionAccepted,
+    ExecutionCompletionReporter,
+    ExecutionFailureReporter,
     ExecutionGraph,
     ExecutionResumeAccepted,
     ExecutionRunResult,
     ExecutionRuntime,
     ExecutionRuntimeError,
 )
+from agent.runtime.failure_reporting import WebhookExecutionFailureReporter
 from agent.runtime.hitl import (
     ExecutionResumeRequest,
     ExecutionStartRequest,
@@ -39,7 +43,9 @@ __all__ = [
     "ExecutionResumeRequest",
     "ExecutionStartRequest",
     "ExecutionAccepted",
+    "ExecutionCompletionReporter",
     "ExecutionContextBinding",
+    "ExecutionFailureReporter",
     "ExecutionGraph",
     "ExecutionResumeAccepted",
     "ExecutionRunResult",
@@ -57,5 +63,7 @@ __all__ = [
     "ResumeStateUpdate",
     "ValidatedResume",
     "WebhookEventContractError",
+    "WebhookExecutionCompletionReporter",
+    "WebhookExecutionFailureReporter",
     "pending_interaction_from_event",
 ]
