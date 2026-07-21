@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
 import httpx
@@ -166,6 +167,7 @@ async def test_runtime_resources_are_built_from_environment(
 
 def test_fastapi_start_fails_when_tool_contract_registration_is_missing(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setenv("BACKEND_BASE_URL", "http://backend.test")
     monkeypatch.setenv("AGENT_SERVICE_TOKEN", "agent-service-token")
@@ -176,9 +178,20 @@ def test_fastapi_start_fails_when_tool_contract_registration_is_missing(
         lambda registry, tools: None,
     )
 
-    with pytest.raises(ContractToolRegistrationError):
+    with (
+        caplog.at_level(logging.CRITICAL, logger="agent.application_runtime"),
+        pytest.raises(ContractToolRegistrationError) as captured,
+    ):
         with TestClient(create_app()):
             pass
+
+    assert captured.value.missing_by_workflow
+    critical_record = next(
+        record for record in caplog.records if record.levelno == logging.CRITICAL
+    )
+    assert getattr(critical_record, "missing_contracts_by_workflow") == (
+        captured.value.missing_by_workflow
+    )
 
 
 @pytest.mark.asyncio
