@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
@@ -29,6 +29,10 @@ from agent.workflows.transfer_slot_extraction import (
     extract_internal_transfer_slots_by_rule,
     extract_internal_transfer_slots_llm_first,
 )
+from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import route_key as _route_key
+from agent.workflows.workflow_support import state_data as _data
+from agent.workflows.workflow_support import terminal_update as _terminal_update
 
 WORKFLOW_ID = "wf_internal_transfer"
 
@@ -1087,22 +1091,6 @@ def build_internal_transfer_graph(
     return graph.compile(checkpointer=checkpointer)
 
 
-def _data(state: AgentState) -> dict[str, Any]:
-    return dict(state.get("data") or {})
-
-
-def _route_key(state: AgentState) -> str:
-    return str(state.get("route_key") or "error")
-
-
-def _config_context(config: RunnableConfig, key: str) -> str:
-    configurable = config.get("configurable") or {}
-    value = configurable.get(key)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"LangGraph 실행 Context가 없습니다: {key}")
-    return value
-
-
 def _tool_call(
     config: RunnableConfig,
     *,
@@ -1141,18 +1129,6 @@ def _tool_error_update(step_id: str, error: Exception) -> dict[str, Any]:
         "current_step_id": step_id,
         "route_key": "error",
         "data": {"safe_error_message": message},
-    }
-
-
-def _terminal_update(
-    step_id: str,
-    *,
-    status: Literal["completed", "workflow_failed"] = "completed",
-) -> dict[str, Any]:
-    return {
-        "current_step_id": step_id,
-        "route_key": "completed",
-        "status": status,
     }
 
 
