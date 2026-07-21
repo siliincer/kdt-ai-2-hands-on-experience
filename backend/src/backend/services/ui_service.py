@@ -2,10 +2,9 @@
 
 FE 가 component 시그널을 받은 뒤 카드 데이터를 조회하는 계층.
 
-FINANCIAL_CLIENT=mock(기본): 목 픽스처 반환(개발/테스트/CI).
-FINANCIAL_CLIENT=http: mock-financial-service(계정계)를 정보계(analytics) 경로로
-실조회하고 원장 데이터를 UI 뷰로 enrich 한다. 원장에 없는 필드(상호/카테고리/
-은행/카드 메타)는 기본값으로 대체한다(원장은 순수 이중기입 원장이라 표시용 메타 없음).
+계정계(mock-financial-service)를 정보계(analytics) 경로로 실조회하고 원장 데이터를 UI
+뷰로 enrich 한다(mock 일원화, 작업 B). 원장에 없는 필드(상호/카테고리/은행/카드 메타)는
+기본값으로 대체한다(원장은 순수 이중기입 원장이라 표시용 메타 없음).
 """
 
 from typing import cast
@@ -14,7 +13,6 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.load_environment_var import settings
 from ..repository.account_repository import (
     get_external_account_ids,
     get_mapped_accounts,
@@ -28,7 +26,6 @@ from ..schemas.ui import (
     BudgetItem,
     CardsData,
     CatTxDatum,
-    CreditCard,
     MonthlySpendDatum,
     PieDatum,
     RecentTxItem,
@@ -38,14 +35,6 @@ from ..schemas.ui import (
 )
 from ..utils.datetime_parse import parse_iso_utc
 from .financial import get_financial_client
-from .mock.ui_fixtures import (
-    ACCOUNT_DETAIL_FIXTURE,
-    BALANCE_FIXTURE,
-    BUDGET_FIXTURE,
-    CARDS_FIXTURE,
-    SPENDING_FIXTURE,
-    TRANSACTIONS_FIXTURE,
-)
 
 # 계정 메타(은행/별칭/색)는 계정계 원장에 없어 backend 가 채운다(기본 enrich).
 _ACCOUNT_COLORS = ["#0052A3", "#FAE100", "#2DD4BF", "#F97316", "#8B5CF6"]
@@ -60,10 +49,6 @@ _CATTX_LIMIT = 20
 _RECENT_LIMIT = 10
 
 
-def _use_http() -> bool:
-    return settings.FINANCIAL_CLIENT.strip().lower() == "http"
-
-
 async def _fetch_user_ledger(session: AsyncSession, user_id: UUID) -> list[dict]:
     """user 의 매핑 계좌 원장을 병합해 최신순으로 반환(계좌 간 병합 재정렬)."""
     account_ids = await get_external_account_ids(session, user_id)
@@ -75,18 +60,12 @@ async def _fetch_user_ledger(session: AsyncSession, user_id: UUID) -> list[dict]
     return raw
 
 
-async def get_balance_view(
-    user_id: UUID, session: AsyncSession | None = None
-) -> BalanceData:
+async def get_balance_view(user_id: UUID, session: AsyncSession | None = None) -> BalanceData:
     """사용자 자산 현황 view model.
 
-    http 모드: 계정계 잔액을 계좌별로 합산. mock 모드: 픽스처.
+    계정계 잔액을 계좌별로 합산한다.
     """
-    if not _use_http():
-        return BALANCE_FIXTURE
-    session = cast(
-        AsyncSession, session
-    )  # http 경로는 라우터 Depends 로 항상 세션 존재
+    session = cast(AsyncSession, session)  # http 경로는 라우터 Depends 로 항상 세션 존재
 
     client = get_financial_client()
 
@@ -96,10 +75,7 @@ async def get_balance_view(
     if rows:
         sources = [(r.external_account_id, r.bank_name, r.account_number) for r in rows]
     else:
-        sources = [
-            (aid, None, None)
-            for aid in await get_external_account_ids(session, user_id)
-        ]
+        sources = [(aid, None, None) for aid in await get_external_account_ids(session, user_id)]
 
     summaries: list[AccountSummary] = []
     for idx, (account_id, bank_name, account_number) in enumerate(sources):
@@ -149,10 +125,8 @@ async def get_account_detail_view(
     """계좌 상세 view model (B2).
 
     http 모드: account_id 가 user 소유(매핑) 계좌인지 확인 후 잔액+최근거래 조회.
-    소유가 아니거나 계좌 없음이면 404. mock 모드: 픽스처.
+    소유가 아니거나 계좌 없음이면 404.
     """
-    if not _use_http():
-        return ACCOUNT_DETAIL_FIXTURE
     session = cast(AsyncSession, session)
 
     rows = await get_mapped_accounts(session, user_id)
@@ -204,14 +178,9 @@ async def get_transactions_view(
 ) -> TransactionsData:
     """거래 내역 view model.
 
-    http 모드: 계정계 원장을 계좌별로 조회해 최신순 병합. month(예: '2025-06')
-    가 주어지면 해당 월만 필터. mock 모드: 픽스처.
+    계정계 원장을 계좌별로 조회해 최신순 병합. month(예: '2025-06')가 주어지면
+    해당 월만 필터.
     """
-    if not _use_http():
-        if month is None:
-            return TRANSACTIONS_FIXTURE
-        items = [tx for tx in TRANSACTIONS_FIXTURE.items if tx.month == month]
-        return TransactionsData(months=TRANSACTIONS_FIXTURE.months, items=items)
     session = cast(AsyncSession, session)
 
     raw = await _fetch_user_ledger(session, user_id)
@@ -235,10 +204,7 @@ def _spending_from_ledger(entries: list[dict]) -> SpendingData:
     for e in out:
         key = parse_iso_utc(e["created_at"]).strftime("%Y-%m")
         monthly_map[key] = monthly_map.get(key, 0) + e["amount"]
-    monthly = [
-        MonthlySpendDatum(month=f"{int(k[5:7])}월", amount=v)
-        for k, v in sorted(monthly_map.items())
-    ]
+    monthly = [MonthlySpendDatum(month=f"{int(k[5:7])}월", amount=v) for k, v in sorted(monthly_map.items())]
 
     pie = (
         [
@@ -277,30 +243,20 @@ def _budget_from_ledger(entries: list[dict]) -> BudgetData:
     """
     used = sum(e["amount"] for e in entries if e["entry_type"] == "DEBIT")
     return BudgetData(
-        budgetItems=[
-            BudgetItem(cat=_DEFAULT_CATEGORY, used=used, total=_DEFAULT_BUDGET_TOTAL)
-        ],
+        budgetItems=[BudgetItem(cat=_DEFAULT_CATEGORY, used=used, total=_DEFAULT_BUDGET_TOTAL)],
         subItems=[],
     )
 
 
-async def get_spending_view(
-    user_id: UUID, session: AsyncSession | None = None
-) -> SpendingData:
-    """소비 분석 view model. http 모드: 원장 집계(기본값 대체). mock 모드: 픽스처."""
-    if not _use_http():
-        return SPENDING_FIXTURE
+async def get_spending_view(user_id: UUID, session: AsyncSession | None = None) -> SpendingData:
+    """소비 분석 view model. 계정계 원장 집계(기본값 대체)."""
     session = cast(AsyncSession, session)
     entries = await _fetch_user_ledger(session, user_id)
     return _spending_from_ledger(entries)
 
 
-async def get_budget_view(
-    user_id: UUID, session: AsyncSession | None = None
-) -> BudgetData:
-    """예산 현황 view model. http 모드: 원장 집계(기본값 대체). mock 모드: 픽스처."""
-    if not _use_http():
-        return BUDGET_FIXTURE
+async def get_budget_view(user_id: UUID, session: AsyncSession | None = None) -> BudgetData:
+    """예산 현황 view model. 계정계 원장 집계(기본값 대체)."""
     session = cast(AsyncSession, session)
     entries = await _fetch_user_ledger(session, user_id)
     return _budget_from_ledger(entries)
@@ -319,26 +275,12 @@ def _mask_card_number(num: str) -> str:
     return " ".join([groups[0], *masked_mid, groups[-1]])
 
 
-async def get_cards_view(
-    user_id: UUID, session: AsyncSession | None = None
-) -> CardsData:
-    """카드 관리 view model. mock 모드: 픽스처(카드번호 마스킹, B6 PII 규칙).
+async def get_cards_view(user_id: UUID, session: AsyncSession | None = None) -> CardsData:
+    """카드 관리 view model.
 
-    http 모드: 계정계에 "계좌별 카드 목록" 엔드포인트가 없어 열거 불가 → 빈 목록
-    (카드 미프로비저닝 상태를 정직하게 반영). TODO: 카드 프로비저닝(계좌처럼 card_id
-    매핑 저장) 도입 시 실제 카드 반환.
+    계정계에 "계좌별 카드 목록" 엔드포인트가 없어 열거 불가 → 빈 목록(카드 미프로비저닝
+    상태를 정직하게 반영). 카드번호 마스킹 유틸(`_mask_card_number`, B6 PII 규칙)은 카드
+    프로비저닝(계좌처럼 card_id 매핑 저장) 도입 시 실제 카드 반환에 재사용한다.
     """
     _ = user_id, session
-    if not _use_http():
-        return CardsData(
-            cards=[
-                CreditCard(
-                    name=c.name,
-                    num=_mask_card_number(c.num),
-                    exp=c.exp,
-                    bg=c.bg,
-                )
-                for c in CARDS_FIXTURE.cards
-            ]
-        )
     return CardsData(cards=[])

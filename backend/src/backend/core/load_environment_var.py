@@ -22,14 +22,12 @@ class Settings(BaseSettings):
     REDIS_STREAM_URL: AnyUrl = AnyUrl("redis://redis:6380/0")
     # redis://[호스트이름]:[포트번호]/[데이터베이스_번호]
 
-    # mock-financial-service(계정계/정보계) 연동 Configuration
-    FINANCIAL_CLIENT: str = Field(
-        default="mock",
-        description="계정계 데이터 소스: mock(내장 픽스처) | http(실서비스 호출)",
-    )
+    # mock-financial-service(계정계/정보계) 연동 Configuration.
+    # 계정계는 항상 http(실서비스)로 연동한다(mock 일원화, 작업 B). 과거의
+    # FINANCIAL_CLIENT(mock|http) 스위치는 제거됐다.
     MOCK_FINANCIAL_SERVICE_URL: str = Field(
         default="http://localhost:8002",
-        description="mock-financial-service base URL (FINANCIAL_CLIENT=http일 때 사용)",
+        description="mock-financial-service(계정계/정보계) base URL",
     )
     FINANCIAL_ANALYTICS_KEY: SecretStr = Field(
         default=SecretStr("analytics-demo-key"),

@@ -4,8 +4,8 @@
 기간·유형 필터·전역 정렬·페이지네이션·집계를 수행한다. title·category·keyword 매칭은
 계정계에 원천 데이터가 없어 미지원(None/무시)하며 TODO(계정계)로 남긴다.
 
-- http 모드: 계정계(정보계) 원장을 실조회.
-- mock 모드: 원장 소스가 없어 빈 결과(테스트는 _load_ledger_rows 를 monkeypatch).
+원장은 계정계(정보계)에서 실조회한다(mock 일원화, 작업 B). 테스트는 _load_ledger_rows
+또는 계정계 HTTP 클라이언트를 stub 으로 대체한다.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from ...schemas.execution_context import ResolvedExecutionContext
 from ...utils.datetime_parse import parse_iso_utc
 from ...utils.parsing import parse_uuid_list
 from ...utils.timezone import resolve_tz
-from ..financial import get_financial_client, is_financial_http_mode
+from ..financial import get_financial_client
 
 # 계정계 원장에 기간 필터가 없어 계좌별로 넉넉히 가져와 메모리 필터한다.
 # TODO(계정계): /ledger 에 start_date·end_date 파라미터가 생기면 하향 위임.
@@ -76,17 +76,13 @@ async def _load_owned(
 
 
 async def _load_ledger_rows(owned: list[Account]) -> list[_LedgerRow]:
-    """소유 계좌들의 원장을 병합한다. http=계정계, mock=빈 목록."""
-    if not is_financial_http_mode():
-        return []
+    """소유 계좌들의 원장을 병합한다(계정계 정보계 실조회)."""
     client = get_financial_client()
     rows: list[_LedgerRow] = []
     for account in owned:
         if not account.external_account_id:
             continue
-        entries = await client.get_ledger(
-            account.external_account_id, limit=_LEDGER_FETCH_CAP
-        )
+        entries = await client.get_ledger(account.external_account_id, limit=_LEDGER_FETCH_CAP)
         for entry in entries:
             rows.append(
                 _LedgerRow(
@@ -100,9 +96,7 @@ async def _load_ledger_rows(owned: list[Account]) -> list[_LedgerRow]:
     return rows
 
 
-def _within_period(
-    occurred_at: datetime, tz: ZoneInfo | timezone, start: date, end: date
-) -> bool:
+def _within_period(occurred_at: datetime, tz: ZoneInfo | timezone, start: date, end: date) -> bool:
     """사용자 타임존 기준 날짜가 [start, end] 양끝 포함 범위인지(계약 12장)."""
     local_date = occurred_at.astimezone(tz).date()
     return start <= local_date <= end
@@ -118,11 +112,7 @@ async def query_transactions(
     rows = await _load_ledger_rows(owned)
     tz = resolve_tz(context.timezone)
 
-    filtered = [
-        r
-        for r in rows
-        if _within_period(r.occurred_at, tz, req.start_date, req.end_date)
-    ]
+    filtered = [r for r in rows if _within_period(r.occurred_at, tz, req.start_date, req.end_date)]
     if req.transaction_type is not None:
         # TODO(계정계): transfer 는 원장 entry 만으로 구분 불가 → 현재 매칭 없음.
         want = req.transaction_type.value
@@ -148,9 +138,7 @@ async def query_transactions(
         for r in page
     ]
 
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=_QUERY_CONTEXT_TTL_SECONDS
-    )
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=_QUERY_CONTEXT_TTL_SECONDS)
     query_ctx = await create_transaction_query_context(
         session,
         user_id=context.user_id,
@@ -180,11 +168,7 @@ async def summarize_transactions(
     rows = await _load_ledger_rows(owned)
     tz = resolve_tz(context.timezone)
 
-    in_period = [
-        r
-        for r in rows
-        if _within_period(r.occurred_at, tz, req.start_date, req.end_date)
-    ]
+    in_period = [r for r in rows if _within_period(r.occurred_at, tz, req.start_date, req.end_date)]
     # spending=DEBIT(출금), income=CREDIT(입금). keyword 는 원장에 원천 없어 무시(TODO).
     target = "DEBIT" if req.summary_type.value == "spending" else "CREDIT"
     matched = [r for r in in_period if r.entry_type == target]

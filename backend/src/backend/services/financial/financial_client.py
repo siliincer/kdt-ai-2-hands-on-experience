@@ -52,24 +52,18 @@ class FinancialServiceClient:
         except httpx.HTTPError as exc:
             # 로컬 IP/도메인 등 내부 주소가 로그로 새지 않도록 예외 문자열은
             # 타입명만 남긴다(CLAUDE.md 로깅 규칙).
-            raise FinancialServiceError(
-                f"금융 서비스 연결 실패: {type(exc).__name__}"
-            ) from exc
+            raise FinancialServiceError(f"금융 서비스 연결 실패: {type(exc).__name__}") from exc
 
     async def get_balance(self, account_id: str) -> dict | None:
         """정보계 잔액 조회. 404 → None(계좌 없음)."""
-        response = await self._request(
-            "GET", f"{_ANALYTICS_PREFIX}/accounts/{account_id}/balance"
-        )
+        response = await self._request("GET", f"{_ANALYTICS_PREFIX}/accounts/{account_id}/balance")
         if response.status_code == 404:
             return None
         if response.status_code >= 400:
             raise FinancialServiceError(f"잔액 조회 실패: HTTP {response.status_code}")
         return response.json()
 
-    async def get_ledger(
-        self, account_id: str, limit: int = 50, offset: int = 0
-    ) -> list[dict]:
+    async def get_ledger(self, account_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
         """정보계 원장 항목 조회. 404 → []."""
         response = await self._request(
             "GET",
@@ -130,7 +124,7 @@ _client: FinancialServiceClient | None = None
 
 
 def get_financial_client() -> FinancialServiceClient:
-    """FINANCIAL_CLIENT=http 경로에서 재사용하는 단일 클라이언트."""
+    """계정계(정보계) 연동에 재사용하는 프로세스당 단일 클라이언트."""
     global _client
     if _client is None:
         _client = FinancialServiceClient(
@@ -148,9 +142,7 @@ async def close_financial_client() -> None:
         _client = None
 
 
-async def financial_service_error_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
+async def financial_service_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """계정계 장애를 503 envelope 으로 격리(결정 D)."""
     return JSONResponse(
         status_code=503,
