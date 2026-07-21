@@ -24,6 +24,7 @@ from agent.workflows.query_slot_extraction import (
 )
 from agent.workflows.workflow_support import build_tool_error_update
 from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import masked_account_options as _account_options
 from agent.workflows.workflow_support import (
     new_input_request_id as _default_input_request_id,
 )
@@ -293,24 +294,6 @@ def build_balance_inquiry_graph(
     graph.add_edge("emit_balance_result", END)
     graph.add_edge("emit_balance_error", END)
     return graph.compile(checkpointer=checkpointer)
-
-
-def _account_options(raw_accounts: Any) -> list[dict[str, Any]]:
-    accounts = raw_accounts if isinstance(raw_accounts, list) else []
-    fields = (
-        "account_id",
-        "bank_name",
-        "account_alias",
-        "account_type",
-        "masked_account_number",
-        "currency",
-        "is_default",
-    )
-    return [
-        {field: account.get(field) for field in fields}
-        for account in accounts
-        if isinstance(account, Mapping)
-    ]
 
 
 def _balance_result_options(raw_results: Any) -> list[dict[str, Any]]:

@@ -41,6 +41,15 @@ class WebhookDependencies(Protocol):
 
 
 ToolErrorUpdate = Callable[[str, Exception], dict[str, Any]]
+_MASKED_ACCOUNT_FIELDS = (
+    "account_id",
+    "bank_name",
+    "account_alias",
+    "account_type",
+    "masked_account_number",
+    "currency",
+    "is_default",
+)
 
 
 def new_input_request_id() -> str:
@@ -53,6 +62,17 @@ def step_request_id(parent_request_id: str, step_id: str) -> str:
     """부모 실행 요청과 Workflow Step을 연결하는 Tool 요청 ID를 만든다."""
 
     return f"{parent_request_id}:{step_id}"
+
+
+def masked_account_options(raw_accounts: Any) -> list[dict[str, Any]]:
+    """Backend 계좌 후보에서 UI 표시가 허용된 마스킹 필드만 반환한다."""
+
+    accounts = raw_accounts if isinstance(raw_accounts, list) else []
+    return [
+        {field: account.get(field) for field in _MASKED_ACCOUNT_FIELDS}
+        for account in accounts
+        if isinstance(account, Mapping)
+    ]
 
 
 def state_data(state: AgentState) -> dict[str, Any]:

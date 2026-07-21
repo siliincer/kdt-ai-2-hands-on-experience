@@ -19,7 +19,6 @@ from agent.tools.contract_registry import (
     ContractToolRegistry,
 )
 from agent.workflows.inquiry_support import (
-    account_options,
     default_recent_month,
     period_was_mentioned,
     reference_date,
@@ -31,6 +30,7 @@ from agent.workflows.query_slot_extraction import (
 )
 from agent.workflows.workflow_support import build_tool_error_update
 from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import masked_account_options as account_options
 from agent.workflows.workflow_support import (
     new_input_request_id as _default_input_request_id,
 )

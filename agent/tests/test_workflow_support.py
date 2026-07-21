@@ -14,6 +14,7 @@ from agent.state import AgentState
 from agent.workflows.workflow_support import (
     build_tool_error_update,
     config_context,
+    masked_account_options,
     new_input_request_id,
     publish_event,
     route_key,
@@ -72,6 +73,36 @@ def test_common_request_id_factories_preserve_trace_format() -> None:
     assert step_request_id("request_123", "query_accounts") == (
         "request_123:query_accounts"
     )
+
+
+def test_masked_account_options_excludes_sensitive_and_unknown_fields() -> None:
+    result = masked_account_options(
+        [
+            {
+                "account_id": "account_123",
+                "bank_name": "우리은행",
+                "account_alias": "생활비",
+                "account_type": "checking",
+                "masked_account_number": "123-****-789",
+                "currency": "KRW",
+                "is_default": True,
+                "account_number": "123456789",
+                "owner_name": "홍길동",
+            }
+        ]
+    )
+
+    assert result == [
+        {
+            "account_id": "account_123",
+            "bank_name": "우리은행",
+            "account_alias": "생활비",
+            "account_type": "checking",
+            "masked_account_number": "123-****-789",
+            "currency": "KRW",
+            "is_default": True,
+        }
+    ]
 
 
 def test_route_key_defaults_to_error() -> None:
