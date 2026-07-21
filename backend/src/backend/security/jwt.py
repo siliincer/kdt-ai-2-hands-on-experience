@@ -53,7 +53,7 @@ def verify_token(token: str) -> str:
             )
         return user_id
     except JWTError:
-        # TODO: jwt 만료 시 자동 로그아웃 후 로그인 창으로 이동시키기
+        # 현재 jwt 만료 시 자동 로그아웃 후 로그인 창으로 FE가 이동시킴
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="토큰이 만료되었거나 유효하지 않습니다.",

@@ -60,6 +60,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        # ── 수정된 부분: 오프라인 버전 테이블 이름 설정 ─────────────────────
+        version_table="alembic_version_mock_financial_service",
     )
 
     with context.begin_transaction():
@@ -80,7 +82,12 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            # ── 수정된 부분: 온라인 버전 테이블 이름 설정 ─────────────────────
+            version_table="alembic_version_mock_financial_service",
+        )
 
         with context.begin_transaction():
             context.run_migrations()

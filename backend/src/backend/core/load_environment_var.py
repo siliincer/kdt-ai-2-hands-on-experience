@@ -35,18 +35,8 @@ class Settings(BaseSettings):
         default=SecretStr("analytics-demo-key"),
         description="정보계(analytics) 읽기 API 키 (X-Analytics-Key 헤더)",
     )
-    FINANCIAL_DEMO_ACCOUNT_ID: str = Field(
-        default="",
-        description="Phase 1 데모 시드: 매핑된 Account 없을 때 fallback account_id",
-    )
-    FINANCIAL_DEMO_RECEIVER_BANK_NAME: str = Field(
-        default="",
-        description="Phase 2 데모 송금 수취 은행명(계정계 단일 은행, 예: KDT은행)",
-    )
-    FINANCIAL_DEMO_RECEIVER_ACCOUNT_NUMBER: str = Field(
-        default="",
-        description="Phase 2 데모 송금 수취 계좌번호. 은행명과 함께 비면 실이체 미실행",
-    )
+    # (D5) FINANCIAL_DEMO_* 3종(fallback account_id·데모 수취처) 삭제 —
+    # 수취인은 recipient_candidates / 실행 이력 참조로 대체됨.
 
     # Auth Configuration
     JWT_SECRET_KEY: SecretStr = SecretStr("change-me-in-local")
@@ -75,6 +65,21 @@ class Settings(BaseSettings):
         default=SecretStr("change-me-agent-webhook"),
         description="Agent → 웹훅(POST /webhooks/agent) 호출 시 공유 시크릿.",
     )
+    AGENT_SERVICE_TOKEN: SecretStr = Field(
+        default=SecretStr("change-me-agent-service-token"),
+        description=(
+            "Agent → Backend Tool API(/api/v1/agent-tools/*) 호출 시 서비스 인증 "
+            "Bearer 토큰. Webhook Secret과 반드시 분리한다(서비스 간 인증 전용)."
+        ),
+    )
+    EXECUTION_CONTEXT_TTL_SECONDS: int = Field(
+        default=1800,
+        description="Execution Context 발급 시 기본 유효시간(초). 만료 후 재발급 필요.",
+    )
+    DEFAULT_EXECUTION_TIMEZONE: str = Field(
+        default="Asia/Seoul",
+        description="Execution Context 기본 타임존. 거래 합계 등 기간 경계 변환 기준.",
+    )
     SSE_TICKET_RATE_LIMIT: str = Field(
         default="30/minute",
         description="GET /sse/ticket slowapi 제한 (IP당). 인증·DB 세션 생성 게이트.",
@@ -96,4 +101,4 @@ class Settings(BaseSettings):
 # 전역 설정 객체 생성
 settings = Settings()
 
-print("환경 변수 로드 완료")  # TODO: loguru 로거로 교체
+print("환경 변수 로드 완료")  # TODO(BE): loguru 로거로 교체

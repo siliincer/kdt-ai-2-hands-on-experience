@@ -45,6 +45,10 @@ dev = [
 src = [".", "backend", "agent"]
 line-length = 88
 target-version = "py311"
+# 노트북은 티칭용이라 lint/format 대상에서 제외 (ruff는 기본으로 ipynb 포함)
+# Alembic auto-generates these — don't hand-format/lint machine-generated
+# migration scripts (autogenerate's own formatting conventions apply there).
+extend-exclude = ["*.ipynb", "mock-financial-service/alembic_migrations/versions"]
 
 
 [tool.ruff.lint]
@@ -54,7 +58,7 @@ select = ["E", "F", "I", "N", "W"]
 known-first-party = ["backend", "agent"]
 
 [tool.ruff.format]
-quote-style = "double"
+
 indent-style = "space"
 
 [tool.ruff.lint.per-file-ignores]
@@ -66,3 +70,8 @@ addopts = "-v --durations=10"
 
 [tool.deptry]
 extend_exclude = ["tests"]
+
+[tool.pyright]
+typeCheckingMode = "standard" # strict가 아닌 standard로 타협
+reportMissingTypeStubs = "none" # 서드파티 라이브러리에 타입 서적 없어도 통과
+reportUnknownMemberType = "none" # 추론 안 되는 타입(Any)은 일단 눈감아주기

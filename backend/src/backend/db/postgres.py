@@ -59,7 +59,15 @@ AsyncSessionLocal = async_sessionmaker(
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     HTTP 요청마다 비동기 DB 세션을 주입합니다.
-    컨텍스트 매니저가 자동 Close 및 예외 시 자동 Rollback을 보장합니다.
+
+    커밋은 repository 계층 책임(함수별 commit 컨벤션)이고, 여기서는 예외 경로만
+    방어한다: 네트워크 단절·DB 다운·비즈니스 예외 등 어떤 실패든 부분 flush 잔재가
+    남지 않도록 명시 rollback 후 프레임워크로 재전파한다(500 등 응답은 핸들러 몫).
+    컨텍스트 매니저(async with)가 세션 close(풀 반환)를 항상 보장한다.
     """
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise

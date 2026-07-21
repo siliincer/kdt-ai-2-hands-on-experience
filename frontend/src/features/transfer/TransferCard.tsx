@@ -48,7 +48,7 @@ export function TransferCard({
     }
   };
 
-  // TODO: done 변수는 차후 지우기
+  // TODO(FE): done 변수는 차후 지우기
   if (done) {
     return (
       <div className="flex flex-col items-center gap-2 py-4">
@@ -300,7 +300,7 @@ export function TransferCard({
                 time: timeOpt === 'now' ? '지금 바로' : schedDT,
               });
             } else {
-              // TODO: transfer card 자체적으로 성공 UI를 띄우는게 아니고
+              // TODO(FE): transfer card 자체적으로 성공 UI를 띄우는게 아니고
               // onConfirm으로 서버에 전송 후 나중에 성공 메시지를 따로 받는다.
               // agent 연결 후 done변수는 제거한다.
               setDone(true);
