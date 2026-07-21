@@ -11,7 +11,6 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
-
 AGENT_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_PATH = AGENT_DIR / "docs" / "agent-management-sheet-v3.xlsx"
 

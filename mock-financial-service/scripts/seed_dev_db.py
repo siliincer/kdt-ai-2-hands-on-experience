@@ -184,18 +184,18 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         valid_ids = {a.account_id for a in accounts}
         cards = session.query(Card).all()
         for card in cards:
-            assert (
-                card.account_id in valid_ids
-            ), f"Card {card.card_id} references unknown account_id {card.account_id}"
+            assert card.account_id in valid_ids, (
+                f"Card {card.card_id} references unknown account_id {card.account_id}"
+            )
 
         # CardProduct category distribution: 4 per each of 5 categories
         products = session.query(CardProduct).all()
         cat_counts = Counter(p.category for p in products)
         expected_cats = {"외식", "쇼핑", "여행", "웹구독", "마트/편의점"}
         for cat in expected_cats:
-            assert (
-                cat_counts[cat] == 4
-            ), f"Category '{cat}' has {cat_counts[cat]} products; expected 4"
+            assert cat_counts[cat] == 4, (
+                f"Category '{cat}' has {cat_counts[cat]} products; expected 4"
+            )
 
         # card_products has no FK to cards (verified structurally via mock_data)
         # (enforced by model design; no card_id column on CardProduct)
@@ -205,12 +205,12 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         n_ledger_entries = session.query(LedgerEntry).count()
         n_card_ledger_entries = session.query(CardLedgerEntry).count()
 
-        assert n_transactions == len(
-            MOCK_TRANSACTIONS
-        ), f"Expected {len(MOCK_TRANSACTIONS)} Transactions, got {n_transactions}"
-        assert n_ledger_entries == len(
-            MOCK_LEDGER_ENTRIES
-        ), f"Expected {len(MOCK_LEDGER_ENTRIES)} LedgerEntries, got {n_ledger_entries}"
+        assert n_transactions == len(MOCK_TRANSACTIONS), (
+            f"Expected {len(MOCK_TRANSACTIONS)} Transactions, got {n_transactions}"
+        )
+        assert n_ledger_entries == len(MOCK_LEDGER_ENTRIES), (
+            f"Expected {len(MOCK_LEDGER_ENTRIES)} LedgerEntries, got {n_ledger_entries}"
+        )
         assert n_card_ledger_entries == len(MOCK_CARD_LEDGER_ENTRIES), (
             f"Expected {len(MOCK_CARD_LEDGER_ENTRIES)} CardLedgerEntries, "
             f"got {n_card_ledger_entries}"
@@ -241,9 +241,9 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
                 f"Transaction {txn.transaction_id} must have exactly "
                 "one DEBIT and one CREDIT"
             )
-            assert (
-                debit[0].amount == credit[0].amount == txn.amount
-            ), f"Transaction {txn.transaction_id} DEBIT/CREDIT/amount mismatch"
+            assert debit[0].amount == credit[0].amount == txn.amount, (
+                f"Transaction {txn.transaction_id} DEBIT/CREDIT/amount mismatch"
+            )
 
         # FK integrity: every CardLedgerEntry.card_id references a real Card
         valid_card_ids = {c.card_id for c in cards}
