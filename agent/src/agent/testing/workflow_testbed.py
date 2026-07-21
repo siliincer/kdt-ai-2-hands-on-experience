@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 from langgraph.checkpoint.memory import MemorySaver
@@ -43,6 +43,20 @@ class WorkflowTestbedDependencies:
 
 
 TestbedGraphFactory = Callable[[WorkflowTestbedDependencies], ExecutionGraph]
+_ValueT = TypeVar("_ValueT")
+
+
+def constant_factory(value: _ValueT) -> Callable[[], _ValueT]:
+    """Testbed에서 동일한 식별자나 시각을 반복 반환하는 Factory를 만든다."""
+
+    return lambda: value
+
+
+def sequence_factory(values: Iterable[_ValueT]) -> Callable[[], _ValueT]:
+    """Testbed 호출 순서에 따라 준비된 값을 하나씩 반환하는 Factory를 만든다."""
+
+    iterator = iter(values)
+    return lambda: next(iterator)
 
 
 @dataclass(slots=True)
