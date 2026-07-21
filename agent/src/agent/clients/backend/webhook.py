@@ -14,7 +14,14 @@ from agent.clients.backend.client import (
 from agent.contracts.backend import AgentWebhookRequest
 
 WEBHOOK_PATH = "/api/v1/webhooks/agent"
-RETRYABLE_EVENT_TYPES = {"status", "token", "tool_call", "component", "error"}
+RETRYABLE_EVENT_TYPES = {
+    "status",
+    "token",
+    "tool_call",
+    "component",
+    "done",
+    "error",
+}
 
 
 class BackendWebhookClient:
