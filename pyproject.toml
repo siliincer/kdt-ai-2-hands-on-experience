@@ -17,6 +17,7 @@ members = [
     "agent",
     "backend",
     "mock-financial-service",
+    "e2e",
 ]
 
 [tool.uv.sources]

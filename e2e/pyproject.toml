@@ -1,0 +1,20 @@
+[project]
+name = "e2e"
+version = "0.1.0"
+description = "실제 API + 실제 브라우저로 프론트~백엔드~에이전트 전체 스택을 검증하는 E2E 테스트"
+requires-python = ">=3.11,<3.12"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-playwright>=0.5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --durations=10"

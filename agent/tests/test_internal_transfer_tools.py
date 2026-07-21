@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from agent.data.mock_bank import MOCK_ACCOUNTS
 from agent.tools.bank_tools import (
+    _parse_itx_approval_reply,
     execute_internal_transfer,
     extract_internal_transfer_slots,
     generate_internal_transfer_response,
@@ -33,6 +34,49 @@ def test_registered():
         "generate_internal_transfer_response",
     ):
         assert tid in TOOL_REGISTRY
+
+
+# ── 승인 카드 답변 파서 (_parse_itx_approval_reply) ──────────────────────────
+# 그래프 없이 함수 직접 호출로 분기만 검증. 대화형 흐름(interrupt/resume)은
+# test_internal_transfer_flow.py에서 그래프로 검증한다.
+
+
+def test_parse_itx_approval_reply_approved_keywords():
+    assert _parse_itx_approval_reply("승인") == "approved"
+    assert _parse_itx_approval_reply("네 보내주세요") == "approved"
+    assert _parse_itx_approval_reply("진행해줘") == "approved"
+
+
+def test_parse_itx_approval_reply_approved_exact_phrases():
+    assert _parse_itx_approval_reply("송금하기") == "approved"
+    assert _parse_itx_approval_reply("이체") == "approved"
+    assert _parse_itx_approval_reply("이체하기") == "approved"
+
+
+def test_parse_itx_approval_reply_cancelled():
+    assert _parse_itx_approval_reply("취소") == "cancelled"
+    assert _parse_itx_approval_reply("그만") == "cancelled"
+
+
+def test_parse_itx_approval_reply_edit_amount():
+    assert _parse_itx_approval_reply("금액 수정") == "edit_amount"
+
+
+def test_parse_itx_approval_reply_edit_from_account():
+    # "출금"이 포함되면 출금 계좌 수정, "계좌"만 있고 출금/입금이 없으면도
+    # from_account로 폴백된다(구현상 "계좌" 분기가 "입금" 분기보다 뒤에 있음).
+    assert _parse_itx_approval_reply("출금 계좌 수정") == "edit_from_account"
+    assert _parse_itx_approval_reply("계좌 바꿔줘") == "edit_from_account"
+
+
+def test_parse_itx_approval_reply_edit_to_account():
+    assert _parse_itx_approval_reply("입금 계좌 수정") == "edit_to_account"
+
+
+def test_parse_itx_approval_reply_unknown_defaults_to_cancelled():
+    # 해석 불가 답변은 보수적으로 취소 — 돈이 움직이기 직전이므로 fail-safe.
+    assert _parse_itx_approval_reply("음... 글쎄") == "cancelled"
+    assert _parse_itx_approval_reply("") == "cancelled"
 
 
 def test_extract_finds_from_to_and_amount():
