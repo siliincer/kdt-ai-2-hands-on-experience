@@ -7,10 +7,8 @@ LLM 호출이나 Schema 검증이 실패한 필드는 결정적 규칙으로만 
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
-import unicodedata
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import date, timedelta
 from typing import Any, Literal, TypeAlias, TypeVar
@@ -26,6 +24,15 @@ from agent.workflows.inquiry_support import (
     extract_summary_type,
     extract_transaction_type,
     requests_all_accounts,
+)
+from agent.workflows.slot_extraction_support import (
+    compact as _compact,
+)
+from agent.workflows.slot_extraction_support import (
+    grounded_phrase as _grounded_phrase,
+)
+from agent.workflows.slot_extraction_support import (
+    invoke_structured,
 )
 
 AccountSlotExtractor: TypeAlias = Callable[
@@ -58,7 +65,6 @@ TransactionType: TypeAlias = Literal[
 ]
 SummaryType: TypeAlias = Literal["spending", "income"]
 
-_MODEL_TIMEOUT_SECONDS = 15.0
 _ACCOUNT_HINT = re.compile(
     r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))"
 )
@@ -360,17 +366,7 @@ async def _invoke_structured(
     schema: type[_ModelT],
     prompt: str,
 ) -> _ModelT | None:
-    try:
-        runnable = get_llm(temperature=0.0).with_structured_output(schema)
-        result = await asyncio.wait_for(
-            runnable.ainvoke(prompt),
-            timeout=_MODEL_TIMEOUT_SECONDS,
-        )
-        if isinstance(result, schema):
-            return result
-        return schema.model_validate(result)
-    except Exception:
-        return None
+    return await invoke_structured(schema, prompt, llm_factory=get_llm)
 
 
 def _prompt(instruction: str, message: str) -> str:
@@ -382,22 +378,6 @@ def _prompt(instruction: str, message: str) -> str:
         f"[작업]\n{instruction}\n\n"
         f"[사용자 텍스트]\n{json.dumps(message, ensure_ascii=False)}"
     )
-
-
-def _grounded_phrase(value: str | None, message: str) -> str | None:
-    if value is None:
-        return None
-    candidate = value.strip()
-    if not candidate or len(candidate) > 100:
-        return None
-    return candidate if _compact(candidate) in _compact(message) else None
-
-
-def _compact(value: object) -> str:
-    if not isinstance(value, str):
-        return ""
-    normalized = unicodedata.normalize("NFKC", value).casefold()
-    return "".join(normalized.split())
 
 
 def _normalized_period(
