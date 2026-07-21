@@ -134,10 +134,7 @@ def make_account_rows() -> list[Account]:
     _build_transaction_dataset()) so every row satisfies the canonical
     Account.balance invariant on creation, not just default=0.
     """
-    return [
-        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
-        for d in MOCK_ACCOUNTS
-    ]
+    return [Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0)) for d in MOCK_ACCOUNTS]
 
 
 def make_card_rows() -> list[Card]:
@@ -510,9 +507,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
 ]
 
 # Convenience lookup: biller name → account_id
-BILLER_ACCOUNT_ID: dict[str, str] = {
-    row["owner"]: row["account_id"] for row in MOCK_BILLER_ACCOUNTS
-}
+BILLER_ACCOUNT_ID: dict[str, str] = {row["owner"]: row["account_id"] for row in MOCK_BILLER_ACCOUNTS}
 
 
 def make_biller_account_rows() -> list[Account]:
@@ -525,10 +520,7 @@ def make_biller_account_rows() -> list[Account]:
     학원비, 관리비).  They are distinct from user-owned MOCK_ACCOUNTS so that
     existing card-service tests that assert exactly 5 user accounts are unaffected.
     """
-    return [
-        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
-        for d in MOCK_BILLER_ACCOUNTS
-    ]
+    return [Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0)) for d in MOCK_BILLER_ACCOUNTS]
 
 
 # ── Schema validation ──────────────────────────────────────────────────────────
@@ -563,8 +555,7 @@ def _validate_row(row: dict, schema: dict, label: str) -> list[str]:
             errors.append(f"{label}[{row}]: missing field '{field}'")
         elif not isinstance(row[field], expected_type):
             errors.append(
-                f"{label}: field '{field}' expected {expected_type.__name__}, "
-                f"got {type(row[field]).__name__}"
+                f"{label}: field '{field}' expected {expected_type.__name__}, got {type(row[field]).__name__}"
             )
     return errors
 
@@ -626,9 +617,7 @@ def validate_dataset() -> list[str]:
     for i, row in enumerate(MOCK_CARD_PRODUCTS):
         cat = row.get("category", "")
         if cat not in allowed_cats:
-            errors.append(
-                f"CardProduct[{i}]: category '{cat}' not in allowed set {allowed_cats}"
-            )
+            errors.append(f"CardProduct[{i}]: category '{cat}' not in allowed set {allowed_cats}")
 
     # benefits must be valid JSON list with >= 1 item
     for i, row in enumerate(MOCK_CARD_PRODUCTS):
@@ -673,9 +662,7 @@ def validate_dataset() -> list[str]:
     cat_counts = _Counter(r["category"] for r in MOCK_CARD_PRODUCTS)
     for cat in CARD_PRODUCT_CATEGORIES:
         if cat_counts.get(cat, 0) != 4:
-            errors.append(
-                f"Category '{cat}' has {cat_counts.get(cat, 0)} products; expected 4"
-            )
+            errors.append(f"Category '{cat}' has {cat_counts.get(cat, 0)} products; expected 4")
 
     return errors
 
@@ -778,9 +765,7 @@ class _Counter:
         return self._n
 
 
-def _build_transaction_dataset() -> tuple[
-    list[dict], list[dict], list[dict], dict[str, int]
-]:
+def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict], dict[str, int]]:
     """Deterministically build 4 months of persona-driven transaction history.
 
     Returns (transactions, ledger_entries, card_ledger_entries, final_balances)
@@ -802,14 +787,10 @@ def _build_transaction_dataset() -> tuple[
     # merchant is None for "transfer" kind; a merchant/store label for "card".
     events: list[tuple[date, str, str, str, int, str, str | None]] = []
 
-    def add_transfer(
-        d: date, sender: str, receiver: str, amount: int, status: str = "success"
-    ) -> None:
+    def add_transfer(d: date, sender: str, receiver: str, amount: int, status: str = "success") -> None:
         events.append((d, "transfer", sender, receiver, amount, status, None))
 
-    def add_card(
-        d: date, account_id: str, amount: int, merchant: str, card_index: int = 0
-    ) -> None:
+    def add_card(d: date, account_id: str, amount: int, merchant: str, card_index: int = 0) -> None:
         cards = _ACCOUNT_CARDS.get(account_id)
         if not cards:
             return
@@ -821,13 +802,9 @@ def _build_transaction_dataset() -> tuple[
         rnd = random.Random(f"{_ACCT1}-{y}{m:02d}")
         if first <= 25 <= last:
             add_transfer(date(y, m, 25), "SALARY", _ACCT1, 2_450_000)
-            add_transfer(
-                date(y, m, _clip_day(26, last)), _ACCT1, _SAVINGS_BILLER, 370_000
-            )
+            add_transfer(date(y, m, _clip_day(26, last)), _ACCT1, _SAVINGS_BILLER, 370_000)
             add_transfer(date(y, m, _clip_day(27, last)), _ACCT1, _MGMT_BILLER, 540_000)
-            add_transfer(
-                date(y, m, _clip_day(27, last)), _ACCT1, _TELECOM_BILLER, 120_000
-            )
+            add_transfer(date(y, m, _clip_day(27, last)), _ACCT1, _TELECOM_BILLER, 120_000)
             add_transfer(date(y, m, _clip_day(28, last)), _ACCT1, _GYM_BILLER, 100_000)
         # 카드결제: 외식 10건 / 마트-편의점 4건 / 쇼핑 2건
         for _ in range(10):
@@ -858,9 +835,7 @@ def _build_transaction_dataset() -> tuple[
                 card_index=0,
             )
     # 4개월 중 1회 여행 특별 소비 + 1회 경조사비 송금
-    add_card(
-        date(2026, 5, 16), _ACCT1, 260_000, rnd.choice(_MERCHANTS_TRAVEL), card_index=1
-    )
+    add_card(date(2026, 5, 16), _ACCT1, 260_000, rnd.choice(_MERCHANTS_TRAVEL), card_index=1)
     add_transfer(date(2026, 6, 20), _ACCT1, _ACCT2, 100_000)  # 경조사비
 
     # ── 박서연 (acct-0002) — 재테크 워킹맘, salary day 21 ─────────────────────
@@ -870,15 +845,9 @@ def _build_transaction_dataset() -> tuple[
             add_transfer(date(y, m, 21), "SALARY", _ACCT2, 4_200_000)
             add_transfer(date(y, m, _clip_day(21, last)), _ACCT2, _LOAN_BILLER, 630_000)
             add_transfer(date(y, m, _clip_day(22, last)), _ACCT2, _MGMT_BILLER, 170_000)
-            add_transfer(
-                date(y, m, _clip_day(22, last)), _ACCT2, _ACADEMY_BILLER, 420_000
-            )
-            add_transfer(
-                date(y, m, _clip_day(23, last)), _ACCT2, _INVEST_BILLER, 840_000
-            )
-            add_transfer(
-                date(y, m, _clip_day(23, last)), _ACCT2, _SAVINGS_BILLER, 340_000
-            )
+            add_transfer(date(y, m, _clip_day(22, last)), _ACCT2, _ACADEMY_BILLER, 420_000)
+            add_transfer(date(y, m, _clip_day(23, last)), _ACCT2, _INVEST_BILLER, 840_000)
+            add_transfer(date(y, m, _clip_day(23, last)), _ACCT2, _SAVINGS_BILLER, 340_000)
         # 카드결제: 마트 대량구매 5건(주1회) / 외식(야근 배달 등) 6건 / 쇼핑 2건
         for _ in range(5):
             d = rnd.randint(first, last)
@@ -915,9 +884,7 @@ def _build_transaction_dataset() -> tuple[
     for y, m, first, last in _MONTH_WINDOWS:
         rnd = random.Random(f"{_ACCT3}-{y}{m:02d}")
         income_day = rnd.randint(max(first, 5), min(last, 20))
-        add_transfer(
-            date(y, m, income_day), "SALARY", _ACCT3, rnd.randint(1_500_000, 2_800_000)
-        )
+        add_transfer(date(y, m, income_day), "SALARY", _ACCT3, rnd.randint(1_500_000, 2_800_000))
         # 배달음식 18건 / 편의점 8건 / 온라인쇼핑·취미 3건 / 교통 4건
         for _ in range(18):
             d = rnd.randint(first, last)
@@ -979,9 +946,7 @@ def _build_transaction_dataset() -> tuple[
             continue  # already covered by the fail/retry pair above
         add_transfer(date(y, m, _clip_day(3, last)), _ACCT3, _MGMT_BILLER, 520_000)
         if (y, m) != (2026, 4):  # April covered by the fail/retry pair above
-            add_transfer(
-                date(y, m, _clip_day(14, last)), _ACCT3, _TELECOM_BILLER, 130_000
-            )
+            add_transfer(date(y, m, _clip_day(14, last)), _ACCT3, _TELECOM_BILLER, 130_000)
 
     # ── acct-0004 / acct-0005 — 페르소나 미지정, 김지훈 축소판 기본값 ─────────
     for acct, salary_day in ((_ACCT4, 25), (_ACCT5, 10)):
@@ -1060,9 +1025,7 @@ def _build_transaction_dataset() -> tuple[
             continue
 
         # "transfer" (account transfer / general payment / income / risk signal)
-        sender_key = (
-            "acct-b099-0000-0000-000000000099" if a in ("SALARY", "FRIEND") else a
-        )
+        sender_key = "acct-b099-0000-0000-000000000099" if a in ("SALARY", "FRIEND") else a
         # External payroll/friend sources are not modeled as a real Account —
         # use a shared external-source placeholder so the FK target still
         # resolves to an existing Account without polluting the 5 user / 7
@@ -1138,10 +1101,7 @@ def make_external_source_account_rows() -> list[Account]:
     its balance is expected to be deeply negative — it represents value
     entering the modeled system from outside, not a real funded account.
     """
-    return [
-        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
-        for d in MOCK_EXTERNAL_SOURCE_ACCOUNTS
-    ]
+    return [Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0)) for d in MOCK_EXTERNAL_SOURCE_ACCOUNTS]
 
 
 (

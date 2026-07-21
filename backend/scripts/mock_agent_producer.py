@@ -37,19 +37,11 @@ INTERVAL_SECONDS = 2.0
 
 
 async def main(chat_session_id: UUID) -> None:
-    redis_stream = aioredis.from_url(
-        str(settings.REDIS_STREAM_URL).strip(), decode_responses=True
-    )
+    redis_stream = aioredis.from_url(str(settings.REDIS_STREAM_URL).strip(), decode_responses=True)
     try:
         for index, (event_type, content) in enumerate(MOCK_SEQUENCE, start=1):
-            approval_id = (
-                "appv_mock_001"
-                if event_type == AgentStreamEventType.NEED_APPROVAL
-                else None
-            )
-            event = AgentStreamEvent(
-                event_type=event_type, content=content, approval_id=approval_id
-            )
+            approval_id = "appv_mock_001" if event_type == AgentStreamEventType.NEED_APPROVAL else None
+            event = AgentStreamEvent(event_type=event_type, content=content, approval_id=approval_id)
             message_id = await publish_agent_event(redis_stream, chat_session_id, event)
             print(f"[XADD #{index}] {event_type.value}: {content} -> {message_id}")
             if index < len(MOCK_SEQUENCE):

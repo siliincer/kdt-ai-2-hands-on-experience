@@ -181,10 +181,7 @@ class ExecutionRuntime:
                 if existing.start_request != request:
                     raise ExecutionRuntimeError(
                         code="START_REQUEST_ID_CONFLICT",
-                        reason=(
-                            "같은 request_id에 다른 실행 시작 요청을 "
-                            "사용할 수 없습니다."
-                        ),
+                        reason=("같은 request_id에 다른 실행 시작 요청을 사용할 수 없습니다."),
                     )
                 return ExecutionAccepted(
                     agent_thread_id=existing_thread_id,

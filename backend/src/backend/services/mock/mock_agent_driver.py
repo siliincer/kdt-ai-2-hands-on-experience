@@ -389,7 +389,7 @@ async def run_initial_turn(
             "무엇을 ",
             "도와드릴까요? ",
             "송금, 잔액 조회, ",
-            "거래내역, 예산관리, 잔액조회, " "자동이체등록, 카드관리, " "소비 분석을 할 수 있어요.",
+            "거래내역, 예산관리, 잔액조회, 자동이체등록, 카드관리, 소비 분석을 할 수 있어요.",
         )
         for chunk in answer_chunks:
             await _emit(redis_stream, chat_session_id, AgentStreamEventType.TOKEN, chunk)
@@ -484,7 +484,7 @@ async def _run_alias_input(
                 "payload": {
                     "title": "새 계좌 별칭을 입력해 주세요.",
                     "description": (
-                        f"{ALIAS_TARGET_ACCOUNT['bank_name']} " f"{ALIAS_TARGET_ACCOUNT['masked_account_number']}"
+                        f"{ALIAS_TARGET_ACCOUNT['bank_name']} {ALIAS_TARGET_ACCOUNT['masked_account_number']}"
                     ),
                     "validation": {"required": True, "max_length": 30},
                     "actions": ["submit", "cancel"],

@@ -24,7 +24,5 @@ def verify_agent_service_token(
 ) -> None:
     """서비스 토큰을 상수시간 비교로 검증한다. 실패 시 INVALID_SERVICE_TOKEN(401)."""
     expected = settings.AGENT_SERVICE_TOKEN.get_secret_value()
-    if credentials is None or not secrets.compare_digest(
-        credentials.credentials, expected
-    ):
+    if credentials is None or not secrets.compare_digest(credentials.credentials, expected):
         raise AgentToolError.invalid_service_token()

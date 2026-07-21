@@ -188,9 +188,7 @@ async def test_create_auth_context_and_execute_external_transfer() -> None:
         "/api/v1/agent-tools/auth-contexts",
         "/api/v1/agent-tools/transfers/external",
     ]
-    assert captured[1].headers["idempotency-key"] == (
-        "external_transfer_execute:confirm_123:1"
-    )
+    assert captured[1].headers["idempotency-key"] == ("external_transfer_execute:confirm_123:1")
     assert auth_result.auth_context_id == "auth_123"
     assert execute_result.transaction_id == "txn_123"
 
@@ -206,9 +204,7 @@ async def test_internal_transfer_supports_correction_and_reauthentication() -> N
                 {
                     "outcome": "correction_required",
                     "reason": "insufficient_balance",
-                    "correction_view": {
-                        "allowed_change_targets": ["from_account", "amount"]
-                    },
+                    "correction_view": {"allowed_change_targets": ["from_account", "amount"]},
                 }
             )
         return _success(

@@ -141,15 +141,11 @@ def test_extract_transfer_slots_llm_first(monkeypatch):
     from agent.tools.bank_tools import _TransferSlots
 
     # "오만원만 부쳐줘" 시나리오: LLM이 50000으로 환산해 반환
-    fake = _FakeSlotLlm(
-        _TransferSlots(recipient="박영수", amount=50_000, from_account_hint="생활비")
-    )
+    fake = _FakeSlotLlm(_TransferSlots(recipient="박영수", amount=50_000, from_account_hint="생활비"))
     monkeypatch.setattr(bank_tools, "get_llm", lambda *a, **k: fake)
 
     # "박영수" / 50000은 이 발화의 정규식 매칭으로는 나올 수 없는 값
-    result = extract_transfer_slots(
-        {"user_input": "지난번 그 사람한테 오만원만 부쳐줘"}
-    )
+    result = extract_transfer_slots({"user_input": "지난번 그 사람한테 오만원만 부쳐줘"})
     assert result["transfer.recipient"] == "박영수"
     assert result["transfer.amount"] == 50_000
     assert result["transfer.from_account"] == "생활비"
@@ -165,9 +161,7 @@ def test_extract_transfer_slots_ignores_nonpositive_llm_amount(monkeypatch):
     from agent.tools import bank_tools
     from agent.tools.bank_tools import _TransferSlots
 
-    fake = _FakeSlotLlm(
-        _TransferSlots(recipient="김철수", amount=0, from_account_hint=None)
-    )
+    fake = _FakeSlotLlm(_TransferSlots(recipient="김철수", amount=0, from_account_hint=None))
     monkeypatch.setattr(bank_tools, "get_llm", lambda *a, **k: fake)
 
     result = extract_transfer_slots({"user_input": "김철수한테 5만원 보내줘"})
@@ -179,23 +173,17 @@ def test_extract_transfer_slots_partial_llm_backfilled_by_rule(monkeypatch):
     from agent.tools import bank_tools
     from agent.tools.bank_tools import _TransferSlots
 
-    fake = _FakeSlotLlm(
-        _TransferSlots(recipient="김철수", amount=None, from_account_hint=None)
-    )
+    fake = _FakeSlotLlm(_TransferSlots(recipient="김철수", amount=None, from_account_hint=None))
     monkeypatch.setattr(bank_tools, "get_llm", lambda *a, **k: fake)
 
-    result = extract_transfer_slots(
-        {"user_input": "생활비통장에서 김철수한테 5만원 보내줘"}
-    )
+    result = extract_transfer_slots({"user_input": "생활비통장에서 김철수한테 5만원 보내줘"})
     assert result["transfer.recipient"] == "김철수"  # LLM 값
     assert result["transfer.amount"] == 50_000  # 정규식 보강
     assert result["transfer.from_account"] == "생활비"  # 정규식 보강
 
 
 def test_extract_transfer_slots_full_utterance():
-    result = extract_transfer_slots(
-        {"user_input": "생활비통장에서 김철수한테 5만원 보내줘"}
-    )
+    result = extract_transfer_slots({"user_input": "생활비통장에서 김철수한테 5만원 보내줘"})
     assert result["transfer.recipient"] == "김철수"
     assert result["transfer.amount"] == 50_000
     assert result["transfer.from_account"] == "생활비"
@@ -242,9 +230,7 @@ def test_verify_amount_routes():
     assert got["route_key"] == "valid"
     assert got["transfer.amount"] == 50_000
 
-    assert verify_amount(_state(**{"transfer.amount": "몰라"}))["route_key"] == (
-        "invalid"
-    )
+    assert verify_amount(_state(**{"transfer.amount": "몰라"}))["route_key"] == ("invalid")
 
     got = verify_amount(_state(**{"transfer.amount": 60_000_000}))
     assert got["route_key"] == "limit_exceeded"
@@ -263,30 +249,21 @@ def test_verify_from_account_routes():
 
 def test_check_balance_routes():
     account = MOCK_ACCOUNTS["user_001"][1]  # 생활비통장 430,000
-    got = check_balance(
-        _state(**{"transfer.amount": 500_000, "transfer.from_account": account})
-    )
+    got = check_balance(_state(**{"transfer.amount": 500_000, "transfer.from_account": account}))
     assert got["route_key"] == "insufficient"
 
-    got = check_balance(
-        _state(**{"transfer.amount": 100_000, "transfer.from_account": account})
-    )
+    got = check_balance(_state(**{"transfer.amount": 100_000, "transfer.from_account": account}))
     assert got["route_key"] == "sufficient"
 
     # 실시간 재조회: state 복사본이 아니라 원장 잔액 기준
     stale = dict(account)
     stale["balance"] = 999_999_999
-    got = check_balance(
-        _state(**{"transfer.amount": 500_000, "transfer.from_account": stale})
-    )
+    got = check_balance(_state(**{"transfer.amount": 500_000, "transfer.from_account": stale}))
     assert got["route_key"] == "insufficient"
 
 
 def test_run_transfer_guardrail_thresholds():
-    assert (
-        run_transfer_guardrail(_state(**{"transfer.amount": 50_000}))["route_key"]
-        == "allowed"
-    )
+    assert run_transfer_guardrail(_state(**{"transfer.amount": 50_000}))["route_key"] == "allowed"
     got = run_transfer_guardrail(_state(**{"transfer.amount": 1_200_000}))
     assert got["route_key"] == "warning_required"
     got = run_transfer_guardrail(_state(**{"transfer.amount": 10_000_000}))

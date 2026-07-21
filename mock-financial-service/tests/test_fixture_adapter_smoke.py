@@ -62,9 +62,7 @@ def test_cards_fixture_positive_limits(cards):
 
 
 def test_card_products_fixture_count(card_products):
-    assert len(card_products) == 20, (
-        f"Expected 20 card_products, got {len(card_products)}"
-    )
+    assert len(card_products) == 20, f"Expected 20 card_products, got {len(card_products)}"
 
 
 def test_card_products_fixture_required_fields(card_products):
@@ -77,12 +75,8 @@ def test_card_products_fixture_required_fields(card_products):
 def test_card_products_fixture_no_fk_fields(card_products):
     """card_products is standalone — must not contain card_id or account_id."""
     for cp in card_products:
-        assert "card_id" not in cp, (
-            f"CardProduct {cp['card_product_id']} must not have card_id"
-        )
-        assert "account_id" not in cp, (
-            f"CardProduct {cp['card_product_id']} must not have account_id"
-        )
+        assert "card_id" not in cp, f"CardProduct {cp['card_product_id']} must not have card_id"
+        assert "account_id" not in cp, f"CardProduct {cp['card_product_id']} must not have account_id"
 
 
 def test_card_products_fixture_categories(card_products):

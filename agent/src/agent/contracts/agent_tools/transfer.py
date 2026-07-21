@@ -62,15 +62,11 @@ class BlockedView(TransferToolContract):
 
 class ExternalCorrectionView(TransferToolContract):
     title: str | None = None
-    allowed_change_targets: Annotated[
-        list[ExternalChangeTarget], Field(min_length=1, max_length=3)
-    ]
+    allowed_change_targets: Annotated[list[ExternalChangeTarget], Field(min_length=1, max_length=3)]
 
     @field_validator("allowed_change_targets")
     @classmethod
-    def validate_targets(
-        cls, value: list[ExternalChangeTarget]
-    ) -> list[ExternalChangeTarget]:
+    def validate_targets(cls, value: list[ExternalChangeTarget]) -> list[ExternalChangeTarget]:
         return _ensure_unique(
             value,
             field_name="allowed_change_targets",
@@ -79,15 +75,11 @@ class ExternalCorrectionView(TransferToolContract):
 
 class InternalCorrectionView(TransferToolContract):
     title: str | None = None
-    allowed_change_targets: Annotated[
-        list[InternalChangeTarget], Field(min_length=1, max_length=3)
-    ]
+    allowed_change_targets: Annotated[list[InternalChangeTarget], Field(min_length=1, max_length=3)]
 
     @field_validator("allowed_change_targets")
     @classmethod
-    def validate_targets(
-        cls, value: list[InternalChangeTarget]
-    ) -> list[InternalChangeTarget]:
+    def validate_targets(cls, value: list[InternalChangeTarget]) -> list[InternalChangeTarget]:
         return _ensure_unique(
             value,
             field_name="allowed_change_targets",
@@ -105,9 +97,7 @@ class ExternalTransferPrepareRequest(TransferToolContract):
     def validate_recipient_reference(self) -> Self:
         references = [self.to_recipient_id, self.to_recipient_candidate_id]
         if sum(reference is not None for reference in references) != 1:
-            raise ValueError(
-                "to_recipient_id와 to_recipient_candidate_id 중 하나만 필요합니다."
-            )
+            raise ValueError("to_recipient_id와 to_recipient_candidate_id 중 하나만 필요합니다.")
         return self
 
 
@@ -169,9 +159,7 @@ class AuthRequestView(TransferToolContract):
 
     @field_validator("available_methods")
     @classmethod
-    def validate_methods(
-        cls, value: list[AuthenticationMethod]
-    ) -> list[AuthenticationMethod]:
+    def validate_methods(cls, value: list[AuthenticationMethod]) -> list[AuthenticationMethod]:
         return _ensure_unique(value, field_name="available_methods")
 
 

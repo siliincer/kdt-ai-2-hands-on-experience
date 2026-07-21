@@ -27,9 +27,7 @@ class AgentStreamEvent(BaseModel):
 
 class SseTicketResponse(BaseModel):
     sse_session_id: UUID
-    chat_session_id: UUID = Field(
-        description="바인딩된 대화 세션 ID. connect 시 이 세션의 스트림을 구독한다."
-    )
+    chat_session_id: UUID = Field(description="바인딩된 대화 세션 ID. connect 시 이 세션의 스트림을 구독한다.")
     expires_in: int = Field(description="티켓 유효 시간(초)")
 
 

@@ -56,9 +56,7 @@ async def test_consume_sse_ticket_returns_context_and_deletes_key(mock_redis):
     chat_session_id = uuid4()
     sse_session_id = uuid4()
     mock_redis.getdel = AsyncMock(
-        return_value=json.dumps(
-            {"user_id": str(user_id), "chat_session_id": str(chat_session_id)}
-        )
+        return_value=json.dumps({"user_id": str(user_id), "chat_session_id": str(chat_session_id)})
     )
 
     context = await consume_sse_ticket(mock_redis, sse_session_id)
@@ -230,14 +228,10 @@ def test_connect_sse_relays_stream_events(client: TestClient):
 
     cache = AsyncMock()
     cache.getdel = AsyncMock(
-        return_value=json.dumps(
-            {"user_id": str(user_id), "chat_session_id": str(chat_session_id)}
-        )
+        return_value=json.dumps({"user_id": str(user_id), "chat_session_id": str(chat_session_id)})
     )
 
-    stream = FakeStreamRedis(
-        [[[key, [("1-0", {"event_type": "done", "content": "완료됨"})]]]]
-    )
+    stream = FakeStreamRedis([[[key, [("1-0", {"event_type": "done", "content": "완료됨"})]]]])
 
     async def override_cache():
         yield cache

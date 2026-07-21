@@ -36,9 +36,5 @@ async def resolve_recipient_endpoint(
 ):
     """이름 힌트를 기존 거래 수취인 하나로 자동 확정할 수 있는지 판단한다."""
     data = await recipient_service.resolve_recipient(session, context, payload)
-    message = (
-        "기존 거래 수취인을 확인했습니다."
-        if data.outcome == "resolved"
-        else "수취인 선택이 필요합니다."
-    )
+    message = "기존 거래 수취인을 확인했습니다." if data.outcome == "resolved" else "수취인 선택이 필요합니다."
     return agent_success_response(message=message, data=data)

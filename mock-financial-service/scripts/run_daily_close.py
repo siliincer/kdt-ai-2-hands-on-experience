@@ -29,9 +29,7 @@ def main() -> int:
     finally:
         db.close()
 
-    print(
-        f"[daily-close] business_date={resolved_date} accounts_closed={len(snapshots)}"
-    )
+    print(f"[daily-close] business_date={resolved_date} accounts_closed={len(snapshots)}")
     for row in snapshots:
         print(
             f"  account_id={row.account_id} closing_balance={row.closing_balance} "

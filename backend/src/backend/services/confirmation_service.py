@@ -105,9 +105,7 @@ async def load_for_execute(
     expected_operation: ConfirmationOperation,
 ) -> Confirmation:
     """Execute 직전 재검증. 요청한 Operation 과 일치하는 승인 건만 통과시킨다."""
-    return await _load_approved(
-        session, context, confirmation_id, frozenset({expected_operation})
-    )
+    return await _load_approved(session, context, confirmation_id, frozenset({expected_operation}))
 
 
 async def load_for_auth(
@@ -121,9 +119,7 @@ async def load_for_auth(
     유형을 알려주지 않는다. 설정 변경 Confirmation 으로 인증을 만들려 하면 불일치로
     거부한다(설정 변경은 추가 인증을 요구하지 않음, 계약 19.3).
     """
-    return await _load_approved(
-        session, context, confirmation_id, _AUTH_ELIGIBLE_OPERATIONS
-    )
+    return await _load_approved(session, context, confirmation_id, _AUTH_ELIGIBLE_OPERATIONS)
 
 
 async def approve(session: AsyncSession, confirmation: Confirmation) -> Confirmation:
@@ -138,9 +134,7 @@ async def approve(session: AsyncSession, confirmation: Confirmation) -> Confirma
 
 async def invalidate(session: AsyncSession, confirmation: Confirmation) -> Confirmation:
     """조건 변경·차단으로 기존 Confirmation 을 재사용 불가 처리한다."""
-    return await set_confirmation_status(
-        session, confirmation, ConfirmationStatus.INVALIDATED
-    )
+    return await set_confirmation_status(session, confirmation, ConfirmationStatus.INVALIDATED)
 
 
 async def mark_executed(session: AsyncSession, confirmation: Confirmation) -> bool:

@@ -74,9 +74,7 @@ class TestOrmMisuseErrorHandler:
         @app.get("/orm-misuse")
         def raise_orm_misuse():
             # lazy='raise' 관계 접근 시 SQLAlchemy 가 던지는 예외를 재현.
-            raise InvalidRequestError(
-                "'ExecutionContext.user' is not available due to lazy='raise'"
-            )
+            raise InvalidRequestError("'ExecutionContext.user' is not available due to lazy='raise'")
 
         response = client.get("/orm-misuse")
 
@@ -155,9 +153,7 @@ class TestRequestValidationErrorHandler:
             return {"message": "OK"}
 
         # Send invalid data (age should be int, not string)
-        response = client.post(
-            "/validate-request", json={"name": "John", "age": "invalid"}
-        )
+        response = client.post("/validate-request", json={"name": "John", "age": "invalid"})
 
         assert response.status_code == 422
         data = response.json()
@@ -190,10 +186,7 @@ class TestResponseValidationErrorHandler:
         data = response.json()
         assert data["success"] is False
         assert data["error"]["code"] == "RESPONSE_VALIDATION_ERROR"
-        assert (
-            data["error"]["message"]
-            == "서버 응답 형식이 API 스키마와 일치하지 않습니다."
-        )
+        assert data["error"]["message"] == "서버 응답 형식이 API 스키마와 일치하지 않습니다."
         assert "details" in data["error"]
 
 

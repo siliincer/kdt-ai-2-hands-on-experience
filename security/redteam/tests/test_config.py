@@ -44,9 +44,7 @@ def test_external_chat_endpoint_is_rejected():
     raw = yaml.safe_load((ROOT / "config.example.yaml").read_text())
     raw["target"]["chat_path"] = "http://example.com/chat"
 
-    with pytest.raises(
-        ValidationError, match="chat_path must be a local absolute path"
-    ):
+    with pytest.raises(ValidationError, match="chat_path must be a local absolute path"):
         RedTeamConfig.model_validate(raw)
 
 

@@ -53,9 +53,7 @@ def test_verify_target_not_found():
 
 
 def test_apply_sets_default_flag():
-    account = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "생활비통장"
-    )
+    account = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "생활비통장")
     result = apply_default_account(_state(**{"default.account": account}))
     assert result["route_key"] == "success"
     # 대상만 is_default=True, 나머지는 False
@@ -64,9 +62,7 @@ def test_apply_sets_default_flag():
 
 
 def test_generate_response():
-    result = generate_setting_response(
-        _state(**{"default.result": {"account_name": "생활비통장"}})
-    )
+    result = generate_setting_response(_state(**{"default.result": {"account_name": "생활비통장"}}))
     assert result["route_key"] == "success"
     assert "생활비통장" in result["final_response"]
     assert "기본 출금계좌" in result["final_response"]

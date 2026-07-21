@@ -69,9 +69,7 @@ async def test_set_account_alias_reference_workflow_completes_full_happy_path() 
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias",
@@ -84,9 +82,7 @@ async def test_set_account_alias_reference_workflow_completes_full_happy_path() 
     )
     backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_result"})
 
-    async with create_account_alias_change_mock_testbed(
-        backend, _config(), thread_id="thread_alias_happy"
-    ) as testbed:
+    async with create_account_alias_change_mock_testbed(backend, _config(), thread_id="thread_alias_happy") as testbed:
         waiting = await testbed.start(
             message="생활비 통장 별칭을 여행 자금으로 바꿔줘",
             request_id="req_1",
@@ -117,9 +113,7 @@ async def test_set_account_alias_reference_workflow_completes_full_happy_path() 
     assert completed.status == "completed"
     assert state["data"]["alias"] == "여행 자금"
 
-    result_event = json.loads(
-        backend.requests_to("POST", "/api/v1/webhooks/agent")[-1].content
-    )
+    result_event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[-1].content)
     assert result_event["metadata"]["step_id"] == "emit_account_alias_result"
     assert result_event["metadata"]["ui"]["payload"]["alias"] == "여행 자금"
     backend.assert_all_responses_used()
@@ -147,9 +141,7 @@ async def test_set_account_alias_selection_required_then_selected() -> None:
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias",
@@ -162,9 +154,7 @@ async def test_set_account_alias_selection_required_then_selected() -> None:
     )
     backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_result"})
 
-    async with create_account_alias_change_mock_testbed(
-        backend, _config(), thread_id="thread_alias_select"
-    ) as testbed:
+    async with create_account_alias_change_mock_testbed(backend, _config(), thread_id="thread_alias_select") as testbed:
         waiting_select = await testbed.start(
             message="별칭을 여행 자금으로 바꿔줘",
             request_id="req_1",
@@ -290,9 +280,7 @@ async def test_set_account_alias_missing_then_submitted() -> None:
             "account_ids": ["acc_001"],
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_input"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_input"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias:prepare",
@@ -302,9 +290,7 @@ async def test_set_account_alias_missing_then_submitted() -> None:
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias",
@@ -357,10 +343,7 @@ async def test_set_account_alias_missing_then_submitted() -> None:
         )
 
     assert completed.status == "completed"
-    events = [
-        json.loads(r.content)
-        for r in backend.requests_to("POST", "/api/v1/webhooks/agent")
-    ]
+    events = [json.loads(r.content) for r in backend.requests_to("POST", "/api/v1/webhooks/agent")]
     assert events[0]["metadata"]["step_id"] == "request_account_alias_input"
     backend.assert_all_responses_used()
 
@@ -377,9 +360,7 @@ async def test_set_account_alias_input_cancelled() -> None:
             "account_ids": ["acc_001"],
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_input"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_input"})
 
     async with create_account_alias_change_mock_testbed(
         backend, _config(), thread_id="thread_alias_input_cancel"
@@ -429,9 +410,7 @@ async def test_set_account_alias_unchanged() -> None:
             "alias": "생활비",
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_unchanged"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_unchanged"})
 
     async with create_account_alias_change_mock_testbed(
         backend, _config(), thread_id="thread_alias_unchanged"
@@ -493,9 +472,7 @@ async def test_set_account_alias_correction_required_target_account() -> None:
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
 
     async with create_account_alias_change_mock_testbed(
         backend, _config(), thread_id="thread_alias_correction_account"
@@ -536,9 +513,7 @@ async def test_set_account_alias_correction_required_target_alias() -> None:
             "correction_view": {"allowed_change_targets": ["alias"]},
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_retry"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_retry"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias:prepare",
@@ -548,9 +523,7 @@ async def test_set_account_alias_correction_required_target_alias() -> None:
             "confirmation_view": _confirmation_view("커피값"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
 
     async with create_account_alias_change_mock_testbed(
         backend, _config(), thread_id="thread_alias_correction_alias"
@@ -602,12 +575,8 @@ async def test_set_account_alias_change_requested_target_alias() -> None:
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"}
-    )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_retry"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"})
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_retry"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias:prepare",
@@ -617,9 +586,7 @@ async def test_set_account_alias_change_requested_target_alias() -> None:
             "confirmation_view": _confirmation_view("커피값"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias",
@@ -673,9 +640,7 @@ async def test_set_account_alias_change_requested_target_alias() -> None:
             value={"alias_input_outcome": "submitted", "alias": "커피값"},
         )
         assert waiting_second_approval.pending_interaction is not None
-        second_confirmation_id = waiting_second_approval.pending_interaction[
-            "confirmation_id"
-        ]
+        second_confirmation_id = waiting_second_approval.pending_interaction["confirmation_id"]
 
         completed = await testbed.resume(
             "thread_alias_change_requested",
@@ -718,9 +683,7 @@ async def test_set_account_alias_cancel_at_approval() -> None:
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
 
     async with create_account_alias_change_mock_testbed(
         backend, _config(), thread_id="thread_alias_cancel_approval"
@@ -779,9 +742,7 @@ async def test_set_account_alias_correction_required_at_execute() -> None:
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias",
@@ -791,9 +752,7 @@ async def test_set_account_alias_correction_required_at_execute() -> None:
             "correction_view": {"allowed_change_targets": ["alias"]},
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_retry"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_alias_retry"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias:prepare",
@@ -803,9 +762,7 @@ async def test_set_account_alias_correction_required_at_execute() -> None:
             "confirmation_view": _confirmation_view("커피값"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias",
@@ -858,9 +815,7 @@ async def test_set_account_alias_correction_required_at_execute() -> None:
             value={"alias_input_outcome": "submitted", "alias": "커피값"},
         )
         assert waiting_second_approval.pending_interaction is not None
-        second_confirmation_id = waiting_second_approval.pending_interaction[
-            "confirmation_id"
-        ]
+        second_confirmation_id = waiting_second_approval.pending_interaction["confirmation_id"]
 
         completed = await testbed.resume(
             "thread_alias_execute_correction",
@@ -951,9 +906,7 @@ async def test_set_account_alias_state_has_no_sensitive_data() -> None:
             "confirmation_view": _confirmation_view("여행 자금"),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/account-alias",
@@ -1015,11 +968,7 @@ async def test_set_account_alias_state_has_no_sensitive_data() -> None:
                 _collect_masked_numbers(item)
 
     _collect_masked_numbers(state)
-    assert masked_numbers, (
-        "검증 대상 계좌번호가 State에 하나도 없으면 이 테스트는 의미가 없다."
-    )
+    assert masked_numbers, "검증 대상 계좌번호가 State에 하나도 없으면 이 테스트는 의미가 없다."
     for number in masked_numbers:
         assert "*" in number, f"마스킹되지 않은 계좌번호가 State에 남아있다: {number}"
-    assert not re.search(r"\d{9,}", state_json), (
-        "마스킹 없는 긴 숫자열(원문 계좌번호로 추정)이 State에 있다."
-    )
+    assert not re.search(r"\d{9,}", state_json), "마스킹 없는 긴 숫자열(원문 계좌번호로 추정)이 State에 있다."

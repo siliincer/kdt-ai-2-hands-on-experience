@@ -64,9 +64,7 @@ agent.tools.bank_tools.get_llm = _tracked_get_llm
 def ledger_snapshot() -> dict:
     return {
         "balances": {
-            account["account_id"]: account["balance"]
-            for accounts in MOCK_ACCOUNTS.values()
-            for account in accounts
+            account["account_id"]: account["balance"] for accounts in MOCK_ACCOUNTS.values() for account in accounts
         },
         "audit_log_count": len(AUDIT_LOG),
     }

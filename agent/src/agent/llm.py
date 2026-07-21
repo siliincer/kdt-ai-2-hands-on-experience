@@ -44,18 +44,9 @@ def _provider() -> str:
 
 def _resolve_model(provider: str, model: str | None) -> str:
     if provider == "ollama":
-        resolved_model = (
-            model
-            or os.getenv("OLLAMA_MODEL")
-            or os.getenv("LLM_MODEL")
-            or _DEFAULT_MODELS["ollama"]
-        )
+        resolved_model = model or os.getenv("OLLAMA_MODEL") or os.getenv("LLM_MODEL") or _DEFAULT_MODELS["ollama"]
     else:
-        resolved_model = (
-            model
-            or os.getenv("LLM_MODEL")
-            or _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
-        )
+        resolved_model = model or os.getenv("LLM_MODEL") or _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS["openai"])
 
     # 제공자-모델 불일치 보호: 예전 .env에 남은 다른 제공자용 모델명이
     # 조용히 404를 내지 않도록 해당 제공자 기본 모델로 되돌린다.
@@ -63,9 +54,7 @@ def _resolve_model(provider: str, model: str | None) -> str:
         return _DEFAULT_MODELS["vertex"]
     if provider == "openai" and resolved_model.startswith("gemini"):
         return _DEFAULT_MODELS["openai"]
-    if provider == "ollama" and (
-        resolved_model.startswith("gpt") or resolved_model.startswith("gemini")
-    ):
+    if provider == "ollama" and (resolved_model.startswith("gpt") or resolved_model.startswith("gemini")):
         return _DEFAULT_MODELS["ollama"]
     return resolved_model
 
@@ -79,9 +68,7 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
     provider = _provider()
     if provider not in _DEFAULT_MODELS:
         supported = ", ".join(sorted(_DEFAULT_MODELS))
-        raise RuntimeError(
-            f"지원하지 않는 LLM_PROVIDER입니다: {provider}. 지원 값: {supported}"
-        )
+        raise RuntimeError(f"지원하지 않는 LLM_PROVIDER입니다: {provider}. 지원 값: {supported}")
 
     resolved_model = _resolve_model(provider, model)
 

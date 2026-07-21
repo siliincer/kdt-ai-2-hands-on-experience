@@ -121,9 +121,7 @@ async def test_verified_auth_loads(monkeypatch):
     auth = _auth(ctx.user_id, conf.id, AuthContextStatus.VERIFIED)
     _patch_get(monkeypatch, auth)
 
-    loaded = await auth_context_service.load_verified(
-        _NO_SESSION, ctx, str(auth.id), conf
-    )
+    loaded = await auth_context_service.load_verified(_NO_SESSION, ctx, str(auth.id), conf)
     assert loaded is auth
 
 
@@ -134,9 +132,7 @@ async def test_expired_status_signals_reauth(monkeypatch):
     conf = _confirmation(ctx.user_id)
     _patch_get(monkeypatch, _auth(ctx.user_id, conf.id, AuthContextStatus.EXPIRED))
 
-    result = await auth_context_service.load_verified(
-        _NO_SESSION, ctx, str(uuid4()), conf
-    )
+    result = await auth_context_service.load_verified(_NO_SESSION, ctx, str(uuid4()), conf)
     assert result is None
 
 
@@ -149,9 +145,7 @@ async def test_past_expiry_signals_reauth(monkeypatch):
         _auth(ctx.user_id, conf.id, AuthContextStatus.VERIFIED, expires_in=-1),
     )
 
-    result = await auth_context_service.load_verified(
-        _NO_SESSION, ctx, str(uuid4()), conf
-    )
+    result = await auth_context_service.load_verified(_NO_SESSION, ctx, str(uuid4()), conf)
     assert result is None
 
 
@@ -206,9 +200,7 @@ async def test_missing_auth_rejected(monkeypatch):
     _patch_get(monkeypatch, None)
 
     with pytest.raises(AgentToolError) as exc:
-        await auth_context_service.load_verified(
-            _NO_SESSION, ctx, str(uuid4()), _confirmation(ctx.user_id)
-        )
+        await auth_context_service.load_verified(_NO_SESSION, ctx, str(uuid4()), _confirmation(ctx.user_id))
     assert exc.value.code == "AUTH_REQUIRED"
 
 
@@ -216,7 +208,5 @@ async def test_missing_auth_rejected(monkeypatch):
 async def test_malformed_auth_id_rejected():
     ctx = _ctx()
     with pytest.raises(AgentToolError) as exc:
-        await auth_context_service.load_verified(
-            _NO_SESSION, ctx, "not-a-uuid", _confirmation(ctx.user_id)
-        )
+        await auth_context_service.load_verified(_NO_SESSION, ctx, "not-a-uuid", _confirmation(ctx.user_id))
     assert exc.value.code == "AUTH_REQUIRED"

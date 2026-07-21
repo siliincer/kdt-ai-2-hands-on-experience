@@ -139,9 +139,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "tx_type",
-            sa.Enum(
-                "DEPOSIT", "WITHDRAWAL", "TRANSFER", "INQUIRY", name="transaction_type"
-            ),
+            sa.Enum("DEPOSIT", "WITHDRAWAL", "TRANSFER", "INQUIRY", name="transaction_type"),
             nullable=False,
         ),
         sa.Column(
@@ -167,9 +165,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum(
-                "PENDING", "APPROVED", "REJECTED", "TIMEOUT", name="approval_status"
-            ),
+            sa.Enum("PENDING", "APPROVED", "REJECTED", "TIMEOUT", name="approval_status"),
             nullable=False,
         ),
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),

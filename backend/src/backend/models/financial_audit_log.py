@@ -22,9 +22,7 @@ if TYPE_CHECKING:
 class FinancialAuditLog(Base):
     __tablename__ = "financial_audit_logs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
@@ -32,26 +30,16 @@ class FinancialAuditLog(Base):
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # 감사 기록은 Context/Confirmation 정리와 무관하게 남아야 하므로 FK 를 걸지 않는다.
-    execution_context_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    chat_session_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    execution_context_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    chat_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     agent_thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     # agent_service | user | backend
     actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
     operation: Mapped[str] = mapped_column(String(64), nullable=False)
     contract_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    confirmation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    auth_context_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    confirmation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    auth_context_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     transaction_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # completed / blocked / correction_required / failed 등 업무 결과
@@ -63,10 +51,7 @@ class FinancialAuditLog(Base):
     user: Mapped["User"] = relationship(lazy="raise")
 
     def __repr__(self) -> str:  # pragma: no cover - 디버깅 편의용
-        return (
-            f"<FinancialAuditLog {self.event_type} "
-            f"{self.operation} outcome={self.outcome}>"
-        )
+        return f"<FinancialAuditLog {self.event_type} {self.operation} outcome={self.outcome}>"
 
 
 # 계약 25.2 주요 Event Type 상수.

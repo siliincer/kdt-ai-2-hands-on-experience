@@ -36,9 +36,7 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_balance_inquiry"
-_tool_error_update = build_tool_error_update(
-    "잔액 조회를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
-)
+_tool_error_update = build_tool_error_update("잔액 조회를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 
 def extract_balance_slots_from_text(message: str) -> Mapping[str, Any]:
@@ -55,15 +53,9 @@ class BalanceInquiryDependencies:
     webhook_client: BackendWebhookClient
     interaction_runtime: InteractionPauseRuntime
     webhook_builder: InteractionWebhookBuilder
-    input_request_id_factory: Callable[[], str] = field(
-        default=_default_input_request_id
-    )
-    tool_request_id_factory: Callable[[str, str], str] = field(
-        default=_default_tool_request_id
-    )
-    slot_extractor: AccountSlotExtractor = field(
-        default=extract_balance_slots_llm_first
-    )
+    input_request_id_factory: Callable[[], str] = field(default=_default_input_request_id)
+    tool_request_id_factory: Callable[[str, str], str] = field(default=_default_tool_request_id)
+    slot_extractor: AccountSlotExtractor = field(default=extract_balance_slots_llm_first)
 
 
 def build_balance_inquiry_graph(
@@ -76,18 +68,14 @@ def build_balance_inquiry_graph(
     async def extract_balance_slots(
         state: AgentState,
     ) -> dict[str, Any]:
-        extracted = await dependencies.slot_extractor(
-            str(state.get("user_input") or "")
-        )
+        extracted = await dependencies.slot_extractor(str(state.get("user_input") or ""))
         return {
             "workflow_id": WORKFLOW_ID,
             "current_step_id": "extract_balance_slots",
             "route_key": "extracted",
             "data": {
                 "account_hint": extracted.get("account_hint"),
-                "all_accounts_requested": bool(
-                    extracted.get("all_accounts_requested", False)
-                ),
+                "all_accounts_requested": bool(extracted.get("all_accounts_requested", False)),
             },
         }
 
@@ -107,9 +95,7 @@ def build_balance_inquiry_graph(
                         "account_hint": data.get("account_hint"),
                         "account_capability": "inquiry",
                         "resolve_selection": True,
-                        "all_accounts_requested": bool(
-                            data.get("all_accounts_requested", False)
-                        ),
+                        "all_accounts_requested": bool(data.get("all_accounts_requested", False)),
                     },
                 ),
             )
@@ -183,9 +169,7 @@ def build_balance_inquiry_graph(
                     config,
                     dependencies=dependencies,
                     step_id="query_balances",
-                    arguments={
-                        "account_ids": list(_data(state).get("account_ids") or [])
-                    },
+                    arguments={"account_ids": list(_data(state).get("account_ids") or [])},
                 ),
             )
         except (AgentToolIntegrationError, ContractToolInputError) as error:
@@ -227,9 +211,7 @@ def build_balance_inquiry_graph(
             ui_contract_id="UI-BALANCE-RESULT",
             ui_type="balance_result",
             content="계좌 잔액을 확인했습니다.",
-            payload={
-                "accounts": _balance_result_options(_data(state).get("balance_results"))
-            },
+            payload={"accounts": _balance_result_options(_data(state).get("balance_results"))},
         )
         await _publish(dependencies, event, config)
         return _terminal_update("emit_balance_result")
@@ -239,8 +221,7 @@ def build_balance_inquiry_graph(
         config: RunnableConfig,
     ) -> dict[str, Any]:
         message = str(
-            _data(state).get("safe_error_message")
-            or "잔액 조회를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            _data(state).get("safe_error_message") or "잔액 조회를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
         )
         event = dependencies.webhook_builder.error(
             chat_session_id=_config_context(config, "chat_session_id"),

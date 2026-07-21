@@ -65,9 +65,7 @@ TransactionType: TypeAlias = Literal[
 ]
 SummaryType: TypeAlias = Literal["spending", "income"]
 
-_ACCOUNT_HINT = re.compile(
-    r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))"
-)
+_ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))")
 _ALL_BALANCE_MARKERS = ("전체", "모든", "전부", "다 보여", "모두")
 _GENERIC_ACCOUNT_HINTS = {"내계좌", "전체계좌", "모든계좌", "전계좌"}
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
@@ -248,11 +246,7 @@ async def extract_account_list_slots_llm_first(
             message,
         ),
     )
-    llm_hint = (
-        _grounded_phrase(extracted.account_hint, message)
-        if extracted is not None
-        else None
-    )
+    llm_hint = _grounded_phrase(extracted.account_hint, message) if extracted is not None else None
     return {"account_hint": llm_hint or fallback.get("account_hint")}
 
 
@@ -272,15 +266,10 @@ async def extract_balance_slots_llm_first(
     if extracted is None:
         return fallback
 
-    all_accounts_requested = bool(
-        extracted.all_accounts_requested
-        or fallback.get("all_accounts_requested", False)
-    )
+    all_accounts_requested = bool(extracted.all_accounts_requested or fallback.get("all_accounts_requested", False))
     llm_hint = _grounded_phrase(extracted.account_hint, message)
     return {
-        "account_hint": (
-            None if all_accounts_requested else llm_hint or fallback.get("account_hint")
-        ),
+        "account_hint": (None if all_accounts_requested else llm_hint or fallback.get("account_hint")),
         "all_accounts_requested": all_accounts_requested,
     }
 
@@ -304,26 +293,15 @@ async def extract_transaction_slots_llm_first(
         return fallback
 
     start_date, end_date = _normalized_period(extracted, requested_date)
-    all_accounts_requested = bool(
-        extracted.all_accounts_requested
-        or fallback.get("all_accounts_requested", False)
-    )
+    all_accounts_requested = bool(extracted.all_accounts_requested or fallback.get("all_accounts_requested", False))
     account_hint = _grounded_phrase(extracted.account_hint, message)
     return {
-        "account_hint": (
-            None
-            if all_accounts_requested
-            else account_hint or fallback.get("account_hint")
-        ),
+        "account_hint": (None if all_accounts_requested else account_hint or fallback.get("account_hint")),
         "all_accounts_requested": all_accounts_requested,
         "start_date": start_date or fallback.get("start_date"),
         "end_date": end_date or fallback.get("end_date"),
-        "keyword": (
-            _grounded_phrase(extracted.keyword, message) or fallback.get("keyword")
-        ),
-        "transaction_type": (
-            extracted.transaction_type or fallback.get("transaction_type")
-        ),
+        "keyword": (_grounded_phrase(extracted.keyword, message) or fallback.get("keyword")),
+        "transaction_type": (extracted.transaction_type or fallback.get("transaction_type")),
     }
 
 
@@ -347,18 +325,14 @@ async def extract_amount_summary_slots_llm_first(
         return fallback
 
     start_date, end_date = _normalized_period(extracted, requested_date)
-    account_hint = _grounded_phrase(extracted.account_hint, message) or fallback.get(
-        "account_hint"
-    )
+    account_hint = _grounded_phrase(extracted.account_hint, message) or fallback.get("account_hint")
     return {
         "account_hint": account_hint,
         "all_accounts_requested": account_hint is None,
         "start_date": start_date or fallback.get("start_date"),
         "end_date": end_date or fallback.get("end_date"),
         "summary_type": extracted.summary_type or fallback.get("summary_type"),
-        "keyword": (
-            _grounded_phrase(extracted.keyword, message) or fallback.get("keyword")
-        ),
+        "keyword": (_grounded_phrase(extracted.keyword, message) or fallback.get("keyword")),
     }
 
 

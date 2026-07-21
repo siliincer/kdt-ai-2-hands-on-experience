@@ -41,9 +41,7 @@ def _pass_session_ownership(monkeypatch):
     async def _verify(session, user_id, chat_session_id):
         return None
 
-    monkeypatch.setattr(
-        recipient_candidate_service, "verify_chat_session_owner", _verify
-    )
+    monkeypatch.setattr(recipient_candidate_service, "verify_chat_session_owner", _verify)
 
 
 def _patch_lookup(monkeypatch, account):
@@ -65,9 +63,7 @@ def _patch_create(monkeypatch, box):
             expires_at=kwargs["expires_at"],
         )
 
-    monkeypatch.setattr(
-        recipient_candidate_service, "create_recipient_candidate", _create
-    )
+    monkeypatch.setattr(recipient_candidate_service, "create_recipient_candidate", _create)
 
 
 @pytest.mark.asyncio
@@ -77,9 +73,7 @@ async def test_verify_issues_candidate_with_masked_values(monkeypatch):
     _patch_lookup(monkeypatch, account)
     _patch_create(monkeypatch, saved)
 
-    data = await recipient_candidate_service.verify_recipient_candidate(
-        _NO_SESSION, uuid4(), _req()
-    )
+    data = await recipient_candidate_service.verify_recipient_candidate(_NO_SESSION, uuid4(), _req())
 
     assert data.recipient_candidate_id
     assert data.name == "홍*동"  # 예금주명 마스킹
@@ -96,9 +90,7 @@ async def test_verify_missing_account_404(monkeypatch):
     _patch_lookup(monkeypatch, None)
 
     with pytest.raises(HTTPException) as exc:
-        await recipient_candidate_service.verify_recipient_candidate(
-            _NO_SESSION, uuid4(), _req()
-        )
+        await recipient_candidate_service.verify_recipient_candidate(_NO_SESSION, uuid4(), _req())
     assert exc.value.status_code == 404
 
 
@@ -107,9 +99,7 @@ async def test_verify_inactive_account_404(monkeypatch):
     _patch_lookup(monkeypatch, _account(active=False))
 
     with pytest.raises(HTTPException) as exc:
-        await recipient_candidate_service.verify_recipient_candidate(
-            _NO_SESSION, uuid4(), _req()
-        )
+        await recipient_candidate_service.verify_recipient_candidate(_NO_SESSION, uuid4(), _req())
     assert exc.value.status_code == 404
 
 
@@ -119,9 +109,7 @@ async def test_verify_bank_mismatch_404(monkeypatch):
     _patch_lookup(monkeypatch, _account())
 
     with pytest.raises(HTTPException) as exc:
-        await recipient_candidate_service.verify_recipient_candidate(
-            _NO_SESSION, uuid4(), _req(bank_name="다른은행")
-        )
+        await recipient_candidate_service.verify_recipient_candidate(_NO_SESSION, uuid4(), _req(bank_name="다른은행"))
     assert exc.value.status_code == 404
 
 
@@ -132,9 +120,7 @@ async def test_verify_own_account_rejected(monkeypatch):
     _patch_lookup(monkeypatch, _account(user_id=user_id))
 
     with pytest.raises(HTTPException) as exc:
-        await recipient_candidate_service.verify_recipient_candidate(
-            _NO_SESSION, user_id, _req()
-        )
+        await recipient_candidate_service.verify_recipient_candidate(_NO_SESSION, user_id, _req())
     assert exc.value.status_code == 400
 
 

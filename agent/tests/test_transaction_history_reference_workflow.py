@@ -187,9 +187,7 @@ async def test_transaction_history_resumes_account_selection_without_requery() -
 
     assert waiting.status == "waiting"
     assert waiting.pending_interaction is not None
-    assert waiting.pending_interaction["step_id"] == (
-        "request_transaction_account_selection"
-    )
+    assert waiting.pending_interaction["step_id"] == ("request_transaction_account_selection")
     assert completed.status == "completed"
     assert len(backend.requests_to("GET", "/api/v1/agent-tools/accounts")) == 1
     query = json.loads(
@@ -257,9 +255,7 @@ async def test_transaction_history_requests_unresolved_period_then_resumes() -> 
     assert waiting.pending_interaction is not None
     assert waiting.pending_interaction["step_id"] == "request_period_selection"
     assert completed.status == "completed"
-    period_event = json.loads(
-        backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content
-    )
+    period_event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content)
     assert period_event["metadata"]["ui"]["type"] == "period_input"
     query = json.loads(
         backend.requests_to(

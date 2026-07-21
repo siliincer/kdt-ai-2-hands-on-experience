@@ -8,9 +8,7 @@ from ..security.jwt import create_access_token
 from .financial.provisioning import provision_account_for_user
 
 
-async def signup_user(
-    session: AsyncSession, email: str, password: str, name: str | None = None
-) -> User:
+async def signup_user(session: AsyncSession, email: str, password: str, name: str | None = None) -> User:
     existing_user = await get_user_by_email(session, email)
     if existing_user:
         raise HTTPException(
@@ -20,9 +18,7 @@ async def signup_user(
 
     password_hash = get_password_hash(password)
 
-    user = await create_user(
-        session, email=email, password_hash=password_hash, name=name
-    )
+    user = await create_user(session, email=email, password_hash=password_hash, name=name)
 
     # 계정계 계좌 프로비저닝(http 모드). best-effort — 장애여도 회원가입은 성공(결정 D).
     await provision_account_for_user(session, user)
@@ -30,9 +26,7 @@ async def signup_user(
     return user
 
 
-async def login_user(
-    session: AsyncSession, email: str, password: str
-) -> tuple[User, str]:
+async def login_user(session: AsyncSession, email: str, password: str) -> tuple[User, str]:
     user = await get_user_by_email(session, email)
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(

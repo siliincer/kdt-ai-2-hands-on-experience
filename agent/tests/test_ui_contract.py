@@ -170,13 +170,9 @@ def test_chat_api_exposes_ui(client):
     assert first["ui"]["type"] == "confirm_modal"
     assert first["ui"]["display"]["amount"] == 50_000
 
-    second = client.post(
-        "/chat", json={"message": "송금하기", "thread_id": first["thread_id"]}
-    ).json()
+    second = client.post("/chat", json={"message": "송금하기", "thread_id": first["thread_id"]}).json()
     assert second["ui"]["type"] == "auth_request"
 
-    third = client.post(
-        "/chat", json={"message": "인증완료", "thread_id": second["thread_id"]}
-    ).json()
+    third = client.post("/chat", json={"message": "인증완료", "thread_id": second["thread_id"]}).json()
     assert third["status"] == "completed"
     assert third["ui"] is None

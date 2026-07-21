@@ -54,9 +54,7 @@ def _read_ollama_json(request: str | Request, timeout: float) -> dict:
         with _DIRECT_OPENER.open(request, timeout=timeout) as response:
             payload = json.load(response)
     except (OSError, TimeoutError, URLError, json.JSONDecodeError) as exc:
-        raise ManagedAgentError(
-            "llm_redteam requires the configured loopback Ollama server"
-        ) from exc
+        raise ManagedAgentError("llm_redteam requires the configured loopback Ollama server") from exc
     if not isinstance(payload, dict):
         raise ManagedAgentError("Ollama returned an invalid JSON response")
     return payload
@@ -76,9 +74,7 @@ def _require_ollama_model(config: RedTeamConfig) -> None:
         if isinstance(value, str)
     }
     if config.safety.required_ollama_model not in installed:
-        raise ManagedAgentError(
-            "llm_redteam requires the configured Ollama model to be installed"
-        )
+        raise ManagedAgentError("llm_redteam requires the configured Ollama model to be installed")
 
     probe_body = json.dumps(
         {
@@ -119,15 +115,12 @@ def _wait_until_ready(
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise ManagedAgentError(
-                f"managed Agent exited during startup: {process.returncode}\n"
-                f"{_log_tail(process_log)}"
+                f"managed Agent exited during startup: {process.returncode}\n{_log_tail(process_log)}"
             )
         if _port_is_open(host, port):
             return
         time.sleep(0.05)
-    raise ManagedAgentError(
-        f"managed Agent startup timed out\n{_log_tail(process_log)}"
-    )
+    raise ManagedAgentError(f"managed Agent startup timed out\n{_log_tail(process_log)}")
 
 
 @contextmanager
@@ -135,9 +128,7 @@ def managed_agent(config: RedTeamConfig) -> Iterator[None]:
     """Run a fresh Agent with the in-memory bank for this invocation only."""
     host, port = _connection_target(config)
     if _port_is_open(host, port):
-        raise ManagedAgentError(
-            f"refusing to reuse an existing process on {host}:{port}"
-        )
+        raise ManagedAgentError(f"refusing to reuse an existing process on {host}:{port}")
     if config.execution.mode == ExecutionMode.LLM_REDTEAM:
         _require_ollama_model(config)
 

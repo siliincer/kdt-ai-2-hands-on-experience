@@ -60,9 +60,7 @@ async def test_approved_confirmation_loads(monkeypatch):
     conf = _confirmation(ctx.user_id)
     _patch_get(monkeypatch, conf)
 
-    loaded = await confirmation_service.load_for_execute(
-        _NO_SESSION, ctx, str(conf.id), _OP
-    )
+    loaded = await confirmation_service.load_for_execute(_NO_SESSION, ctx, str(conf.id), _OP)
     assert loaded.fixed_data == {"account_id": "acc-1"}
 
 
@@ -103,9 +101,7 @@ async def test_other_users_confirmation_is_mismatch(monkeypatch):
     _patch_get(monkeypatch, _confirmation(uuid4()))  # 다른 사용자 소유
 
     with pytest.raises(AgentToolError) as exc:
-        await confirmation_service.load_for_execute(
-            _NO_SESSION, _ctx(), str(uuid4()), _OP
-        )
+        await confirmation_service.load_for_execute(_NO_SESSION, _ctx(), str(uuid4()), _OP)
     assert exc.value.status_code == 409
     assert exc.value.code == "CONFIRMATION_MISMATCH"
 
@@ -148,16 +144,12 @@ async def test_missing_confirmation_is_mismatch(monkeypatch):
     _patch_get(monkeypatch, None)
 
     with pytest.raises(AgentToolError) as exc:
-        await confirmation_service.load_for_execute(
-            _NO_SESSION, _ctx(), str(uuid4()), _OP
-        )
+        await confirmation_service.load_for_execute(_NO_SESSION, _ctx(), str(uuid4()), _OP)
     assert exc.value.code == "CONFIRMATION_MISMATCH"
 
 
 @pytest.mark.asyncio
 async def test_malformed_id_is_mismatch():
     with pytest.raises(AgentToolError) as exc:
-        await confirmation_service.load_for_execute(
-            _NO_SESSION, _ctx(), "not-a-uuid", _OP
-        )
+        await confirmation_service.load_for_execute(_NO_SESSION, _ctx(), "not-a-uuid", _OP)
     assert exc.value.code == "CONFIRMATION_MISMATCH"

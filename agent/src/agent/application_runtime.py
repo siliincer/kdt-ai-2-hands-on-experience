@@ -106,9 +106,7 @@ def _backend_client_config_from_environment() -> BackendClientConfig:
     values = {name: os.getenv(name, "").strip() for name in required_names}
     missing = [name for name, value in values.items() if not value]
     if missing:
-        raise AgentRuntimeConfigurationError(
-            "Agent Runtime 필수 환경변수가 없습니다: " + ", ".join(missing)
-        )
+        raise AgentRuntimeConfigurationError("Agent Runtime 필수 환경변수가 없습니다: " + ", ".join(missing))
     return BackendClientConfig(
         base_url=values["BACKEND_BASE_URL"],
         agent_service_token=SecretStr(values["AGENT_SERVICE_TOKEN"]),

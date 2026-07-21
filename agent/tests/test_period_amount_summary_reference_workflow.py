@@ -187,9 +187,7 @@ async def test_period_summary_requests_type_and_uses_verified_resume() -> None:
     assert waiting.pending_interaction is not None
     assert waiting.pending_interaction["step_id"] == "request_summary_type"
     assert completed.status == "completed"
-    option_event = json.loads(
-        backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content
-    )
+    option_event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content)
     assert option_event["metadata"]["ui"]["type"] == "option_select"
     query = json.loads(
         backend.requests_to(

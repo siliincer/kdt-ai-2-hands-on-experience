@@ -23,9 +23,7 @@ def redact(value: object, fields: set[str]) -> object:
     normalized_fields = {field.lower() for field in fields}
     if isinstance(value, dict):
         return {
-            key: _REDACTED
-            if key.lower() in normalized_fields
-            else redact(item, normalized_fields)
+            key: _REDACTED if key.lower() in normalized_fields else redact(item, normalized_fields)
             for key, item in value.items()
         }
     if isinstance(value, list):

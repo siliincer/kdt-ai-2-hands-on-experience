@@ -14,10 +14,7 @@ from agent.tools.registry import TOOL_REGISTRY
 
 def test_registered():
     assert TOOL_REGISTRY["fetch_account_list"] is fetch_account_list
-    assert (
-        TOOL_REGISTRY["generate_account_list_response"]
-        is generate_account_list_response
-    )
+    assert TOOL_REGISTRY["generate_account_list_response"] is generate_account_list_response
 
 
 def test_fetch_returns_accounts_and_success():

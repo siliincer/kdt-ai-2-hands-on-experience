@@ -91,9 +91,7 @@ def get_balance_endpoint(account_id: str, db: DbDep):
     if acct is None:
         throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
-    return BalanceResponse(
-        account_id=account_id, balance=balance, currency=acct.currency
-    )
+    return BalanceResponse(account_id=account_id, balance=balance, currency=acct.currency)
 
 
 # ── 4. GET /accounts/{account_id}/transactions — ledger history ───────────────

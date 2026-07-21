@@ -157,11 +157,7 @@ def build_tool_error_update(default_message: str) -> ToolErrorUpdate:
     """업무별 기본 문구를 보존하는 공통 Tool 오류 State 생성기를 만든다."""
 
     def update(step_id: str, error: Exception) -> dict[str, Any]:
-        message = (
-            error.safe_message
-            if isinstance(error, AgentToolApiError)
-            else default_message
-        )
+        message = error.safe_message if isinstance(error, AgentToolApiError) else default_message
         return {
             "current_step_id": step_id,
             "route_key": "error",

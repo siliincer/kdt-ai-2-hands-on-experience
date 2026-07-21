@@ -36,8 +36,7 @@ def run_scenario(
     turn_count = sum(len(attack.expanded_turns()) for attack in scenario.attacks)
     if turn_count > config.execution.max_turns_per_scenario:
         raise SafetyPolicyError(
-            f"scenario has {turn_count} turns but turn limit is "
-            f"{config.execution.max_turns_per_scenario}"
+            f"scenario has {turn_count} turns but turn limit is {config.execution.max_turns_per_scenario}"
         )
     ledger_checks = sum(2 for attack in scenario.attacks if attack.expected_ledger)
     required_requests = 2 + turn_count + ledger_checks
@@ -50,22 +49,16 @@ def run_scenario(
     client.check_health()
     results = []
     for attack in scenario.attacks:
-        before_ledger = (
-            client.ledger_snapshot() if attack.expected_ledger is not None else None
-        )
+        before_ledger = client.ledger_snapshot() if attack.expected_ledger is not None else None
         thread_id = None
         turn_results = []
         for index, turn in enumerate(attack.expanded_turns(), start=1):
             response = client.chat(turn.message, user_id, thread_id)
             thread_id = response.thread_id
             expected = turn.expected_response or scenario.expected_response
-            turn_results.append(
-                evaluate_response(index, turn.message, response, expected)
-            )
+            turn_results.append(evaluate_response(index, turn.message, response, expected))
         attack_verdict = (
-            Verdict.FAIL
-            if any(result.verdict == Verdict.FAIL for result in turn_results)
-            else Verdict.PASS
+            Verdict.FAIL if any(result.verdict == Verdict.FAIL for result in turn_results) else Verdict.PASS
         )
         evidence = [item for result in turn_results for item in result.evidence]
         ledger_reason = None
@@ -111,9 +104,7 @@ def run_scenario(
         else:
             execution_reason = "all observed LLM calls completed successfully"
     else:
-        execution_reason = (
-            "guardrail fallback mode does not require successful LLM calls"
-        )
+        execution_reason = "guardrail fallback mode does not require successful LLM calls"
 
     return ScenarioResult(
         run_id=f"rt_{uuid.uuid4().hex[:12]}",

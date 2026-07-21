@@ -98,9 +98,7 @@ def get_analytics_balance(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     if acct is None:
         throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
-    return BalanceResponse(
-        account_id=account_id, balance=balance, currency=acct.currency
-    )
+    return BalanceResponse(account_id=account_id, balance=balance, currency=acct.currency)
 
 
 # ── GET /analytics/accounts/{account_id}/ledger ──────────────────────────────

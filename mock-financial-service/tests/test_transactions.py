@@ -8,12 +8,8 @@ Independent test for Sub-AC 4:
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_account(
-    client, owner: str = "TxUser", initial_balance: int = 100_000
-) -> dict:
-    r = client.post(
-        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
-    )
+def _make_account(client, owner: str = "TxUser", initial_balance: int = 100_000) -> dict:
+    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -126,9 +122,7 @@ class TestGetTransactionsContent:
             "tx-schema-001",
         )
 
-        entries = client.get(
-            f"/api/v1/accounts/{sender['account_id']}/transactions"
-        ).json()
+        entries = client.get(f"/api/v1/accounts/{sender['account_id']}/transactions").json()
         types = [e["entry_type"] for e in entries]
         assert "DEBIT" in types, f"Expected DEBIT in sender entries: {types}"
 
@@ -143,9 +137,7 @@ class TestGetTransactionsContent:
             "tx-schema-002",
         )
 
-        entries = client.get(
-            f"/api/v1/accounts/{receiver['account_id']}/transactions"
-        ).json()
+        entries = client.get(f"/api/v1/accounts/{receiver['account_id']}/transactions").json()
         types = [e["entry_type"] for e in entries]
         assert "CREDIT" in types, f"Expected CREDIT in receiver entries: {types}"
 
@@ -161,9 +153,7 @@ class TestGetTransactionsContent:
             "tx-amt-001",
         )
 
-        entries = client.get(
-            f"/api/v1/accounts/{sender['account_id']}/transactions"
-        ).json()
+        entries = client.get(f"/api/v1/accounts/{sender['account_id']}/transactions").json()
         debit_entries = [e for e in entries if e["entry_type"] == "DEBIT"]
         assert len(debit_entries) >= 1
         assert debit_entries[0]["amount"] == transfer_amount
@@ -181,9 +171,7 @@ class TestGetTransactionsContent:
             "tx-runbal-001",
         )
 
-        entries = client.get(
-            f"/api/v1/accounts/{sender['account_id']}/transactions"
-        ).json()
+        entries = client.get(f"/api/v1/accounts/{sender['account_id']}/transactions").json()
         debit_entries = [e for e in entries if e["entry_type"] == "DEBIT"]
         assert debit_entries[0]["running_balance"] == initial - transfer_amount
 
@@ -194,12 +182,8 @@ class TestGetTransactionsContent:
         txn = _do_transfer(client, sender, receiver, 10_000, "tx-link-001")
         txn_id = txn["transfer_id"]
 
-        s_entries = client.get(
-            f"/api/v1/accounts/{sender['account_id']}/transactions"
-        ).json()
-        r_entries = client.get(
-            f"/api/v1/accounts/{receiver['account_id']}/transactions"
-        ).json()
+        s_entries = client.get(f"/api/v1/accounts/{sender['account_id']}/transactions").json()
+        r_entries = client.get(f"/api/v1/accounts/{receiver['account_id']}/transactions").json()
 
         s_txn_ids = {e["transaction_id"] for e in s_entries}
         r_txn_ids = {e["transaction_id"] for e in r_entries}
@@ -229,9 +213,7 @@ class TestGetTransactionsPagination:
         assert r.json() == []
 
     def test_not_found_returns_404_and_error_schema(self, client):
-        r = client.get(
-            "/api/v1/accounts/00000000-0000-0000-0000-000000000000/transactions"
-        )
+        r = client.get("/api/v1/accounts/00000000-0000-0000-0000-000000000000/transactions")
         assert r.status_code == 404
         body = r.json()
         assert body["error_code"] == "ACCOUNT_NOT_FOUND"

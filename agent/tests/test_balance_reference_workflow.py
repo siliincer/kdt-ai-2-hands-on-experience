@@ -118,9 +118,7 @@ async def test_balance_reference_workflow_auto_resolves_and_emits_result() -> No
 
 
 @pytest.mark.asyncio
-async def test_balance_reference_workflow_resumes_without_revalidating_selection() -> (
-    None
-):
+async def test_balance_reference_workflow_resumes_without_revalidating_selection() -> None:
     backend = MockBackend()
     backend.add_success(
         "GET",
@@ -189,9 +187,7 @@ async def test_balance_reference_workflow_resumes_without_revalidating_selection
     assert state["data"]["account_ids"] == ["acc_002"]
     assert state["data"]["input_request_id"] is None
 
-    input_event = json.loads(
-        backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content
-    )
+    input_event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content)
     assert input_event["event_type"] == "need_input"
     assert input_event["metadata"]["ui"]["payload"]["accounts"][0] == {
         "account_id": "acc_001",

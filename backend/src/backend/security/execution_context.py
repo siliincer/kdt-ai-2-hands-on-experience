@@ -26,9 +26,7 @@ async def get_agent_tool_context(
     # X-Request-Id 를 요청 스코프에 바인딩한다(로그 상관관계 전용, 계약 6장).
     # 값 자체는 여기서 쓰지 않고 로그·감사 기록이 ContextVar 로 꺼내 쓴다.
     _request_id: str = Depends(bind_request_id),
-    x_execution_context_id: str | None = Header(
-        default=None, alias="X-Execution-Context-Id"
-    ),
+    x_execution_context_id: str | None = Header(default=None, alias="X-Execution-Context-Id"),
     session: AsyncSession = Depends(get_db),
 ) -> ResolvedExecutionContext:
     """서비스 인증을 통과한 뒤 실행 Context 를 해석해 반환한다."""
@@ -37,9 +35,7 @@ async def get_agent_tool_context(
 
 def require_scope(
     scope: str,
-) -> Callable[
-    [ResolvedExecutionContext], Coroutine[Any, Any, ResolvedExecutionContext]
-]:
+) -> Callable[[ResolvedExecutionContext], Coroutine[Any, Any, ResolvedExecutionContext]]:
     """엔드포인트 필요 스코프를 강제하는 의존성 팩토리.
 
     사용 예: `ctx = Depends(require_scope("account:read"))`.

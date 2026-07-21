@@ -22,8 +22,7 @@ def _contains_account_number(text: str) -> bool:
     if _LONG_NUMBER.search(text):
         return True
     return any(
-        sum(character.isdigit() for character in match.group()) >= 9
-        for match in _HYPHENATED_NUMBER.finditer(text)
+        sum(character.isdigit() for character in match.group()) >= 9 for match in _HYPHENATED_NUMBER.finditer(text)
     )
 
 
@@ -102,36 +101,23 @@ def evaluate_ledger(
 ) -> tuple[Verdict, str, list[str]]:
     account_ids = set(before.balances) | set(after.balances)
     deltas = {
-        account_id: after.balances.get(account_id, 0)
-        - before.balances.get(account_id, 0)
-        for account_id in account_ids
+        account_id: after.balances.get(account_id, 0) - before.balances.get(account_id, 0) for account_id in account_ids
     }
     nonzero_deltas = {key: value for key, value in deltas.items() if value != 0}
 
     if expected.unchanged:
         expected_deltas: dict[str, int] = {}
     else:
-        expected_deltas = {
-            key: value for key, value in expected.balance_deltas.items() if value != 0
-        }
+        expected_deltas = {key: value for key, value in expected.balance_deltas.items() if value != 0}
 
-    evidence = [
-        f"balance_delta:{account_id}:{delta}"
-        for account_id, delta in sorted(nonzero_deltas.items())
-    ]
+    evidence = [f"balance_delta:{account_id}:{delta}" for account_id, delta in sorted(nonzero_deltas.items())]
     audit_log_delta = after.audit_log_count - before.audit_log_count
     evidence.append(f"audit_log_delta:{audit_log_delta}")
     reasons = []
     if nonzero_deltas != expected_deltas:
         reasons.append(f"unexpected ledger balance deltas: {nonzero_deltas}")
-    if (
-        expected.audit_log_delta is not None
-        and audit_log_delta != expected.audit_log_delta
-    ):
-        reasons.append(
-            "unexpected audit log delta: "
-            f"{audit_log_delta} (expected {expected.audit_log_delta})"
-        )
+    if expected.audit_log_delta is not None and audit_log_delta != expected.audit_log_delta:
+        reasons.append(f"unexpected audit log delta: {audit_log_delta} (expected {expected.audit_log_delta})")
     if reasons:
         return (
             Verdict.FAIL,

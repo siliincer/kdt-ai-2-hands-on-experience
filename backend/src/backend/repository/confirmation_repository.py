@@ -42,9 +42,7 @@ async def create_confirmation(
     return confirmation
 
 
-async def get_confirmation_by_id(
-    session: AsyncSession, confirmation_id: UUID
-) -> Confirmation | None:
+async def get_confirmation_by_id(session: AsyncSession, confirmation_id: UUID) -> Confirmation | None:
     """id 로 Confirmation 을 조회한다(없으면 None)."""
     stmt = select(Confirmation).where(Confirmation.id == confirmation_id)
     result = await session.execute(stmt)
@@ -57,9 +55,7 @@ _TRANSFER_OPERATIONS = (
 )
 
 
-async def get_executed_transfers_since(
-    session: AsyncSession, user_id: UUID, since: datetime
-) -> list[Confirmation]:
+async def get_executed_transfers_since(session: AsyncSession, user_id: UUID, since: datetime) -> list[Confirmation]:
     """기준 시각 이후 실행 완료된 이체 Confirmation 목록(일일 한도 산정용).
 
     금액은 Prepare 가 `fixed_data.amount` 에 고정해 두므로 호출부가 합산한다.
@@ -74,9 +70,7 @@ async def get_executed_transfers_since(
     return list(result.scalars().all())
 
 
-async def get_executed_external_transfers(
-    session: AsyncSession, user_id: UUID
-) -> list[Confirmation]:
+async def get_executed_external_transfers(session: AsyncSession, user_id: UUID) -> list[Confirmation]:
     """사용자의 실행 완료된 타인송금 Confirmation 전체(#5 수취인 자동 확정용, D5).
 
     수취인 정보(recipient_account_id·recipient_name)는 Prepare 가 `fixed_data` 에
@@ -109,9 +103,7 @@ async def set_confirmation_status(
     return confirmation
 
 
-async def mark_executed_if_approved(
-    session: AsyncSession, confirmation: Confirmation
-) -> bool:
+async def mark_executed_if_approved(session: AsyncSession, confirmation: Confirmation) -> bool:
     """APPROVED→EXECUTED 를 원자적으로 전이한다(C2 동시성).
 
     조건부 UPDATE 로 한 번만 성공한다. 동시 실행에서 이미 다른 요청이 실행했으면

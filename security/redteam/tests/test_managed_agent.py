@@ -37,9 +37,7 @@ class _OllamaResponse(io.BytesIO):
 
 
 def test_ollama_probe_opener_has_no_proxy_handler():
-    assert not any(
-        isinstance(handler, ProxyHandler) for handler in managed._DIRECT_OPENER.handlers
-    )
+    assert not any(isinstance(handler, ProxyHandler) for handler in managed._DIRECT_OPENER.handlers)
 
 
 def test_managed_agent_forces_local_bank_and_cleans_up(monkeypatch):
@@ -100,11 +98,7 @@ def test_llm_mode_requires_ollama_before_start(monkeypatch):
     root = Path(__file__).resolve().parents[1]
     config = load_config(root / "config.example.yaml")
     config = config.model_copy(
-        update={
-            "execution": config.execution.model_copy(
-                update={"mode": ExecutionMode.LLM_REDTEAM}
-            )
-        }
+        update={"execution": config.execution.model_copy(update={"mode": ExecutionMode.LLM_REDTEAM})}
     )
 
     monkeypatch.setattr(managed, "_port_is_open", lambda *args: False)
@@ -134,11 +128,7 @@ def test_ollama_preflight_requires_configured_model(monkeypatch):
         type(
             "MissingModelOpener",
             (),
-            {
-                "open": lambda *args, **kwargs: _OllamaResponse(
-                    b'{"models":[{"name":"another-model:latest"}]}'
-                )
-            },
+            {"open": lambda *args, **kwargs: _OllamaResponse(b'{"models":[{"name":"another-model:latest"}]}')},
         )(),
     )
 

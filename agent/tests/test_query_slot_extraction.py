@@ -40,9 +40,7 @@ async def test_account_hint_uses_llm_before_rule_fallback(monkeypatch) -> None:
     fake = _FakeStructuredLlm({"account_hint": "주거래"})
     monkeypatch.setattr(query_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await query_slot_extraction.extract_account_list_slots_llm_first(
-        "주거래로 쓰는 것만 보여줘"
-    )
+    result = await query_slot_extraction.extract_account_list_slots_llm_first("주거래로 쓰는 것만 보여줘")
 
     assert result == {"account_hint": "주거래"}
     assert "오타 교정" in fake.prompts[0]
@@ -58,9 +56,7 @@ async def test_ungrounded_llm_account_expansion_is_rejected(monkeypatch) -> None
     )
     monkeypatch.setattr(query_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await query_slot_extraction.extract_balance_slots_llm_first(
-        "시난 통장 잔액 알려줘"
-    )
+    result = await query_slot_extraction.extract_balance_slots_llm_first("시난 통장 잔액 알려줘")
 
     assert result == {
         "account_hint": "시난 통장",

@@ -71,9 +71,7 @@ class SafetyConfig(BaseModel):
     allow_remote_targets: Literal[False] = False
     required_bank_client: Literal["local"] = "local"
     required_llm_provider: Literal["ollama"] = "ollama"
-    required_ollama_base_url: Literal["http://127.0.0.1:11434"] = (
-        "http://127.0.0.1:11434"
-    )
+    required_ollama_base_url: Literal["http://127.0.0.1:11434"] = "http://127.0.0.1:11434"
     required_ollama_model: str = Field(min_length=1, max_length=200)
     allowed_user_ids: set[str] = Field(min_length=1)
     redact_fields: set[str] = Field(default_factory=set)

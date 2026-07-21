@@ -43,17 +43,11 @@ def test_extract_alias_value_missing_when_pattern_absent():
 
 
 def test_apply_sets_alias_field():
-    account = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장"
-    )
-    result = apply_account_alias(
-        _state(**{"alias.account": account, "alias.value": "생활비"})
-    )
+    account = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장")
+    result = apply_account_alias(_state(**{"alias.account": account, "alias.value": "생활비"}))
     assert result["route_key"] == "success"
     assert result["alias.result"]["alias"] == "생활비"
-    target = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장"
-    )
+    target = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장")
     assert target["alias"] == "생활비"
 
 
@@ -64,9 +58,7 @@ def test_apply_missing_value_errors():
 
 
 def test_generate_response_mentions_alias_value():
-    result = generate_setting_response(
-        _state(**{"alias.result": {"account_name": "입출금통장", "alias": "생활비"}})
-    )
+    result = generate_setting_response(_state(**{"alias.result": {"account_name": "입출금통장", "alias": "생활비"}}))
     assert result["route_key"] == "success"
     assert "입출금통장" in result["final_response"]
     assert "생활비" in result["final_response"]

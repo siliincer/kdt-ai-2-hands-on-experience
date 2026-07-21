@@ -130,10 +130,7 @@ def _rows_from_matrix(matrix: list[list]) -> list[dict]:
         values = ["" if c is None else str(c) for c in cells]
         if not any(v.strip() for v in values):
             continue
-        row = {
-            header[i]: (values[i] if i < len(values) else "")
-            for i in range(len(header))
-        }
+        row = {header[i]: (values[i] if i < len(values) else "") for i in range(len(header))}
         out.append(row)
     return out
 
@@ -150,8 +147,7 @@ def fetch_csv(sheet_name: str) -> list[dict]:
 
     if text.lstrip().startswith("<"):
         raise RuntimeError(
-            f"'{sheet_name}' 탭 응답이 CSV가 아닙니다(HTML). "
-            "시트가 비공개이거나 탭 이름이 바뀌었는지 확인하세요."
+            f"'{sheet_name}' 탭 응답이 CSV가 아닙니다(HTML). 시트가 비공개이거나 탭 이름이 바뀌었는지 확인하세요."
         )
     matrix = list(csv.reader(io.StringIO(text)))
     return _rows_from_matrix(matrix)
@@ -360,16 +356,12 @@ def build_workflows(raw: dict[str, list[dict]], tools: dict) -> dict:
     for wf_id, steps in steps_by_wf.items():
         for step in steps:
             step["step_order"] = to_int(step.get("step_order"), step.get("step_order"))
-            step["output_data_key"] = _map_output_key(
-                wf_id, step.get("output_data_key") or ""
-            )
+            step["output_data_key"] = _map_output_key(wf_id, step.get("output_data_key") or "")
             # input 스텝의 output_data_key가 비어 있으면 Tool_v2 동명 항목의
             # write_state_keys로 백필한다 (예: ask_recipient -> transfer.recipient).
             # 시트에서는 input UI가 Tool_v2 탭에 tool로 기술되어 있기 때문.
             if step.get("step_type") == "input" and not step.get("output_data_key"):
-                write_keys = (
-                    tools.get(step.get("step_id"), {}).get("write_state_keys") or []
-                )
+                write_keys = tools.get(step.get("step_id"), {}).get("write_state_keys") or []
                 if write_keys:
                     step["output_data_key"] = write_keys[0]
                     warn(
@@ -445,36 +437,24 @@ def validate(generated: dict) -> None:
             tool_id = step.get("tool_id")
             task_id = step.get("task_id")
             if tool_id and tool_id not in tools:
-                warn(
-                    f"[{wf_id}] step '{step.get('step_id')}'의 tool_id "
-                    f"'{tool_id}'가 Tool_v2에 없음"
-                )
+                warn(f"[{wf_id}] step '{step.get('step_id')}'의 tool_id '{tool_id}'가 Tool_v2에 없음")
             if tool_id and registered and tool_id not in registered:
                 warn(
                     f"[{wf_id}] step '{step.get('step_id')}'의 tool_id "
                     f"'{tool_id}'가 TOOL_REGISTRY에 미등록(런타임 error 라우팅)"
                 )
             if task_id and task_id not in tasks:
-                warn(
-                    f"[{wf_id}] step '{step.get('step_id')}'의 task_id "
-                    f"'{task_id}'가 Task 시트에 없음"
-                )
+                warn(f"[{wf_id}] step '{step.get('step_id')}'의 task_id '{task_id}'가 Task 시트에 없음")
         # Data Schema 정합성: source_step_id 존재 + flat/네임스페이스 중복
         keys_seen: dict[str, str] = {}
         for ds in wf.get("data_schema", []):
             src = ds.get("source_step_id")
             if src and step_ids and src not in step_ids:
-                warn(
-                    f"[{wf_id}] data_schema '{ds.get('data_key')}'의 "
-                    f"source_step_id '{src}'가 steps에 없음"
-                )
+                warn(f"[{wf_id}] data_schema '{ds.get('data_key')}'의 source_step_id '{src}'가 steps에 없음")
             key = ds.get("data_key") or ""
             base = key.split(".", 1)[1] if "." in key else key
             if base in keys_seen and keys_seen[base] != key:
-                warn(
-                    f"[{wf_id}] data_schema에 flat/네임스페이스 중복: "
-                    f"'{keys_seen[base]}' vs '{key}'"
-                )
+                warn(f"[{wf_id}] data_schema에 flat/네임스페이스 중복: '{keys_seen[base]}' vs '{key}'")
             keys_seen.setdefault(base, key)
 
     for tid, task in tasks.items():
@@ -493,9 +473,7 @@ def validate(generated: dict) -> None:
 
 
 def dump_yaml(data: dict) -> str:
-    return yaml.safe_dump(
-        data, allow_unicode=True, sort_keys=False, default_flow_style=False
-    )
+    return yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
 
 
 def backup_existing(out_dir: str, filenames: list[str]) -> None:

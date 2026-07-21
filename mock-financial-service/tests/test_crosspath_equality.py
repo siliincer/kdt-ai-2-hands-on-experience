@@ -97,10 +97,7 @@ def _transfer(client, sender: dict, receiver: dict, amount: int, key: str) -> No
 def _view_balance(engine, account_id: str) -> int:
     with engine.connect() as conn:
         row = conn.execute(
-            text(
-                "SELECT balance FROM v_infobank_account_balances "
-                "WHERE account_id = :aid"
-            ),
+            text("SELECT balance FROM v_infobank_account_balances WHERE account_id = :aid"),
             {"aid": account_id},
         ).fetchone()
     assert row is not None, f"Account {account_id} not in view"
@@ -127,10 +124,7 @@ def _view_ledger(engine, account_id: str) -> list[dict]:
             ),
             {"aid": account_id},
         ).fetchall()
-    return [
-        {"entry_id": r.entry_id, "entry_type": r.entry_type, "amount": r.amount}
-        for r in rows
-    ]
+    return [{"entry_id": r.entry_id, "entry_type": r.entry_type, "amount": r.amount} for r in rows]
 
 
 def _rest_ledger(client, account_id: str) -> list[dict]:
@@ -178,16 +172,12 @@ def test_crosspath_balance_after_transfer(xp_client):
 
     sender_view = _view_balance(engine, sender_id)
     sender_rest = _rest_balance(client, sender_id)
-    assert sender_view == sender_rest, (
-        f"Sender balance mismatch: view={sender_view}, rest={sender_rest}"
-    )
+    assert sender_view == sender_rest, f"Sender balance mismatch: view={sender_view}, rest={sender_rest}"
     assert sender_view == 60_000
 
     receiver_view = _view_balance(engine, receiver_id)
     receiver_rest = _rest_balance(client, receiver_id)
-    assert receiver_view == receiver_rest, (
-        f"Receiver balance mismatch: view={receiver_view}, rest={receiver_rest}"
-    )
+    assert receiver_view == receiver_rest, f"Receiver balance mismatch: view={receiver_view}, rest={receiver_rest}"
     assert receiver_view == 40_000
 
 
@@ -214,9 +204,7 @@ def test_crosspath_ledger_initial_credit(xp_client):
     view_entries = _view_ledger(engine, acct_id)
     rest_entries = _rest_ledger(client, acct_id)
 
-    assert view_entries == rest_entries, (
-        f"Ledger mismatch:\n  view={view_entries}\n  rest={rest_entries}"
-    )
+    assert view_entries == rest_entries, f"Ledger mismatch:\n  view={view_entries}\n  rest={rest_entries}"
     assert len(view_entries) == 1
     assert view_entries[0]["entry_type"] == "CREDIT"
     assert view_entries[0]["amount"] == 20_000
@@ -234,9 +222,7 @@ def test_crosspath_ledger_after_transfer(xp_client):
     for acct_id, label in [(sender_id, "sender"), (receiver_id, "receiver")]:
         view_entries = _view_ledger(engine, acct_id)
         rest_entries = _rest_ledger(client, acct_id)
-        assert view_entries == rest_entries, (
-            f"{label} ledger mismatch:\n  view={view_entries}\n  rest={rest_entries}"
-        )
+        assert view_entries == rest_entries, f"{label} ledger mismatch:\n  view={view_entries}\n  rest={rest_entries}"
 
     sender_view = _view_ledger(engine, sender_id)
     assert len(sender_view) == 2

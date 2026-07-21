@@ -6,9 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-DEFAULT_MANIFEST_PATH = (
-    Path(__file__).resolve().parents[2] / "contracts" / "workflow-contracts.json"
-)
+DEFAULT_MANIFEST_PATH = Path(__file__).resolve().parents[2] / "contracts" / "workflow-contracts.json"
 
 
 class WorkflowContractNotFoundError(KeyError):
@@ -20,9 +18,7 @@ class WorkflowContractStore:
 
     def __init__(self, manifest_path: Path = DEFAULT_MANIFEST_PATH) -> None:
         self._manifest_path = manifest_path
-        self._manifest: dict[str, Any] = json.loads(
-            manifest_path.read_text(encoding="utf-8")
-        )
+        self._manifest: dict[str, Any] = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     @property
     def manifest_version(self) -> str:
@@ -34,17 +30,13 @@ class WorkflowContractStore:
     def get_workflow(self, workflow_id: str) -> dict[str, Any]:
         workflow = self._manifest["workflows"].get(workflow_id)
         if workflow is None:
-            raise WorkflowContractNotFoundError(
-                f"등록되지 않은 workflow_id입니다: {workflow_id}"
-            )
+            raise WorkflowContractNotFoundError(f"등록되지 않은 workflow_id입니다: {workflow_id}")
         return workflow
 
     def get_contract(self, contract_id: str) -> dict[str, Any]:
         contract = self._manifest["contracts"].get(contract_id)
         if contract is None:
-            raise WorkflowContractNotFoundError(
-                f"등록되지 않은 contract_id입니다: {contract_id}"
-            )
+            raise WorkflowContractNotFoundError(f"등록되지 않은 contract_id입니다: {contract_id}")
         return contract
 
     def required_contract_ids(
@@ -54,11 +46,7 @@ class WorkflowContractStore:
         contract_type: str | None = None,
     ) -> set[str]:
         workflow = self.get_workflow(workflow_id)
-        contract_ids = {
-            str(step["contract_id"])
-            for step in workflow["steps"]
-            if step.get("contract_id")
-        }
+        contract_ids = {str(step["contract_id"]) for step in workflow["steps"] if step.get("contract_id")}
         if contract_type is None:
             return contract_ids
         return {
@@ -75,13 +63,7 @@ class WorkflowContractStore:
         direction: str | None = None,
     ) -> tuple[dict[str, Any], ...]:
         workflow = self.get_workflow(workflow_id)
-        mappings = (
-            mapping
-            for mapping in workflow["step_data_mappings"]
-            if mapping["step_id"] == step_id
-        )
+        mappings = (mapping for mapping in workflow["step_data_mappings"] if mapping["step_id"] == step_id)
         if direction is not None:
-            mappings = (
-                mapping for mapping in mappings if mapping["direction"] == direction
-            )
+            mappings = (mapping for mapping in mappings if mapping["direction"] == direction)
         return tuple(mappings)

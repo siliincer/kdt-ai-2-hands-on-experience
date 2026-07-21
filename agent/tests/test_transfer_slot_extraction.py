@@ -46,9 +46,7 @@ async def test_internal_transfer_llm_fills_hint_rule_misses(monkeypatch) -> None
     )
     monkeypatch.setattr(transfer_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await transfer_slot_extraction.extract_internal_transfer_slots_llm_first(
-        message
-    )
+    result = await transfer_slot_extraction.extract_internal_transfer_slots_llm_first(message)
 
     assert result == {
         "from_account_hint": "생활비 통장",
@@ -72,9 +70,7 @@ async def test_internal_transfer_ungrounded_account_correction_is_rejected(
     )
     monkeypatch.setattr(transfer_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await transfer_slot_extraction.extract_internal_transfer_slots_llm_first(
-        message
-    )
+    result = await transfer_slot_extraction.extract_internal_transfer_slots_llm_first(message)
 
     assert result == {
         "from_account_hint": "신후은행",
@@ -89,13 +85,9 @@ async def test_internal_transfer_llm_failure_uses_rule_fallback(monkeypatch) -> 
     failed = _FailedStructuredLlm()
     monkeypatch.setattr(transfer_slot_extraction, "get_llm", lambda **_: failed)
 
-    result = await transfer_slot_extraction.extract_internal_transfer_slots_llm_first(
-        message
-    )
+    result = await transfer_slot_extraction.extract_internal_transfer_slots_llm_first(message)
 
-    assert result == transfer_slot_extraction.extract_internal_transfer_slots_by_rule(
-        message
-    )
+    assert result == transfer_slot_extraction.extract_internal_transfer_slots_by_rule(message)
 
 
 @pytest.mark.asyncio
@@ -112,9 +104,7 @@ async def test_external_transfer_llm_fills_recipient_hint_rule_misses(
     )
     monkeypatch.setattr(transfer_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await transfer_slot_extraction.extract_external_transfer_slots_llm_first(
-        message
-    )
+    result = await transfer_slot_extraction.extract_external_transfer_slots_llm_first(message)
 
     assert result == {
         "recipient_name_hint": "민지",
@@ -143,9 +133,7 @@ async def test_external_transfer_ungrounded_recipient_correction_is_rejected(
     )
     monkeypatch.setattr(transfer_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await transfer_slot_extraction.extract_external_transfer_slots_llm_first(
-        message
-    )
+    result = await transfer_slot_extraction.extract_external_transfer_slots_llm_first(message)
 
     assert result == {
         "recipient_name_hint": "철숴",
@@ -160,10 +148,6 @@ async def test_external_transfer_llm_failure_uses_rule_fallback(monkeypatch) -> 
     failed = _FailedStructuredLlm()
     monkeypatch.setattr(transfer_slot_extraction, "get_llm", lambda **_: failed)
 
-    result = await transfer_slot_extraction.extract_external_transfer_slots_llm_first(
-        message
-    )
+    result = await transfer_slot_extraction.extract_external_transfer_slots_llm_first(message)
 
-    assert result == transfer_slot_extraction.extract_external_transfer_slots_by_rule(
-        message
-    )
+    assert result == transfer_slot_extraction.extract_external_transfer_slots_by_rule(message)

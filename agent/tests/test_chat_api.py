@@ -66,9 +66,7 @@ def test_balance_inquiry_interrupt_and_resume(client, monkeypatch):
     monkeypatch.setitem(TOOL_REGISTRY, "apply_account_selection", pick_first)
 
     # 2턴: 같은 thread_id로 답변 → 재개 후 완료
-    second = client.post(
-        "/chat", json={"message": "1번", "thread_id": thread_id}
-    ).json()
+    second = client.post("/chat", json={"message": "1번", "thread_id": thread_id}).json()
     assert second["status"] == "completed"
     assert "1,250,000" in second["reply"]
 
@@ -83,16 +81,12 @@ def test_transfer_http_multiturn(client):
     assert first["prompt_for"] == "transfer.approval_decision"
     assert "김철수" in first["reply"] and "50,000" in first["reply"]
 
-    second = client.post(
-        "/chat", json={"message": "승인", "thread_id": first["thread_id"]}
-    ).json()
+    second = client.post("/chat", json={"message": "승인", "thread_id": first["thread_id"]}).json()
     assert second["status"] == "waiting_input"
     assert second["prompt_for"] == "transfer.auth_result"
     assert second["thread_id"] == first["thread_id"]
 
-    third = client.post(
-        "/chat", json={"message": "인증완료", "thread_id": second["thread_id"]}
-    ).json()
+    third = client.post("/chat", json={"message": "인증완료", "thread_id": second["thread_id"]}).json()
     assert third["status"] == "completed"
     assert "50,000원을 송금했습니다" in third["reply"]
 
@@ -118,8 +112,6 @@ def test_period_reask_resumes_and_completes(client):
     assert first["status"] == "waiting_input"
     assert first["prompt_for"] == "txn.period"
 
-    second = client.post(
-        "/chat", json={"message": "이번 달", "thread_id": first["thread_id"]}
-    ).json()
+    second = client.post("/chat", json={"message": "이번 달", "thread_id": first["thread_id"]}).json()
     assert second["status"] == "completed"
     assert "거래내역" in second["reply"]

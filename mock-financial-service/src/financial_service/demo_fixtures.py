@@ -124,9 +124,7 @@ def load_into_db(engine) -> dict:
 
         assert n_accounts == 5, f"Expected 5 Accounts after load, got {n_accounts}"
         assert 5 <= n_cards <= 10, f"Expected 5-10 Cards after load, got {n_cards}"
-        assert n_products == 20, (
-            f"Expected 20 CardProducts after load, got {n_products}"
-        )
+        assert n_products == 20, f"Expected 20 CardProducts after load, got {n_products}"
 
         # Cards per account: 1-2 each
         accounts = session.query(Account).all()
@@ -138,24 +136,19 @@ def load_into_db(engine) -> dict:
         valid_ids = {a.account_id for a in accounts}
         cards = session.query(Card).all()
         for card in cards:
-            assert card.account_id in valid_ids, (
-                f"Card {card.card_id} references unknown account_id {card.account_id}"
-            )
+            assert card.account_id in valid_ids, f"Card {card.card_id} references unknown account_id {card.account_id}"
 
         # CardProduct category distribution: 4 per each of 5 categories
         products = session.query(CardProduct).all()
         cat_counts = Counter(p.category for p in products)
         expected_cats = {"외식", "쇼핑", "여행", "웹구독", "마트/편의점"}
         for cat in expected_cats:
-            assert cat_counts[cat] == 4, (
-                f"Category '{cat}' has {cat_counts[cat]} products; expected 4"
-            )
+            assert cat_counts[cat] == 4, f"Category '{cat}' has {cat_counts[cat]} products; expected 4"
 
         # card_products must not reference cards (structural: no FK columns)
         for cp in products:
-            assert (
-                not hasattr(cp, "card_id")
-                or cp.__class__.__table__.c.keys().count("card_id") == 0
-            ), "CardProduct must not have a card_id FK column"
+            assert not hasattr(cp, "card_id") or cp.__class__.__table__.c.keys().count("card_id") == 0, (
+                "CardProduct must not have a card_id FK column"
+            )
 
     return {"accounts": n_accounts, "cards": n_cards, "card_products": n_products}

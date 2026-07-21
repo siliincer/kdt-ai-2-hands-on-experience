@@ -82,9 +82,7 @@ def _patch_auth_create(monkeypatch, auth_context):
     async def _create(session, context, confirmation):
         return auth_context
 
-    monkeypatch.setattr(
-        auth_tool_service.auth_context_service, "create_for_confirmation", _create
-    )
+    monkeypatch.setattr(auth_tool_service.auth_context_service, "create_for_confirmation", _create)
 
 
 @pytest.mark.asyncio
@@ -176,8 +174,6 @@ async def test_other_users_confirmation_rejected(monkeypatch):
 
 
 def test_auth_contexts_requires_service_token(client):
-    response = client.post(
-        "/api/v1/agent-tools/auth-contexts", json={"confirmation_id": str(uuid4())}
-    )
+    response = client.post("/api/v1/agent-tools/auth-contexts", json={"confirmation_id": str(uuid4())})
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "INVALID_SERVICE_TOKEN"

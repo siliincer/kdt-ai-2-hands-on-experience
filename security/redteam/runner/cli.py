@@ -26,9 +26,7 @@ EXIT_CODES = {
 
 def _scenario_name(value: str) -> str:
     if not re.fullmatch(r"[a-z0-9_]+", value):
-        raise argparse.ArgumentTypeError(
-            "scenario must contain lowercase letters and _"
-        )
+        raise argparse.ArgumentTypeError("scenario must contain lowercase letters and _")
     return value
 
 
@@ -61,11 +59,7 @@ def main() -> int:
         config = load_config(args.config)
         if args.mode:
             config = config.model_copy(
-                update={
-                    "execution": config.execution.model_copy(
-                        update={"mode": ExecutionMode(args.mode)}
-                    )
-                }
+                update={"execution": config.execution.model_copy(update={"mode": ExecutionMode(args.mode)})}
             )
         scenario = load_scenario(scenario_path)
         budget = RequestBudget(config.execution.max_requests_per_run)

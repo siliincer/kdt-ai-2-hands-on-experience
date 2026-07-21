@@ -42,9 +42,7 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_set_default_account"
-_tool_error_update = build_tool_error_update(
-    "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
-)
+_tool_error_update = build_tool_error_update("설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 
 def extract_default_account_slots_from_text(message: str) -> Mapping[str, Any]:
@@ -61,15 +59,9 @@ class DefaultAccountChangeDependencies:
     webhook_client: BackendWebhookClient
     interaction_runtime: InteractionPauseRuntime
     webhook_builder: InteractionWebhookBuilder
-    input_request_id_factory: Callable[[], str] = field(
-        default=_default_input_request_id
-    )
-    tool_request_id_factory: Callable[[str, str], str] = field(
-        default=_default_tool_request_id
-    )
-    slot_extractor: SettingSlotExtractor = field(
-        default=extract_default_account_slots_llm_first
-    )
+    input_request_id_factory: Callable[[], str] = field(default=_default_input_request_id)
+    tool_request_id_factory: Callable[[str, str], str] = field(default=_default_tool_request_id)
+    slot_extractor: SettingSlotExtractor = field(default=extract_default_account_slots_llm_first)
 
 
 def build_set_default_account_graph(
@@ -89,9 +81,7 @@ def build_set_default_account_graph(
             "data": {"account_hint": extracted.get("account_hint")},
         }
 
-    async def resolve_default_account(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def resolve_default_account(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -136,9 +126,7 @@ def build_set_default_account_graph(
             "data": update,
         }
 
-    async def request_default_account_selection(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_default_account_selection(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = data.get("input_request_id")
         if not isinstance(input_request_id, str) or not input_request_id:
@@ -188,9 +176,7 @@ def build_set_default_account_graph(
             ValueError("계좌 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def emit_default_account_selection_empty(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_default_account_selection_empty(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
@@ -215,14 +201,10 @@ def build_set_default_account_graph(
             "data": {"prepare_attempt": attempt, "correction_view": None},
         }
 
-    async def prepare_default_account_change(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def prepare_default_account_change(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         idempotency_key = (
-            f"default_account_prepare:"
-            f"{_config_context(config, 'execution_context_id')}:"
-            f"{data.get('prepare_attempt')}"
+            f"default_account_prepare:{_config_context(config, 'execution_context_id')}:{data.get('prepare_attempt')}"
         )
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -246,10 +228,7 @@ def build_set_default_account_graph(
         elif outcome == "unchanged":
             pass
         elif outcome == "correction_required":
-            targets = list(
-                (result.get("correction_view") or {}).get("allowed_change_targets")
-                or []
-            )
+            targets = list((result.get("correction_view") or {}).get("allowed_change_targets") or [])
             if targets != ["account"]:
                 return _tool_error_update(
                     "prepare_default_account_change",
@@ -269,9 +248,7 @@ def build_set_default_account_graph(
             "data": update,
         }
 
-    async def emit_default_account_unchanged(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_default_account_unchanged(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -289,9 +266,7 @@ def build_set_default_account_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_default_account_unchanged")
 
-    async def emit_default_account_blocked(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_default_account_blocked(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         view = _data(state).get("blocked_view") or {}
         event = dependencies.webhook_builder.blocked(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -302,13 +277,9 @@ def build_set_default_account_graph(
             payload=dict(view),
         )
         await _publish(dependencies, event, config)
-        return _terminal_update(
-            "emit_default_account_blocked", status="workflow_failed"
-        )
+        return _terminal_update("emit_default_account_blocked", status="workflow_failed")
 
-    async def request_default_account_approval(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_default_account_approval(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         confirmation_id = data.get("confirmation_id")
         if not isinstance(confirmation_id, str) or not confirmation_id:
@@ -368,9 +339,7 @@ def build_set_default_account_graph(
             "data": {key: None for key in clears},
         }
 
-    async def execute_default_account_change(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def execute_default_account_change(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         idempotency_key = f"default_account_execute:{data.get('confirmation_id')}"
         try:
@@ -398,10 +367,7 @@ def build_set_default_account_graph(
                 },
             }
         if outcome == "correction_required":
-            targets = list(
-                (result.get("correction_view") or {}).get("allowed_change_targets")
-                or []
-            )
+            targets = list((result.get("correction_view") or {}).get("allowed_change_targets") or [])
             if targets != ["account"]:
                 return _tool_error_update(
                     "execute_default_account_change",
@@ -426,9 +392,7 @@ def build_set_default_account_graph(
             ValueError("Execute 응답 outcome이 계약과 일치하지 않습니다."),
         )
 
-    async def emit_default_account_result(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_default_account_result(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         view = data.get("confirmation_view") or {}
         event = dependencies.webhook_builder.component(
@@ -441,20 +405,16 @@ def build_set_default_account_graph(
             payload={
                 "purpose": "default_account",
                 "outcome": "completed",
-                "account": view.get("new_default_account")
-                or {"account_id": data.get("account_id")},
+                "account": view.get("new_default_account") or {"account_id": data.get("account_id")},
                 "completed_at": data.get("completed_at"),
             },
         )
         await _publish(dependencies, event, config)
         return _terminal_update("emit_default_account_result")
 
-    async def emit_default_account_error(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_default_account_error(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         message = str(
-            _data(state).get("safe_error_message")
-            or "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            _data(state).get("safe_error_message") or "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
         )
         event = dependencies.webhook_builder.error(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -470,12 +430,8 @@ def build_set_default_account_graph(
     graph = StateGraph(AgentState)
     graph.add_node("extract_default_account_slots", extract_default_account_slots)
     graph.add_node("resolve_default_account", resolve_default_account)
-    graph.add_node(
-        "request_default_account_selection", request_default_account_selection
-    )
-    graph.add_node(
-        "emit_default_account_selection_empty", emit_default_account_selection_empty
-    )
+    graph.add_node("request_default_account_selection", request_default_account_selection)
+    graph.add_node("emit_default_account_selection_empty", emit_default_account_selection_empty)
     graph.add_node("start_default_account_prepare", start_default_account_prepare)
     graph.add_node("prepare_default_account_change", prepare_default_account_change)
     graph.add_node("emit_default_account_unchanged", emit_default_account_unchanged)

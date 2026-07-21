@@ -11,9 +11,7 @@ async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def create_user(
-    session: AsyncSession, email: str, password_hash: str, name: str | None = None
-) -> User:
+async def create_user(session: AsyncSession, email: str, password_hash: str, name: str | None = None) -> User:
     user = User(email=email, password_hash=password_hash, name=name)
     session.add(user)
     await session.commit()

@@ -40,9 +40,7 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_internal_transfer"
-_tool_error_update = build_tool_error_update(
-    "이체를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
-)
+_tool_error_update = build_tool_error_update("이체를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 # 승인·수정·인증 재시도 화면의 정정 대상 3종 — route_internal_transfer_correction,
 # request_internal_transfer_approval, request_internal_transfer_correction이 공유한다.
@@ -67,15 +65,9 @@ class InternalTransferDependencies:
     webhook_client: BackendWebhookClient
     interaction_runtime: InteractionPauseRuntime
     webhook_builder: InteractionWebhookBuilder
-    input_request_id_factory: Callable[[], str] = field(
-        default=_default_input_request_id
-    )
-    tool_request_id_factory: Callable[[str, str], str] = field(
-        default=_default_tool_request_id
-    )
-    slot_extractor: TransferSlotExtractor = field(
-        default=extract_internal_transfer_slots_llm_first
-    )
+    input_request_id_factory: Callable[[], str] = field(default=_default_input_request_id)
+    tool_request_id_factory: Callable[[str, str], str] = field(default=_default_tool_request_id)
+    slot_extractor: TransferSlotExtractor = field(default=extract_internal_transfer_slots_llm_first)
 
 
 def build_internal_transfer_graph(
@@ -99,9 +91,7 @@ def build_internal_transfer_graph(
             },
         }
 
-    async def resolve_internal_from_account(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def resolve_internal_from_account(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -146,9 +136,7 @@ def build_internal_transfer_graph(
             "data": update,
         }
 
-    async def request_from_account_selection(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_from_account_selection(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = data.get("input_request_id")
         if not isinstance(input_request_id, str) or not input_request_id:
@@ -201,9 +189,7 @@ def build_internal_transfer_graph(
             ValueError("계좌 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def emit_internal_from_accounts_empty(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_internal_from_accounts_empty(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
@@ -220,9 +206,7 @@ def build_internal_transfer_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_internal_from_accounts_empty")
 
-    async def resolve_internal_to_account(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def resolve_internal_to_account(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -235,9 +219,7 @@ def build_internal_transfer_graph(
                         "account_hint": data.get("to_account_hint"),
                         "account_capability": "deposit",
                         "resolve_selection": True,
-                        "exclude_account_ids": [data["from_account_id"]]
-                        if data.get("from_account_id")
-                        else [],
+                        "exclude_account_ids": [data["from_account_id"]] if data.get("from_account_id") else [],
                     },
                 ),
             )
@@ -270,9 +252,7 @@ def build_internal_transfer_graph(
             "data": update,
         }
 
-    async def request_to_account_selection(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_to_account_selection(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = data.get("input_request_id")
         if not isinstance(input_request_id, str) or not input_request_id:
@@ -325,9 +305,7 @@ def build_internal_transfer_graph(
             ValueError("계좌 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def emit_internal_to_accounts_empty(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_internal_to_accounts_empty(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
@@ -352,9 +330,7 @@ def build_internal_transfer_graph(
             "route_key": "valid" if valid else "invalid",
         }
 
-    async def request_internal_transfer_amount(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_internal_transfer_amount(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         input_request_id = dependencies.input_request_id_factory()
         event = dependencies.webhook_builder.need_input(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -405,14 +381,10 @@ def build_internal_transfer_graph(
             "data": {"prepare_attempt": attempt},
         }
 
-    async def prepare_internal_transfer(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def prepare_internal_transfer(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         idempotency_key = (
-            f"internal_transfer_prepare:"
-            f"{_config_context(config, 'execution_context_id')}:"
-            f"{data.get('prepare_attempt')}"
+            f"internal_transfer_prepare:{_config_context(config, 'execution_context_id')}:{data.get('prepare_attempt')}"
         )
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -453,9 +425,7 @@ def build_internal_transfer_graph(
             "data": update,
         }
 
-    async def request_internal_transfer_approval(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_internal_transfer_approval(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         confirmation_id = data.get("confirmation_id")
         if not isinstance(confirmation_id, str) or not confirmation_id:
@@ -582,9 +552,7 @@ def build_internal_transfer_graph(
             "route_key": "multiple",
         }
 
-    async def request_internal_transfer_correction(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_internal_transfer_correction(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = dependencies.input_request_id_factory()
         view = data.get("correction_view") or {}
@@ -642,14 +610,9 @@ def build_internal_transfer_graph(
             },
         }
 
-    async def create_internal_auth_context(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def create_internal_auth_context(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
-        idempotency_key = (
-            f"internal_transfer_auth:{data.get('confirmation_id')}:"
-            f"{data.get('auth_attempt')}"
-        )
+        idempotency_key = f"internal_transfer_auth:{data.get('confirmation_id')}:{data.get('auth_attempt')}"
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
                 "create_auth_context",
@@ -685,9 +648,7 @@ def build_internal_transfer_graph(
             ValueError("Auth Context 응답 outcome이 계약과 일치하지 않습니다."),
         )
 
-    async def request_internal_authentication(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_internal_authentication(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         auth_context_id = data.get("auth_context_id")
         if not isinstance(auth_context_id, str) or not auth_context_id:
@@ -730,9 +691,7 @@ def build_internal_transfer_graph(
             ValueError("인증 재개 결과가 올바르지 않습니다."),
         )
 
-    async def request_internal_auth_retry(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_internal_auth_retry(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         input_request_id = dependencies.input_request_id_factory()
         event = dependencies.webhook_builder.need_input(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -767,14 +726,9 @@ def build_internal_transfer_graph(
             ValueError("재인증 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def execute_internal_transfer(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def execute_internal_transfer(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
-        idempotency_key = (
-            f"internal_transfer_execute:{data.get('confirmation_id')}:"
-            f"{data.get('auth_attempt')}"
-        )
+        idempotency_key = f"internal_transfer_execute:{data.get('confirmation_id')}:{data.get('auth_attempt')}"
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
                 "execute_internal_transfer",
@@ -834,9 +788,7 @@ def build_internal_transfer_graph(
             ValueError("Execute 응답 outcome이 계약과 일치하지 않습니다."),
         )
 
-    async def emit_internal_transfer_result(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_internal_transfer_result(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         view = data.get("confirmation_view") or {}
         event = dependencies.webhook_builder.component(
@@ -858,9 +810,7 @@ def build_internal_transfer_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_internal_transfer_result")
 
-    async def emit_internal_transfer_blocked(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_internal_transfer_blocked(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         view = _data(state).get("blocked_view") or {}
         event = dependencies.webhook_builder.blocked(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -871,16 +821,11 @@ def build_internal_transfer_graph(
             payload=dict(view),
         )
         await _publish(dependencies, event, config)
-        return _terminal_update(
-            "emit_internal_transfer_blocked", status="workflow_failed"
-        )
+        return _terminal_update("emit_internal_transfer_blocked", status="workflow_failed")
 
-    async def emit_internal_transfer_error(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_internal_transfer_error(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         message = str(
-            _data(state).get("safe_error_message")
-            or "이체를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            _data(state).get("safe_error_message") or "이체를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
         )
         event = dependencies.webhook_builder.error(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -891,17 +836,13 @@ def build_internal_transfer_graph(
             payload={"message": message},
         )
         await _publish(dependencies, event, config)
-        return _terminal_update(
-            "emit_internal_transfer_error", status="workflow_failed"
-        )
+        return _terminal_update("emit_internal_transfer_error", status="workflow_failed")
 
     graph = StateGraph(AgentState)
     graph.add_node("extract_internal_transfer_slots", extract_internal_transfer_slots)
     graph.add_node("resolve_internal_from_account", resolve_internal_from_account)
     graph.add_node("request_from_account_selection", request_from_account_selection)
-    graph.add_node(
-        "emit_internal_from_accounts_empty", emit_internal_from_accounts_empty
-    )
+    graph.add_node("emit_internal_from_accounts_empty", emit_internal_from_accounts_empty)
     graph.add_node("resolve_internal_to_account", resolve_internal_to_account)
     graph.add_node("request_to_account_selection", request_to_account_selection)
     graph.add_node("emit_internal_to_accounts_empty", emit_internal_to_accounts_empty)
@@ -909,18 +850,12 @@ def build_internal_transfer_graph(
     graph.add_node("request_internal_transfer_amount", request_internal_transfer_amount)
     graph.add_node("start_internal_transfer_prepare", start_internal_transfer_prepare)
     graph.add_node("prepare_internal_transfer", prepare_internal_transfer)
-    graph.add_node(
-        "request_internal_transfer_approval", request_internal_transfer_approval
-    )
+    graph.add_node("request_internal_transfer_approval", request_internal_transfer_approval)
     graph.add_node("reset_internal_from_account", reset_internal_from_account)
     graph.add_node("reset_internal_to_account", reset_internal_to_account)
     graph.add_node("reset_internal_transfer_amount", reset_internal_transfer_amount)
-    graph.add_node(
-        "route_internal_transfer_correction", route_internal_transfer_correction
-    )
-    graph.add_node(
-        "request_internal_transfer_correction", request_internal_transfer_correction
-    )
+    graph.add_node("route_internal_transfer_correction", route_internal_transfer_correction)
+    graph.add_node("request_internal_transfer_correction", request_internal_transfer_correction)
     graph.add_node("start_internal_auth", start_internal_auth)
     graph.add_node("create_internal_auth_context", create_internal_auth_context)
     graph.add_node("request_internal_authentication", request_internal_authentication)

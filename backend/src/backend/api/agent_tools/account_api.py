@@ -36,15 +36,11 @@ async def list_accounts_endpoint(
     session: AsyncSession = Depends(get_db),
 ):
     """사용자 소유 계좌 후보를 조회한다(마스킹, 잔액 미포함)."""
-    data = await account_service.list_accounts(
-        session, context, account_hint, account_capability, limit
-    )
+    data = await account_service.list_accounts(session, context, account_hint, account_capability, limit)
     return agent_success_response(message="계좌 목록을 조회했습니다.", data=data)
 
 
-@account_router.post(
-    "/accounts/balances:query", response_model=CommonResponse[BalanceQueryData]
-)
+@account_router.post("/accounts/balances:query", response_model=CommonResponse[BalanceQueryData])
 async def query_balances_endpoint(
     payload: BalanceQueryRequest,
     context: ResolvedExecutionContext = Depends(require_scope(SCOPE_ACCOUNT_READ)),

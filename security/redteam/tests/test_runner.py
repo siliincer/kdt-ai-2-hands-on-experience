@@ -167,9 +167,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
     assert result.verdict == Verdict.PASS
     assert [len(item.turns) for item in result.results] == [1, 2, 3]
     assert all(
-        request.get("thread_id") is not None
-        for request in requests
-        if request["message"] in {"승인", "인증완료"}
+        request.get("thread_id") is not None for request in requests if request["message"] in {"승인", "인증완료"}
     )
     assert budget.used == 14
 
@@ -213,11 +211,7 @@ def test_request_budget_counts_health_and_chat():
 def test_llm_mode_uses_runtime_telemetry(telemetry, expected_verdict, reason):
     config = load_config(ROOT / "config.example.yaml")
     config = config.model_copy(
-        update={
-            "execution": config.execution.model_copy(
-                update={"mode": ExecutionMode.LLM_REDTEAM}
-            )
-        }
+        update={"execution": config.execution.model_copy(update={"mode": ExecutionMode.LLM_REDTEAM})}
     )
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
     budget = RequestBudget(config.execution.max_requests_per_run)
@@ -242,11 +236,7 @@ def test_llm_mode_uses_runtime_telemetry(telemetry, expected_verdict, reason):
 def test_attack_failure_takes_priority_over_llm_error():
     config = load_config(ROOT / "config.example.yaml")
     config = config.model_copy(
-        update={
-            "execution": config.execution.model_copy(
-                update={"mode": ExecutionMode.LLM_REDTEAM}
-            )
-        }
+        update={"execution": config.execution.model_copy(update={"mode": ExecutionMode.LLM_REDTEAM})}
     )
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
     budget = RequestBudget(config.execution.max_requests_per_run)

@@ -26,9 +26,7 @@ def upgrade() -> None:
         "transaction_query_contexts",
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("user_id", sa.UUID(), nullable=False),
-        sa.Column(
-            "account_ids", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("account_ids", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("start_date", sa.Date(), nullable=False),
         sa.Column("end_date", sa.Date(), nullable=False),
         sa.Column("keyword", sa.String(length=100), nullable=True),

@@ -80,19 +80,13 @@ class MockBackend:
     def requests_to(self, method: str, path: str) -> list[httpx.Request]:
         """특정 계약 Endpoint로 전송된 요청만 반환한다."""
 
-        return [
-            request
-            for request in self.requests
-            if request.method == method.upper() and request.url.path == path
-        ]
+        return [request for request in self.requests if request.method == method.upper() and request.url.path == path]
 
     def assert_all_responses_used(self) -> None:
         """Scenario에 등록했지만 사용되지 않은 Mock 응답이 없음을 확인한다."""
 
         unused = {
-            f"{method} {path}": len(responses)
-            for (method, path), responses in self._responses.items()
-            if responses
+            f"{method} {path}": len(responses) for (method, path), responses in self._responses.items() if responses
         }
         if unused:
             raise AssertionError(f"사용되지 않은 Mock Backend 응답입니다: {unused}")
@@ -104,10 +98,7 @@ class MockBackend:
     ) -> list[dict[str, Any]]:
         """Step 학습용으로 실제 Mock 요청과 응답을 순서대로 반환한다."""
 
-        return [
-            _exchange_summary(exchange, include_payload=include_payload)
-            for exchange in self.exchanges
-        ]
+        return [_exchange_summary(exchange, include_payload=include_payload) for exchange in self.exchanges]
 
 
 def _exchange_summary(

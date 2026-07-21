@@ -20,12 +20,8 @@ if TYPE_CHECKING:
 class TransactionQueryContext(Base):
     __tablename__ = "transaction_query_contexts"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     # 조회 대상 로컬 Account.id 목록(문자열 배열).
     account_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -33,12 +29,8 @@ class TransactionQueryContext(Base):
     keyword: Mapped[str | None] = mapped_column(String(100), nullable=True)
     transaction_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     page_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 서비스는 user_id 컬럼만 사용 → 자동 로딩 안 함(R4).
     user: Mapped["User"] = relationship(lazy="raise")

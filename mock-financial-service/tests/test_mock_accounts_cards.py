@@ -57,14 +57,8 @@ def test_mock_card_count_exact(seeded_session):
 def test_each_account_has_one_or_two_cards(seeded_session):
     accounts = seeded_session.query(Account).all()
     for acct in accounts:
-        n = (
-            seeded_session.query(Card)
-            .filter(Card.account_id == acct.account_id)
-            .count()
-        )
-        assert 1 <= n <= 2, (
-            f"Account {acct.account_id} ({acct.owner}) has {n} cards; expected 1-2"
-        )
+        n = seeded_session.query(Card).filter(Card.account_id == acct.account_id).count()
+        assert 1 <= n <= 2, f"Account {acct.account_id} ({acct.owner}) has {n} cards; expected 1-2"
 
 
 # ── 4. FK integrity: every Card.account_id points to a real Account ───────────
@@ -74,9 +68,7 @@ def test_all_card_account_ids_are_valid(seeded_session):
     valid_ids = {a.account_id for a in seeded_session.query(Account).all()}
     cards = seeded_session.query(Card).all()
     for card in cards:
-        assert card.account_id in valid_ids, (
-            f"Card {card.card_id} references unknown account_id {card.account_id}"
-        )
+        assert card.account_id in valid_ids, f"Card {card.card_id} references unknown account_id {card.account_id}"
 
 
 # ── 5. Data-layer sanity: MOCK_* constants match ORM rows ─────────────────────
