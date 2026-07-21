@@ -64,6 +64,32 @@ class TestRuntimeErrorHandler:
         assert data["error"]["message"] == "서버 오류가 발생했습니다."
 
 
+class TestOrmMisuseErrorHandler:
+    """Test SQLAlchemy InvalidRequestError handler (lazy='raise' 접근 등)."""
+
+    def test_invalid_request_error_response(self, app, client):
+        """서버측 ORM 오용은 500 일반 envelope 으로, 내부 상세는 노출하지 않는다."""
+        from sqlalchemy.exc import InvalidRequestError
+
+        @app.get("/orm-misuse")
+        def raise_orm_misuse():
+            # lazy='raise' 관계 접근 시 SQLAlchemy 가 던지는 예외를 재현.
+            raise InvalidRequestError(
+                "'ExecutionContext.user' is not available due to lazy='raise'"
+            )
+
+        response = client.get("/orm-misuse")
+
+        assert response.status_code == 500
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["code"] == "RUNTIME_ERROR"
+        assert data["error"]["message"] == "서버 오류가 발생했습니다."
+        # 관계명·스키마 등 내부 정보가 응답에 새지 않아야 한다.
+        assert "lazy" not in data["error"]["message"]
+        assert "ExecutionContext" not in str(data)
+
+
 class TestHTTPExceptionHandler:
     """Test HTTPException exception handler."""
 

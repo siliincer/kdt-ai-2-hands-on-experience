@@ -51,7 +51,7 @@ Each service pyproject sets `pythonpath = ["src"]`, `testpaths = ["tests"]`, `te
   - Success: `{success, message, data}` via `CommonResponse[T]` (`schemas/response.py`) + `success_response()` (`utils/build_response.py`).
   - Error: `{success: false, error: {code, message, details}}` produced by the exception handlers in `core/exceptions.py` (HTTPException, validation errors, ValueError, RuntimeError). `tests/test_exceptions_response.py` covers this exhaustively.
 - **Settings gotcha**: real env settings are in `core/load_environment_var.py` (pydantic-settings, `find_dotenv`); `core/config.py` is mostly commented out — only `CORS_OPTIONS` is live. `utils/is_dev.py` raises `ValueError` at import time for unrecognized `APP_ENV`.
-- DB: async SQLAlchemy 2.0 (`db/base.py` engine + `Base`, `db/session.py` `get_db` dependency). Alembic is scaffolded (`alembic.ini`, `migrations/`) but **not functional**: placeholder `sqlalchemy.url`, `target_metadata=None`, no `versions/` — don't assume migrations run.
+- DB: async SQLAlchemy 2.0 (`db/base.py` engine + `Base`, `db/session.py` `get_db` dependency). Alembic is scaffolded (`alembic.ini`, `migrations/`)
 
 ## Frontend (`frontend/`)
 

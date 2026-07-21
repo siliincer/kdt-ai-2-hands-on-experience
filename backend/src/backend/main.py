@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api.agent_tools import agent_tools_router
 from .api.chat_api import chat_router
 from .api.check_db_conn import health_router
+from .api.recipient_candidate_api import recipient_candidate_router
 from .api.sse_api import sse_router
 from .api.ui_api import ui_router
 from .api.user_api import user_router
@@ -20,7 +22,7 @@ from .services.financial import close_financial_client
 async def lifespan(app: FastAPI):
     # Perform startup tasks here (e.g., connect to database, initialize resources)
     run_migrations()
-    # TODO: 시간되면 print문은 loguru같은 전문 로거로 변경
+    # TODO(BE): 시간되면 print문은 loguru같은 전문 로거로 변경
     print("마이그레이션 적용 완료")
     yield  # 제어권 넘기는 제너레이터
     # 종료 시: Redis 커넥션 풀 + 계정계 HTTP 클라이언트 graceful shutdown
@@ -42,6 +44,8 @@ app.include_router(sse_router, prefix="/api/v1")
 app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(ui_router, prefix="/api/v1")
+app.include_router(recipient_candidate_router, prefix="/api/v1")
+app.include_router(agent_tools_router, prefix="/api/v1")
 
 configure_app(app)  # 일괄적인 설정값 주입
 

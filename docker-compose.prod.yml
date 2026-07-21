@@ -1,4 +1,4 @@
-# TODO: docker-compose.yml 파일이 프로덕션 용 업데이트하는 파일이라
+# TODO: docker-compose.yml 파일이 프로덕션용 업데이트하는 파일이라
 # 생각하고 여기다 최종본 작성해서 docker compose로 클라우드로 배포해주세용
 services:
   backend:

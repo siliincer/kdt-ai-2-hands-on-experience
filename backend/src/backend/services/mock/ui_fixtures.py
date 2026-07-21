@@ -1,10 +1,12 @@
 """UI Data API 목 픽스처 (mock 분리 원칙, BE_Coding).
 
-TODO: 향후 ui_service 가 실제 데이터 소스 조회로 교체될 때 이 파일을 제거한다.
+TODO(BE): 향후 ui_service 가 실제 데이터 소스 조회로 교체될 때 이 파일을 제거한다.
 값은 backend/docs/agent_ui_event_spec.md §4b 스키마와 일치한다.
 """
 
 from ...schemas.ui import (
+    AccountDetailData,
+    AccountDetailInfo,
     AccountSummary,
     BalanceData,
     BarCatDatum,
@@ -16,6 +18,7 @@ from ...schemas.ui import (
     CreditCard,
     MonthlySpendDatum,
     PieDatum,
+    RecentTxItem,
     SpendingData,
     SubscriptionItem,
     TransactionItem,
@@ -40,6 +43,38 @@ BALANCE_FIXTURE = BalanceData(
             tail="1234",
             balance=4_650_000,
             color="#FAE100",
+        ),
+    ],
+)
+
+ACCOUNT_DETAIL_FIXTURE = AccountDetailData(
+    account=AccountDetailInfo(
+        bank="신한은행",
+        alias="입출금통장",
+        tail="4200",
+        balance=8_200_000,
+    ),
+    recent=[
+        RecentTxItem(
+            name="급여 입금",
+            emoji="💰",
+            date="06.25 09:00",
+            amount=3_200_000,
+            type="in",
+        ),
+        RecentTxItem(
+            name="월세 이서연",
+            emoji="🏠",
+            date="06.01 09:00",
+            amount=-550_000,
+            type="out",
+        ),
+        RecentTxItem(
+            name="스타벅스",
+            emoji="☕",
+            date="06.28 14:23",
+            amount=-7_500,
+            type="out",
         ),
     ],
 )

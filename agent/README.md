@@ -6,6 +6,15 @@ backend 게이트웨이가 채팅을 이쪽으로 넘겨줍니다.
 
 이 문서는 agent 폴더를 처음 보는 팀원(프론트/백엔드)을 위한 전체 개요입니다.
 
+> 전환 안내
+>
+> 아래 1~5절은 기존 `/chat`, `bank_client.py`, `bank_tools.py` 기반 Demo 구조를
+> 설명한다. 관리시트 v3 기반 신규 Workflow는 금융 원장을 직접 호출하지 않고
+> Backend의 `/api/v1/agent-tools/*`와 Webhook·Resume 계약을 사용한다.
+> 신규 공동개발은 [Workflow 개발 가이드](docs/agent-workflow-development-guide.md)와
+> [Agent 구현 규칙](AGENTS.md)을 우선한다. 기존 Demo Tool에 신규 기능을 추가하지
+> 않는다.
+
 ---
 
 ## 1. 대화 한 턴이 처리되는 흐름
@@ -102,6 +111,7 @@ state에 쌓입니다. 엔진용 고정 필드(응답 문장, 분기 키 등)와
 | 담당 | 접점 | 봐야 할 것 |
 |---|---|---|
 | **프론트** | 채팅 응답의 `ui` 필드로 화면을 그린다 — 계좌 카드 목록, 승인 카드(버튼 라벨 포함) 등. 버튼 라벨("송금하기")을 **그대로 다음 메시지로 보내면** 에이전트가 인식 | `frontend/src/features/agent_chat/api/types.ts` (타입), [docs/README.md](docs/README.md) 3절 (ui 종류별 예시) |
+| **E2E 테스트** | `agent` 자체는 화면이 없어(FastAPI `/chat` `/health`만) Playwright는 `e2e/`에서 돈다. mock 없이 실제 backend API(회원가입/로그인)와 실제 브라우저로 로그인→계좌조회→송금 플로우 검증 — 이 서비스가 `/chat`에서 실제로 만들어내는 응답(잔액조회 tool 결과, 송금 need_approval 흐름)이 바뀌면 여기 테스트가 깨짐 | [`e2e/README.md`](../e2e/README.md) |
 | **백엔드** | `/api/v1/agent/chat`이 이 서비스의 `/chat`으로 프록시. 요청/응답을 그대로 전달만 하면 됨 | `backend/src/backend/api/agent_api.py`, `backend/src/backend/services/agent_client.py` |
 | **원장(mock-financial-service)** | 에이전트가 http 모드에서 호출하는 계좌/송금 REST API | `mock-financial-service/README.md` (구현된 API와 에러 규칙) |
 
@@ -125,7 +135,19 @@ curl -X POST localhost:8001/chat -H 'content-type: application/json' \
 uv run pytest agent
 ```
 
-## 6. 구조를 빠르게 이해하는 최단 경로 — 노트북 3권
+## 6. Notebook
+
+### 6.1 현재 계약 기반 Workflow Testbed
+
+신규 Workflow는 [notebooks/testbed/README.md](notebooks/testbed/README.md)의
+실행법을 사용한다.
+
+1. `notebooks/testbed/01_balance_inquiry_testbed.ipynb`
+   - 관리시트 v3 기반 잔액조회 기준 구현
+   - Agent 내부 처리, Mock Tool API, UI Webhook과 Resume을 단계별 확인
+   - pytest와 동일한 `WorkflowTestbed` Harness 사용
+
+### 6.2 기존 Demo 학습용 Notebook
 
 `notebooks/`에 **실행 결과가 포함된** 노트북이 있습니다. 코드를 안 돌려도
 GitHub에서 출력까지 그대로 볼 수 있습니다:

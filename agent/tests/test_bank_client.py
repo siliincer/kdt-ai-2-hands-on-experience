@@ -152,6 +152,33 @@ def test_http_transfer_409_raises():
         client.transfer("user_001", "acc_001", "rec_001", 999_999_999)
 
 
+def test_http_transfer_internal_contract():
+    client, captured = _capture_client(
+        lambda req: httpx.Response(
+            200, json={"transaction_id": "txn_itx", "status": "completed"}
+        )
+    )
+    result = client.transfer_internal("user_001", "acc_001", "acc_002", 50_000)
+
+    request = captured[0]
+    assert request.method == "POST"
+    assert request.url.path == "/api/transactions/transfer-internal"
+    body = json.loads(request.content)
+    assert body == {
+        "user_id": "user_001",
+        "from_account_id": "acc_001",
+        "to_account_id": "acc_002",
+        "amount": 50_000,
+    }
+    assert result["transaction_id"] == "txn_itx"
+
+
+def test_http_transfer_internal_409_raises():
+    client, _ = _capture_client(lambda req: httpx.Response(409))
+    with pytest.raises(BankClientError):
+        client.transfer_internal("user_001", "acc_001", "acc_002", 999_999_999)
+
+
 def test_http_post_audit_log_contract():
     client, captured = _capture_client(
         lambda req: httpx.Response(200, json={"log_id": "srv_log_0001"})

@@ -18,7 +18,8 @@ export async function customFetch<T>(
     if (!response.ok) {
       // 401: 토큰 만료/인증 실패 → 전역 로그아웃 시그널(리프레시 토큰 미도입).
       // ErrorBoundary 대신 로그인 화면으로 리다이렉트되도록 App 이 구독한다.
-      if (response.status === 401) {
+      // 단, 로그인 요청 자체의 401(비밀번호 오류 등)은 제외
+      if (response.status === 401 && !url.includes('/login')) {
         emitUnauthorized();
         throw new APIError(
           '세션이 만료되었습니다. 다시 로그인해 주세요.',

@@ -15,11 +15,9 @@ from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
 
-from ..db.postgres import AsyncSessionLocal
 from ..db.redis import stream_pool
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 from .agent_stream_producer import publish_agent_event
-from .financial.transfer_service import execute_external_transfer
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +94,7 @@ def _extract_transfer_args(message: str) -> dict[str, str]:
     args = dict(_SAMPLE_ARGS)
 
     # 금액: "30,000원" / "3만원" 대략 처리 → 숫자만
-    amount_match = re.search(r"([\d,]+)\s*원", message)
+    amount_match = re.search(r"([\d,]{1,20})\s*원", message)
     if amount_match:
         args["amount"] = amount_match.group(1).replace(",", "")
 
@@ -112,7 +110,7 @@ def _extract_autotransfer_args(message: str) -> dict[str, str]:
     """메시지에서 자동이체 파라미터를 가볍게 파싱(목). 실패 필드는 샘플로 채운다."""
     args = dict(_AUTOTRANSFER_SAMPLE_ARGS)
 
-    amount_match = re.search(r"([\d,]+)\s*원", message)
+    amount_match = re.search(r"([\d,]{1,20})\s*원", message)
     if amount_match:
         args["amount"] = amount_match.group(1).replace(",", "")
 
@@ -324,32 +322,15 @@ async def _run_transfer_result(
         "송금을 실행하고 있어요...",
         metadata={"tool": "transfer", "approval_id": approval_id},
     )
-    await _execute_transfer_best_effort(user_id, amount, approval_id)
+    # 실이체는 수행하지 않는다(D5: env-고정 수취처 데모 로직 제거). 실제 송금은
+    # Stage 7 의 실 Agent 연동이 agent-tools Prepare→승인→인증→Execute 로 수행한다.
+    _ = user_id
     await _emit(
         redis_stream,
         chat_session_id,
         AgentStreamEventType.DONE,
         f"{name}님께 {int(amount):,}원을 보냈어요. ✓",
     )
-
-
-async def _execute_transfer_best_effort(
-    user_id: UUID | None, amount, approval_id: str
-) -> None:
-    """승인 시 계정계 실이체(best-effort). 실패/미설정은 삼킨다(결정 D).
-
-    이 드라이버는 임시 스텁이라 실이체 실패가 챗 흐름을 깨지 않게 격리한다.
-    background task 라 요청 세션이 닫힌 뒤이므로 새 세션을 연다.
-    """
-    if user_id is None:
-        return
-    try:
-        async with AsyncSessionLocal() as db:
-            await execute_external_transfer(
-                db, user_id, int(amount), idempotency_key=approval_id
-            )
-    except Exception:
-        logger.warning("transfer execution skipped in driver")
 
 
 async def _run_autotransfer_result(

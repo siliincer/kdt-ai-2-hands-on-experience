@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
               return 'vendor';
             }
           },
-          // TODO: React.lazy 최적화
+          // TODO(FE): React.lazy 최적화
         },
       },
     },

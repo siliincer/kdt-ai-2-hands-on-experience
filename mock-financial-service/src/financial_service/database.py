@@ -1,6 +1,5 @@
 """Database engine and session configuration."""
 
-import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
@@ -12,7 +11,9 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 # two different files depending on where `uvicorn`/pytest was invoked.
 # Override with the DATABASE_URL env var for Postgres etc.
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / "financial.db"
-DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{_DEFAULT_DB_PATH}")
+DATABASE_URL = f"sqlite:///{_DEFAULT_DB_PATH}"
+# 수정사항: database_url은 backend에서 쓰는 환경변수라서
+# sqlite 경로는 하드코딩으로 대체했습니다.
 
 engine = create_engine(
     DATABASE_URL,

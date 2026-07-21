@@ -1,4 +1,4 @@
-# TODO: 계정계 작성자님이 이 문서를 새로운 버전으로 바꿔주세요!
+# TODO(계정계): 계정계 작성자님이 이 문서를 새로운 버전으로 바꿔주세요!
 
 # API Reference — 정보계 (Analytics) Endpoints
 

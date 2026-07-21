@@ -64,17 +64,40 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
     Raises:
         AssertionError: if post-seed counts or FK checks fail.
     """
-    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+    # ── 수정된 부분 시작 ──────────────────────────────────────────────────
+    # SQLite일 때만 check_same_thread 옵션을 적용하도록 분기 처리합니다.
+    if db_url.startswith("sqlite"):
+        connect_args = {"check_same_thread": False}
+    else:
+        connect_args = {}
+
+    engine = create_engine(db_url, connect_args=connect_args)
+    # ── 수정된 부분 끝 ────────────────────────────────────────────────────
 
     # Enable FK enforcement for SQLite
     from sqlalchemy import event as _sqla_event
 
     @_sqla_event.listens_for(engine, "connect")
-    def _set_fk(conn, _):
-        conn.execute("PRAGMA foreign_keys=ON")
+    def _set_fk(dbapi_connection, connection_record):
+        # PostgreSQL 등 타 DB에서는 PRAGMA foreign_keys가 필요 없으므로
+        # SQLite인 경우에만 실행합니다.
+        if db_url.startswith("sqlite"):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
     if reset:
-        Base.metadata.drop_all(bind=engine)
+        if db_url.startswith("postgresql"):
+            # PostgreSQL의 경우 CASCADE 옵션을 적용하여 의존성 테이블을 함께 삭제합니다.
+            from sqlalchemy import text
+
+            with engine.begin() as conn:
+                # 메타데이터에 등록된 모든 테이블명을 가져와 DROP TABLE ... CASCADE 실행
+                for table in reversed(Base.metadata.sorted_tables):
+                    conn.execute(text(f'DROP TABLE IF EXISTS "{table.name}" CASCADE;'))
+        else:
+            # SQLite 등 타 DB는 기본 drop_all 사용
+            Base.metadata.drop_all(bind=engine)
 
     if ":memory:" in db_url:
         # Alembic opens its own separate connection; SQLite's `:memory:` DB

@@ -221,6 +221,27 @@ _LIST_COLS = {
 # 시트에서 흘러들어오는 잡동사니 컬럼은 YAML에서 제외한다
 _JUNK_COL = re.compile(r"^(notes( \d+)?|notes_\d+|\d+열(_\d+)?)$")
 
+# Workflow Step 탭에서 사람의 연동 검토를 위해 사용하는 컬럼이다.
+# Workflow Step XLSX에는 유지하지만 런타임 workflows.yaml에는 포함하지 않는다.
+_STEP_MANAGEMENT_COLS = {
+    "interaction_mode",
+    "execution_owner",
+    "backend_api_method",
+    "backend_api_path",
+    "request_fields",
+    "response_fields",
+    "webhook_event_type",
+    "webhook_method",
+    "webhook_path",
+    "prompt_for",
+    "frontend_endpoint",
+    "resume_type",
+    "wait_for_resume",
+    "direct_frontend_call",
+    "direct_ledger_call",
+    "integration_notes",
+}
+
 
 def _convert_row(row: dict, sheet: str) -> dict:
     """한 행에 bool/list 변환을 적용한 dict를 만든다(컬럼 순서 보존)."""
@@ -229,6 +250,8 @@ def _convert_row(row: dict, sheet: str) -> dict:
     out = {}
     for key, value in row.items():
         if not key or _JUNK_COL.match(key):
+            continue
+        if sheet == "steps" and key in _STEP_MANAGEMENT_COLS:
             continue
         if key in bool_cols:
             out[key] = to_bool(value)

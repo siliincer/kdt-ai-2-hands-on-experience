@@ -24,6 +24,31 @@ class BalanceData(BaseModel):
     accounts: list[AccountSummary]
 
 
+# --- account_detail (계좌 상세, GET /api/v1/ui/account/{account_id}) ---
+
+
+class RecentTxItem(BaseModel):
+    name: str
+    emoji: str
+    date: str
+    amount: int = Field(description="부호 있음(출금 음수) — A2 규칙과 다름")
+    type: str = Field(description="'in' | 'out'")
+
+
+class AccountDetailInfo(BaseModel):
+    bank: str
+    alias: str
+    tail: str
+    balance: int
+
+
+class AccountDetailData(BaseModel):
+    """GET /api/v1/ui/account/{account_id}"""
+
+    account: AccountDetailInfo
+    recent: list[RecentTxItem]
+
+
 # --- spending (소비 분석, GET /api/v1/ui/spending) ---
 
 

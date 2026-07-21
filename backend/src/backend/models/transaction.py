@@ -24,7 +24,7 @@ class TransactionStatus(PyEnum):
     CANCELLED = "CANCELLED"
 
 
-# TODO: 계정계 서버를 mock-financial-service로 분리함에 따라 deprecate 예정
+# TODO(BE): 계정계 서버를 mock-financial-service로 분리함에 따라 deprecate 예정
 class TransactionType(PyEnum):
     DEPOSIT = "DEPOSIT"
     WITHDRAWAL = "WITHDRAWAL"
