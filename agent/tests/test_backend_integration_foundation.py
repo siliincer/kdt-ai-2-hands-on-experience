@@ -73,9 +73,7 @@ async def test_tool_client_retries_with_same_headers_and_body() -> None:
     assert data["outcome"] == "ready_for_confirmation"
     assert len(requests) == 2
     assert all(request.headers["x-request-id"] == "req_123" for request in requests)
-    assert all(
-        request.headers["idempotency-key"] == "idem_123" for request in requests
-    )
+    assert all(request.headers["idempotency-key"] == "idem_123" for request in requests)
     assert requests[0].content == requests[1].content
 
 

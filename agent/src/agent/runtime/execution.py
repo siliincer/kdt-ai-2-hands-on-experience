@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from collections.abc import Callable, Mapping
@@ -19,6 +20,8 @@ from agent.runtime.resume_validation import (
     ExecutionContextBinding,
     ResumeValidationRuntime,
 )
+
+logger = logging.getLogger(__name__)
 
 ExecutionStatus = Literal["accepted", "running", "waiting", "completed", "failed"]
 ExecutionRuntimeErrorCode = Literal[
@@ -50,6 +53,32 @@ class ExecutionGraph(Protocol):
         *,
         subgraphs: bool = False,
     ) -> StateSnapshot: ...
+
+
+class ExecutionFailureReporter(Protocol):
+    """실행 실패를 외부 채널에 안전한 형태로 알리는 최소 경계."""
+
+    async def report_failure(
+        self,
+        *,
+        agent_thread_id: str,
+        chat_session_id: str,
+        execution_context_id: str,
+        request_id: str,
+    ) -> None: ...
+
+
+class ExecutionCompletionReporter(Protocol):
+    """정상 종료한 실행 턴을 외부 채널에 알리는 최소 경계."""
+
+    async def report_completion(
+        self,
+        *,
+        agent_thread_id: str,
+        chat_session_id: str,
+        execution_context_id: str,
+        request_id: str,
+    ) -> str: ...
 
 
 class ExecutionAccepted(BaseModel):
@@ -128,11 +157,15 @@ class ExecutionRuntime:
         graph: ExecutionGraph,
         interaction_runtime: InteractionPauseRuntime,
         resume_mapper: ResumeStateMapper,
+        failure_reporter: ExecutionFailureReporter | None = None,
+        completion_reporter: ExecutionCompletionReporter | None = None,
         thread_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._graph = graph
         self._interaction_runtime = interaction_runtime
         self._resume_mapper = resume_mapper
+        self._failure_reporter = failure_reporter
+        self._completion_reporter = completion_reporter
         self._thread_id_factory = thread_id_factory or (lambda: uuid.uuid4().hex)
         self._lock = threading.RLock()
         self._records: dict[str, _ExecutionRecord] = {}
@@ -225,6 +258,10 @@ class ExecutionRuntime:
             with self._lock:
                 record.status = "failed"
                 record.pending_interaction = None
+            await self._report_failure(
+                record,
+                request_id=record.start_request.request_id,
+            )
             raise
 
     async def resume(
@@ -347,7 +384,33 @@ class ExecutionRuntime:
                 record.status = "failed"
                 record.pending_interaction = None
                 record.active_resume_request_id = None
+            await self._report_failure(record, request_id=request_id)
             raise
+
+    async def _report_failure(
+        self,
+        record: _ExecutionRecord,
+        *,
+        request_id: str,
+    ) -> None:
+        reporter = self._failure_reporter
+        if reporter is None:
+            return
+        try:
+            await reporter.report_failure(
+                agent_thread_id=record.binding.agent_thread_id,
+                chat_session_id=record.binding.chat_session_id,
+                execution_context_id=record.binding.execution_context_id,
+                request_id=request_id,
+            )
+        except Exception:
+            logger.exception(
+                "Agent Workflow 실패 Webhook 전송에 실패했습니다.",
+                extra={
+                    "agent_thread_id": record.binding.agent_thread_id,
+                    "request_id": request_id,
+                },
+            )
 
     async def _finish_invocation(
         self,
@@ -358,10 +421,15 @@ class ExecutionRuntime:
     ) -> ExecutionRunResult:
         interrupt_payload = self._interrupt_payload_from_result(result)
         if interrupt_payload is None:
+            completion_message_id = await self._report_completion(
+                record,
+                result=result,
+                request_id=request_id,
+            )
             with self._lock:
                 record.status = "completed"
                 record.pending_interaction = None
-                record.webhook_message_id = None
+                record.webhook_message_id = completion_message_id
                 return self._result_from_record(record)
 
         published = await self._interaction_runtime.publish_interrupted(
@@ -375,6 +443,33 @@ class ExecutionRuntime:
             record.pending_interaction = pending
             record.webhook_message_id = published.message_id
             return self._result_from_record(record)
+
+    async def _report_completion(
+        self,
+        record: _ExecutionRecord,
+        *,
+        result: Mapping[str, Any],
+        request_id: str,
+    ) -> str | None:
+        reporter = self._completion_reporter
+        if reporter is None or result.get("route_key") == "cancelled":
+            return None
+        try:
+            return await reporter.report_completion(
+                agent_thread_id=record.binding.agent_thread_id,
+                chat_session_id=record.binding.chat_session_id,
+                execution_context_id=record.binding.execution_context_id,
+                request_id=request_id,
+            )
+        except Exception:
+            logger.exception(
+                "Agent Workflow 완료 Webhook 전송에 실패했습니다.",
+                extra={
+                    "agent_thread_id": record.binding.agent_thread_id,
+                    "request_id": request_id,
+                },
+            )
+            return None
 
     def _replayed_resume(
         self,

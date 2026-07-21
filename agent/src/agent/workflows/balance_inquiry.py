@@ -180,9 +180,7 @@ def build_balance_inquiry_graph(
                     dependencies=dependencies,
                     step_id="query_balances",
                     arguments={
-                        "account_ids": list(
-                            _data(state).get("account_ids") or []
-                        )
+                        "account_ids": list(_data(state).get("account_ids") or [])
                     },
                 ),
             )
@@ -226,9 +224,7 @@ def build_balance_inquiry_graph(
             ui_type="balance_result",
             content="계좌 잔액을 확인했습니다.",
             payload={
-                "accounts": _balance_result_options(
-                    _data(state).get("balance_results")
-                )
+                "accounts": _balance_result_options(_data(state).get("balance_results"))
             },
         )
         await _publish(dependencies, event, config)

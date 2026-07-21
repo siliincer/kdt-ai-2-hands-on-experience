@@ -178,9 +178,7 @@ def extract_account_list_slots_by_rule(message: str) -> Mapping[str, Any]:
 def extract_balance_slots_by_rule(message: str) -> Mapping[str, Any]:
     """잔액조회의 결정적 폴백 추출."""
 
-    all_accounts_requested = any(
-        marker in message for marker in _ALL_BALANCE_MARKERS
-    )
+    all_accounts_requested = any(marker in message for marker in _ALL_BALANCE_MARKERS)
     account_hint = extract_account_list_slots_by_rule(message).get("account_hint")
     if all_accounts_requested:
         account_hint = None
@@ -275,9 +273,7 @@ async def extract_balance_slots_llm_first(
     llm_hint = _grounded_phrase(extracted.account_hint, message)
     return {
         "account_hint": (
-            None
-            if all_accounts_requested
-            else llm_hint or fallback.get("account_hint")
+            None if all_accounts_requested else llm_hint or fallback.get("account_hint")
         ),
         "all_accounts_requested": all_accounts_requested,
     }
@@ -317,8 +313,7 @@ async def extract_transaction_slots_llm_first(
         "start_date": start_date or fallback.get("start_date"),
         "end_date": end_date or fallback.get("end_date"),
         "keyword": (
-            _grounded_phrase(extracted.keyword, message)
-            or fallback.get("keyword")
+            _grounded_phrase(extracted.keyword, message) or fallback.get("keyword")
         ),
         "transaction_type": (
             extracted.transaction_type or fallback.get("transaction_type")
@@ -346,9 +341,8 @@ async def extract_amount_summary_slots_llm_first(
         return fallback
 
     start_date, end_date = _normalized_period(extracted, requested_date)
-    account_hint = (
-        _grounded_phrase(extracted.account_hint, message)
-        or fallback.get("account_hint")
+    account_hint = _grounded_phrase(extracted.account_hint, message) or fallback.get(
+        "account_hint"
     )
     return {
         "account_hint": account_hint,
@@ -357,8 +351,7 @@ async def extract_amount_summary_slots_llm_first(
         "end_date": end_date or fallback.get("end_date"),
         "summary_type": extracted.summary_type or fallback.get("summary_type"),
         "keyword": (
-            _grounded_phrase(extracted.keyword, message)
-            or fallback.get("keyword")
+            _grounded_phrase(extracted.keyword, message) or fallback.get("keyword")
         ),
     }
 

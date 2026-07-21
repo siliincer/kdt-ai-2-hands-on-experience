@@ -154,9 +154,7 @@ async def test_webhook_is_published_once_after_checkpoint_interrupt() -> None:
         graph_builder.set_entry_point("pause")
         graph_builder.add_edge("pause", END)
         graph = graph_builder.compile(checkpointer=MemorySaver())
-        config: RunnableConfig = {
-            "configurable": {"thread_id": "thread_123"}
-        }
+        config: RunnableConfig = {"configurable": {"thread_id": "thread_123"}}
 
         interrupted = graph.invoke({}, config=config)
         payload = interrupted["__interrupt__"][0].value

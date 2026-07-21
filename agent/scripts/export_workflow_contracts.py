@@ -117,8 +117,7 @@ def build_manifest(workbook_path: Path) -> dict[str, Any]:
             missing = ", ".join(missing_sheets)
             raise ContractValidationError(f"관리시트 탭이 없습니다: {missing}")
         rows = {
-            key: _read_rows(workbook[sheet_name])
-            for key, sheet_name in SHEETS.items()
+            key: _read_rows(workbook[sheet_name]) for key, sheet_name in SHEETS.items()
         }
     finally:
         workbook.close()
@@ -228,9 +227,7 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
             )
 
         schema_keys = common_keys | {
-            row["state_key"]
-            for row in workflow["state_schema"]
-            if row.get("state_key")
+            row["state_key"] for row in workflow["state_schema"] if row.get("state_key")
         }
         for step in steps:
             step_id = str(step["step_id"])

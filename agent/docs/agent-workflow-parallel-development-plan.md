@@ -242,6 +242,8 @@ docs/agent-integration-specs-20260716
 - Webhook Adapter 구현
 - Mock Backend와 테스트 Fixture 구현
 - 잔액 조회를 기준 Workflow로 연결
+- [x] Agent 서버 시작 시 모든 Workflow의 `contract_id` 등록 여부를 검증하고, 누락된 계약이 있으면 서버 시작을 실패 처리한다.
+- [ ] TODO: MVP에서는 FastAPI `BackgroundTasks`를 사용하고, 작업 보존이나 부하 분산이 필요해지면 Redis Task Queue와 Celery 또는 Taskiq 전환을 검토한다.
 
 ### 단계 2. 기능군 병렬 개발
 

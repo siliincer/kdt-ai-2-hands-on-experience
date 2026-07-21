@@ -62,9 +62,11 @@ known-first-party = ["backend", "agent", "mock-financial-service", "e2e"]
 [tool.ruff.format]
 
 indent-style = "space"
+exclude = ["agent/scripts/build_agent_management_sheet_v3.py"]
 
 [tool.ruff.lint.per-file-ignores]
 "backend/migrations/env.py" = ["F401"]
+"agent/scripts/build_agent_management_sheet_v3.py" = ["E501"]
 
 [tool.pytest.ini_options]
 python_files = "test_*.py"

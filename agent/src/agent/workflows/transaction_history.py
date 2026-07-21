@@ -298,9 +298,7 @@ def build_transaction_history_graph(
             "current_step_id": "query_transactions",
             "route_key": "succeeded",
             "data": {
-                "transaction_results": list(
-                    result.get("transaction_results") or []
-                ),
+                "transaction_results": list(result.get("transaction_results") or []),
                 "transaction_query_id": result.get("transaction_query_id"),
                 "next_cursor": result.get("next_cursor"),
             },
