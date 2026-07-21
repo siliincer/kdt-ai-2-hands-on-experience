@@ -28,6 +28,25 @@ def _config() -> BackendClientConfig:
 
 
 @pytest.mark.asyncio
+async def test_backend_client_context_preserves_injected_http_client() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(204)
+
+    http_client = httpx.AsyncClient(
+        base_url="http://backend.test",
+        transport=httpx.MockTransport(handler),
+    )
+    tool_client = BackendToolClient(_config(), client=http_client)
+
+    async with tool_client as entered_client:
+        assert entered_client is tool_client
+
+    response = await http_client.get("/health")
+    assert response.status_code == 204
+    await http_client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_tool_client_retries_with_same_headers_and_body() -> None:
     requests: list[httpx.Request] = []
 
@@ -72,6 +91,10 @@ async def test_tool_client_retries_with_same_headers_and_body() -> None:
 
     assert data["outcome"] == "ready_for_confirmation"
     assert len(requests) == 2
+    assert all(
+        request.headers["authorization"] == "Bearer service-token"
+        for request in requests
+    )
     assert all(request.headers["x-request-id"] == "req_123" for request in requests)
     assert all(request.headers["idempotency-key"] == "idem_123" for request in requests)
     assert requests[0].content == requests[1].content

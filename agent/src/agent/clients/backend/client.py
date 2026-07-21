@@ -2,30 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
+from pydantic import ValidationError
 
+from agent.clients.backend.base import BackendHttpClientBase
+from agent.clients.backend.client_config import BackendClientConfig
 from agent.contracts.backend import (
     AgentToolEnvelope,
     AgentToolErrorData,
 )
-
-
-class BackendClientConfig(BaseModel):
-    """Agent가 Backend에 요청을 보낼 때 사용하는 공통 설정."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    base_url: str
-    agent_service_token: SecretStr
-    agent_webhook_secret: SecretStr
-    connect_timeout_seconds: float = Field(default=3.0, gt=0)
-    request_timeout_seconds: float = Field(default=10.0, gt=0)
-    retry_backoff_seconds: float = Field(default=0.1, ge=0)
-    max_retries: int = Field(default=1, ge=0, le=1)
 
 
 class AgentToolIntegrationError(RuntimeError):
@@ -68,7 +55,7 @@ RETRYABLE_STATUS_CODES = {502, 503, 504}
 AGENT_TOOL_PREFIX = "/api/v1/agent-tools"
 
 
-class BackendToolClient:
+class BackendToolClient(BackendHttpClientBase):
     """모든 Workflow가 공유하는 Backend Tool API Client."""
 
     def __init__(
@@ -77,15 +64,7 @@ class BackendToolClient:
         *,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._config = config
-        self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(
-            base_url=config.base_url.rstrip("/"),
-            timeout=httpx.Timeout(
-                timeout=config.request_timeout_seconds,
-                connect=config.connect_timeout_seconds,
-            ),
-        )
+        super().__init__(config, client=client)
 
     async def request(
         self,
@@ -99,16 +78,15 @@ class BackendToolClient:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         self._validate_path(path)
-        headers = {
-            "Authorization": (
-                "Bearer " + self._config.agent_service_token.get_secret_value()
+        headers = self._headers(
+            authentication_header=(
+                "Authorization",
+                "Bearer " + self._config.agent_service_token.get_secret_value(),
             ),
-            "X-Execution-Context-Id": execution_context_id,
-            "X-Request-Id": request_id,
-            "Accept": "application/json",
-        }
-        if body is not None:
-            headers["Content-Type"] = "application/json"
+            execution_context_id=execution_context_id,
+            request_id=request_id,
+            json_content=body is not None,
+        )
         if idempotency_key is not None:
             headers["Idempotency-Key"] = idempotency_key
 
@@ -140,10 +118,6 @@ class BackendToolClient:
         if response is None:
             raise AgentToolTransportError(request_id=request_id)
         return self._parse_response(response, request_id=request_id)
-
-    async def _backoff(self) -> None:
-        if self._config.retry_backoff_seconds:
-            await asyncio.sleep(self._config.retry_backoff_seconds)
 
     @staticmethod
     def _validate_path(path: str) -> None:
@@ -182,13 +156,3 @@ class BackendToolClient:
                 reason="HTTP 상태와 success 값 불일치",
             )
         return envelope.data or {}
-
-    async def aclose(self) -> None:
-        if self._owns_client:
-            await self._client.aclose()
-
-    async def __aenter__(self) -> BackendToolClient:
-        return self
-
-    async def __aexit__(self, *_: object) -> None:
-        await self.aclose()
