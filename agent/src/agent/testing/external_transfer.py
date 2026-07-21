@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import cast
 
 import httpx
@@ -15,6 +14,9 @@ from agent.testing.workflow_testbed import (
     WorkflowTestbed,
     WorkflowTestbedDependencies,
     create_workflow_testbed,
+)
+from agent.testing.workflow_testbed import (
+    constant_factory as _constant_factory,
 )
 from agent.workflows.external_transfer import (
     ExternalTransferDependencies,
@@ -82,7 +84,3 @@ def _external_transfer_graph_factory(
         )
 
     return factory
-
-
-def _constant_factory(value: str) -> Callable[[], str]:
-    return lambda: value
