@@ -277,3 +277,8 @@ def test_terminal_update_uses_requested_status() -> None:
         "route_key": "completed",
         "status": "workflow_failed",
     }
+    assert terminal_update("emit_blocked", status="blocked") == {
+        "current_step_id": "emit_blocked",
+        "route_key": "completed",
+        "status": "blocked",
+    }
