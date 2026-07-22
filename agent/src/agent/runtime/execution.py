@@ -144,7 +144,6 @@ class _ExecutionRecord:
 
 @dataclass(frozen=True)
 class _PreparedResume:
-    command_payload: dict[str, Any]
     state_values: dict[str, Any]
 
 
@@ -330,7 +329,6 @@ class ExecutionRuntime:
             record.active_resume_request_id = request.request_id
             record.resume_requests[request.request_id] = request
             record.prepared_resumes[request.request_id] = _PreparedResume(
-                command_payload=validated.command_payload(),
                 state_values=state_update.values,
             )
             return ExecutionResumeAccepted(
@@ -364,10 +362,7 @@ class ExecutionRuntime:
 
         try:
             result = await self._graph.ainvoke(
-                Command(
-                    resume=prepared.command_payload,
-                    update={"data": prepared.state_values},
-                ),
+                Command(resume=prepared.state_values),
                 config=config,
             )
             run_result = await self._finish_invocation(
