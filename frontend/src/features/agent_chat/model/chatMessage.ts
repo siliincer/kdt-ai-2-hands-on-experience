@@ -52,15 +52,24 @@ export function foldEvent(
       return { ...message, parts };
     }
     case 'component': {
-      // 읽기전용 카드 렌더 시그널(ADR-002): 데이터는 없고 component 키/params 만.
-      // FE 툴 UI 가 UI Data API 로 데이터를 별도 fetch 한다.
-      const component = (metadata?.component as string) ?? 'unknown';
+      // 결과 카드 렌더 시그널(ADR C3): 데이터는 SSE inline payload 로 온다.
+      // Agent 실제 형식은 need_input 과 동일하게 metadata.ui.{type,payload} 다.
+      // 예: ui.type='balance_result' → 'render_balance_result', payload=결과 데이터(args).
+      const ui =
+        (metadata?.ui as {
+          type?: string;
+          payload?: Record<string, unknown>;
+        }) ?? {};
+      const uiType = ui.type ?? 'unknown';
       parts.push({
         type: 'tool-call',
         toolCallId: newId(),
-        toolName: `render_${component}`,
+        toolName: `render_${uiType}`,
         argsText: event.content,
-        args: (metadata?.params as Record<string, unknown>) ?? {},
+        args: {
+          ...(ui.payload ?? {}),
+          ui_contract_id: metadata?.ui_contract_id,
+        },
       });
       return { ...message, parts };
     }
@@ -88,15 +97,24 @@ export function foldEvent(
       return { ...message, parts };
     }
     case 'need_approval': {
-      // 승인 프롬프트는 진행 tool_call 과 toolName 이 겹치지 않도록 confirm_ 접두사.
-      // 예: metadata.tool='transfer' → 'confirm_transfer' (전용 confirm 카드 렌더)
-      const tool = (metadata?.tool as string) ?? 'action';
+      // 승인 대기(계약 3.7). Agent 는 metadata.ui.{type:'confirm_modal', payload} +
+      // ui_contract_id 를 보내고, approval_id(=confirmation_id)는 top-level 로 온다.
+      // confirm_modal → ConfirmModalUI 로 렌더(payload=confirmation_view).
+      const ui =
+        (metadata?.ui as {
+          type?: string;
+          payload?: Record<string, unknown>;
+        }) ?? {};
+      const uiType = ui.type ?? 'confirm_modal';
       parts.push({
         type: 'tool-call',
         toolCallId: newId(),
-        toolName: `confirm_${tool}`,
+        toolName: uiType.startsWith('confirm_') ? uiType : `confirm_${uiType}`,
         argsText: event.content,
-        args: (metadata?.args as Record<string, unknown>) ?? undefined,
+        args: {
+          ...(ui.payload ?? {}),
+          ui_contract_id: metadata?.ui_contract_id,
+        },
         approvalId: event.approval_id ?? undefined,
       });
       return { ...message, parts };
@@ -124,6 +142,11 @@ export function foldEvent(
     }
     case 'error': {
       parts.push({ type: 'text', text: event.content });
+      return { ...message, parts, status: 'error' };
+    }
+    case 'blocked': {
+      // 업무 차단 종료(workflow_failed, 예: 한도 초과). content 에 사유. terminal.
+      if (event.content) parts.push({ type: 'text', text: event.content });
       return { ...message, parts, status: 'error' };
     }
     case 'done': {

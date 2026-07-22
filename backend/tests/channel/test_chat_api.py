@@ -347,3 +347,81 @@ async def test_authenticate_expired_is_410():
         for p in patches:
             p.stop()
     assert exc.value.status_code == 410
+
+
+# --- 취소 시 Backend 종료 책임(계약점검 #6) ------------------------------------
+
+
+def test_is_cancel_input_detects_any_outcome():
+    assert chat_service._is_cancel_input({"recipient_selection_outcome": "cancelled"})
+    assert chat_service._is_cancel_input({"account_selection_outcome": "cancelled"})
+    assert not chat_service._is_cancel_input({"amount_input_outcome": "submitted", "amount": 5})
+    assert not chat_service._is_cancel_input({})
+
+
+def _patch_resume_input(cancel_value: bool):
+    """resume_after_input 의존성을 대체하고 publish 호출을 캡처한다."""
+    calls = {"published": 0, "resumed": 0}
+
+    async def _owner(session, uid, cid):
+        return None
+
+    async def _consume(session, cs, irid):
+        return SimpleNamespace(execution_context_id=uuid4())
+
+    async def _resolve(session, ec):
+        return "thread_1", ec
+
+    class _Agent:
+        async def resume_input(self, **kw):
+            calls["resumed"] += 1
+
+    async def _publish(cs, content="x"):
+        calls["published"] += 1
+
+    patches = [
+        patch.object(chat_service, "verify_chat_session_owner", _owner),
+        patch.object(chat_service, "consume_pending_input", _consume),
+        patch.object(chat_service, "_resolve_agent_thread_id", _resolve),
+        patch.object(chat_service, "get_agent_client", lambda: _Agent()),
+        patch.object(chat_service, "publish_cancellation_done", _publish),
+    ]
+    return patches, calls
+
+
+@pytest.mark.asyncio
+async def test_resume_input_cancel_publishes_terminal_done():
+    patches, calls = _patch_resume_input(cancel_value=True)
+    for p in patches:
+        p.start()
+    try:
+        await chat_service.resume_after_input(
+            AsyncMock(),
+            uuid4(),
+            uuid4(),
+            "input_1",
+            {"recipient_selection_outcome": "cancelled"},
+        )
+    finally:
+        for p in patches:
+            p.stop()
+    assert calls == {"published": 1, "resumed": 1}
+
+
+@pytest.mark.asyncio
+async def test_resume_input_non_cancel_does_not_publish():
+    patches, calls = _patch_resume_input(cancel_value=False)
+    for p in patches:
+        p.start()
+    try:
+        await chat_service.resume_after_input(
+            AsyncMock(),
+            uuid4(),
+            uuid4(),
+            "input_1",
+            {"account_selection_outcome": "selected", "account_ids": ["a"]},
+        )
+    finally:
+        for p in patches:
+            p.stop()
+    assert calls == {"published": 0, "resumed": 1}

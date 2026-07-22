@@ -27,7 +27,7 @@ async def relay_agent_stream(
 
     - last_event_id(재연결): 그 ID 다음 이벤트부터 이어서 전송.
     - last_event_id 없음(최초 연결): 0-0 부터 버퍼된 이벤트를 모두 리플레이 후 tail.
-    - DONE 또는 ERROR 이벤트를 만나면 [DONE] sentinel 을 보내고 스트림을 종료한다.
+    - DONE·ERROR·BLOCKED(terminal) 이벤트를 만나면 [DONE] sentinel 을 보내고 스트림을 종료한다.
     - 클라이언트 연결 종료(CancelledError) 시 조용히 정리한다.
     - idle 블로킹 읽기의 read timeout·일시 단절은 정상 흐름으로 취급하고 계속 대기한다.
     """
@@ -73,7 +73,9 @@ async def relay_agent_stream(
                     if event.event_type in {
                         AgentStreamEventType.DONE,
                         AgentStreamEventType.ERROR,
+                        AgentStreamEventType.BLOCKED,
                     }:
+                        # done·error·blocked 는 모두 terminal → [DONE] sentinel 후 종료.
                         yield ServerSentEvent(raw_data="[DONE]", event="done")
                         return
     except asyncio.CancelledError:

@@ -37,6 +37,7 @@ from ..utils.constants import (
 )
 from . import auth_context_service, confirmation_service
 from .agent_client import get_agent_client
+from .agent_stream_producer import publish_cancellation_done
 from .chat_session_service import resolve_chat_session, verify_chat_session_owner
 from .execution_context_service import issue_context
 from .pending_input_service import consume_pending_input
@@ -50,9 +51,18 @@ _CHAT_SCOPES = [SCOPE_ACCOUNT_READ, SCOPE_TRANSFER_REQUEST, SCOPE_SETTINGS_WRITE
 _CONFIRMATION_COMPONENTS = frozenset({"account_alias", "default_account", "external_transfer", "internal_transfer"})
 
 
+# 취소로 종료되는 승인 decision(수정=change_requested 는 워크플로우가 계속되므로 제외).
+_CANCEL_DECISIONS = frozenset({"cancelled", "reject"})
+
+
 def _new_request_id(kind: str) -> str:
     """실행/재개 요청 상관관계용 request_id 를 생성한다(로그 추적 전용, 계약 9장)."""
     return f"req_{kind}_{uuid4().hex}"
+
+
+def _is_cancel_input(value: dict) -> bool:
+    """입력·선택 회신 value 가 취소인지 판정한다(어떤 `*_outcome` 이든 'cancelled')."""
+    return any(key.endswith("_outcome") and val == "cancelled" for key, val in value.items())
 
 
 async def _resolve_agent_thread_id(session: AsyncSession, execution_context_id: UUID | None) -> tuple[str, UUID]:
@@ -124,7 +134,7 @@ async def resume_after_approval(
     """confirm 카드(HITL) 승인/거절/수정 → 에이전트 후속 턴을 재개한다.
 
     실제 Confirmation 을 승인/폐기한 뒤(재개 전 검증 계약), 그 Confirmation 의 실행
-    Context 에 연결된 Agent thread 를 재개한다. 승인이면 Agent 의 Execute 가 EXECUTED 로
+    Context 에 연결된 Agent thread 를 재개한다. 승인이면 Agent의 Execute 가 EXECUTED 로
     전이시키고, 취소/수정이면 Agent 가 그 결과에 맞춰 마무리한다.
     """
     await verify_chat_session_owner(session, user_id, chat_session_id)
@@ -144,6 +154,9 @@ async def resume_after_approval(
         decision=decision,
         change_target=change_target,
     )
+    # 취소 종료는 Backend 책임(계약: Agent 는 cancelled 시 done 을 보내지 않음).
+    if decision in _CANCEL_DECISIONS:
+        await publish_cancellation_done(chat_session_id)
 
 
 async def _load_owned_confirmation(
@@ -220,6 +233,9 @@ async def resume_after_input(
         input_request_id=input_request_id,
         value=value,
     )
+    # 취소 종료는 Backend 책임(계약: Agent 는 cancelled 시 done 을 보내지 않음).
+    if _is_cancel_input(value):
+        await publish_cancellation_done(chat_session_id)
 
 
 async def authenticate_and_resume(
