@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,23 +14,28 @@ from .api.user_api import user_router
 from .api.webhook_api import webhook_router
 from .core.config import CORS_OPTIONS, configure_app
 from .core.exceptions import exception_handlers
+from .core.logging_config import setup_logging
 from .db.redis import close_redis_pools
 from .migration.migration import run_migrations
 from .services.agent_client import close_agent_client
 from .services.financial import close_financial_client
+
+# 앱 부팅 시 1회: 로깅(콘솔/파일 로테이션) 설정을 먼저 적용해 이후 로그가 유실되지 않게 한다.
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Perform startup tasks here (e.g., connect to database, initialize resources)
     run_migrations()
-    print("마이그레이션 적용 완료")
+    logger.info("마이그레이션 적용 완료")
     yield  # 제어권 넘기는 제너레이터
     # 종료 시: Redis 커넥션 풀 + 계정계 HTTP 클라이언트 graceful shutdown
     await close_redis_pools()
     await close_financial_client()
     await close_agent_client()
-    print("레디스 풀 종료 완료, 계정계·Agent HTTP 클라이언트 종료 완료")
+    logger.info("레디스 풀 종료 완료, 계정계·Agent HTTP 클라이언트 종료 완료")
 
 
 app = FastAPI(

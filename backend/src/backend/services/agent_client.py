@@ -25,6 +25,8 @@ from typing import Any
 import httpx
 
 from ..core.load_environment_var import settings
+from ..core.resilience import MAX_RETRY_ATTEMPTS, call_with_retry
+from .dlq import enqueue_dlq
 
 _EXECUTIONS_PATH = "/internal/v1/executions"
 
@@ -44,7 +46,14 @@ class AgentServiceError(Exception):
 
     로컬 IP/도메인 등 내부 주소가 로그로 새지 않도록 메시지는 타입명·상태코드만
     남긴다(CLAUDE.md 로깅 규칙). 상위에서 사용자에게는 일반 오류로 흡수한다.
+
+    `retryable`: 전송 오류·타임아웃·5xx 는 True(재시도 대상), 4xx(계약 위반·검증 실패)는
+    False(즉시 전파). `core/resilience.is_retryable` 이 이 값으로 재시도를 판정한다.
     """
+
+    def __init__(self, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 class AgentServiceClient:
@@ -74,10 +83,46 @@ class AgentServiceClient:
         try:
             response = await self._client.post(url, json=json, headers={"X-Request-Id": request_id})
         except httpx.HTTPError as exc:
-            raise AgentServiceError(f"Agent 서비스 연결 실패: {type(exc).__name__}") from exc
+            # 전송 오류·타임아웃은 재시도 대상.
+            raise AgentServiceError(f"Agent 서비스 연결 실패: {type(exc).__name__}", retryable=True) from exc
         if response.status_code >= 400:
-            raise AgentServiceError(f"Agent 실행 요청 실패: HTTP {response.status_code}")
+            # 5xx 는 재시도, 4xx(계약 위반·검증)는 즉시 전파.
+            raise AgentServiceError(
+                f"Agent 실행 요청 실패: HTTP {response.status_code}",
+                retryable=response.status_code >= 500,
+            )
         return response.json()
+
+    async def _post_resilient(
+        self,
+        url: str,
+        *,
+        json: dict[str, Any],
+        request_id: str,
+        operation: str,
+    ) -> dict[str, Any]:
+        """`_post` 를 3회 재시도로 감싸고, 재시도 소진 실패면 DLQ 적재 후 전파한다.
+
+        재개 안전성: 동일 `request_id` 로만 재시도/재처리하므로 Agent 가 중복 실행하지 않는다.
+        DLQ args 에는 PII 가 없다(식별자만).
+        """
+        try:
+            return await call_with_retry(self._post, url, json=json, request_id=request_id)
+        except AgentServiceError as exc:
+            if exc.retryable:
+                await enqueue_dlq(
+                    kind="agent_exec",
+                    operation=operation,
+                    correlation_id=request_id,
+                    args={
+                        "url": url,
+                        "chat_session_id": json.get("chat_session_id"),
+                        "execution_context_id": json.get("execution_context_id"),
+                    },
+                    attempts=MAX_RETRY_ATTEMPTS,
+                    error_type=type(exc).__name__,
+                )
+            raise
 
     async def start_execution(
         self,
@@ -88,7 +133,7 @@ class AgentServiceClient:
         message: str,
     ) -> str:
         """새 Workflow 실행을 접수시키고 Agent 가 발급한 agent_thread_id 를 돌려준다."""
-        data = await self._post(
+        data = await self._post_resilient(
             _EXECUTIONS_PATH,
             json={
                 "request_id": request_id,
@@ -97,6 +142,7 @@ class AgentServiceClient:
                 "message": message,
             },
             request_id=request_id,
+            operation="start_execution",
         )
         return str(data["agent_thread_id"])
 
@@ -109,8 +155,9 @@ class AgentServiceClient:
         execution_context_id: str,
         resume: dict[str, Any],
     ) -> None:
-        await self._post(
+        await self._post_resilient(
             f"{_EXECUTIONS_PATH}/{agent_thread_id}/resume",
+            operation="resume",
             json={
                 "request_id": request_id,
                 "chat_session_id": chat_session_id,

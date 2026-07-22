@@ -16,11 +16,22 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from ...core.load_environment_var import settings
+from ...core.resilience import MAX_RETRY_ATTEMPTS, call_with_retry
+from ...utils.masking import mask_account_number
+from ..dlq import enqueue_dlq
 from .constants import _ACCOUNTS_PATH, _ANALYTICS_PREFIX, _TRANSFERS_PATH
 
 
 class FinancialServiceError(Exception):
-    """계정계 조회/변경 실패. 상위에서 503 envelope 으로 번역된다."""
+    """계정계 조회/변경 실패. 상위에서 503 envelope 으로 번역된다.
+
+    `retryable`: 전송 오류·타임아웃·5xx 는 True(재시도 대상), 4xx 는 False(즉시 전파).
+    `core/resilience.is_retryable` 이 이 값으로 재시도를 판정한다.
+    """
+
+    def __init__(self, message: str = "", *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 class FinancialServiceClient:
@@ -51,8 +62,8 @@ class FinancialServiceClient:
             return await self._client.request(method, url, **kwargs)
         except httpx.HTTPError as exc:
             # 로컬 IP/도메인 등 내부 주소가 로그로 새지 않도록 예외 문자열은
-            # 타입명만 남긴다(CLAUDE.md 로깅 규칙).
-            raise FinancialServiceError(f"금융 서비스 연결 실패: {type(exc).__name__}") from exc
+            # 타입명만 남긴다(CLAUDE.md 로깅 규칙). 전송 오류·타임아웃은 재시도 대상.
+            raise FinancialServiceError(f"금융 서비스 연결 실패: {type(exc).__name__}", retryable=True) from exc
 
     async def get_balance(self, account_id: str) -> dict | None:
         """정보계 잔액 조회. 404 → None(계좌 없음)."""
@@ -90,7 +101,7 @@ class FinancialServiceClient:
             raise FinancialServiceError(f"계좌 생성 실패: HTTP {response.status_code}")
         return response.json()
 
-    async def transfer(
+    async def _transfer_once(
         self,
         sender_account_number: str,
         receiver_bank_name: str,
@@ -98,11 +109,6 @@ class FinancialServiceClient:
         amount: int,
         idempotency_key: str,
     ) -> dict:
-        """계정계 송금(POST /transfers). 계좌번호+은행명 기반(계정계 신 계약).
-
-        Idempotency-Key 필수. 실패(4xx/5xx/커넥션)는 FinancialServiceError. 동일 키+
-        동일 payload 재호출은 계정계가 기존 트랜잭션을 그대로 반환한다(safe replay).
-        """
         response = await self._request(
             "POST",
             _TRANSFERS_PATH,
@@ -115,8 +121,54 @@ class FinancialServiceClient:
             headers={"Idempotency-Key": idempotency_key},
         )
         if response.status_code >= 400:
-            raise FinancialServiceError(f"송금 실패: HTTP {response.status_code}")
+            # 5xx 는 재시도, 4xx(검증·정책 위반)는 즉시 전파.
+            raise FinancialServiceError(
+                f"송금 실패: HTTP {response.status_code}",
+                retryable=response.status_code >= 500,
+            )
         return response.json()
+
+    async def transfer(
+        self,
+        sender_account_number: str,
+        receiver_bank_name: str,
+        receiver_account_number: str,
+        amount: int,
+        idempotency_key: str,
+    ) -> dict:
+        """계정계 송금(POST /transfers). 계좌번호+은행명 기반(계정계 신 계약).
+
+        Idempotency-Key 필수. 실패(4xx/5xx/커넥션)는 FinancialServiceError. 동일 키+
+        동일 payload 재호출은 계정계가 기존 트랜잭션을 그대로 반환한다(safe replay).
+
+        상태변경이라 **동일 Idempotency-Key 로 3회 인라인 재시도**하고(중복 이체 없음),
+        재시도 소진 실패면 DLQ 에 적재한다(BE_Coding 1순위). DLQ 에는 마스킹 계좌·금액만.
+        """
+        try:
+            return await call_with_retry(
+                self._transfer_once,
+                sender_account_number,
+                receiver_bank_name,
+                receiver_account_number,
+                amount,
+                idempotency_key,
+            )
+        except FinancialServiceError as exc:
+            if exc.retryable:
+                await enqueue_dlq(
+                    kind="financial_transfer",
+                    operation="transfer",
+                    correlation_id=idempotency_key,
+                    args={
+                        "sender": mask_account_number(sender_account_number),
+                        "receiver_bank": receiver_bank_name,
+                        "receiver": mask_account_number(receiver_account_number),
+                        "amount": amount,
+                    },
+                    attempts=MAX_RETRY_ATTEMPTS,
+                    error_type=type(exc).__name__,
+                )
+            raise
 
 
 # ── 프로세스당 단일 인스턴스(lazy) ────────────────────────────────────────────
