@@ -277,7 +277,7 @@ def build_set_default_account_graph(
             payload=dict(view),
         )
         await _publish(dependencies, event, config)
-        return _terminal_update("emit_default_account_blocked", status="workflow_failed")
+        return _terminal_update("emit_default_account_blocked", status="blocked")
 
     async def request_default_account_approval(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)

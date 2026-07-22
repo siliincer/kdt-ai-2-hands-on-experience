@@ -367,7 +367,7 @@ def build_set_account_alias_graph(
             payload=dict(view),
         )
         await _publish(dependencies, event, config)
-        return _terminal_update("emit_account_alias_blocked", status="workflow_failed")
+        return _terminal_update("emit_account_alias_blocked", status="blocked")
 
     async def request_account_alias_approval(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)

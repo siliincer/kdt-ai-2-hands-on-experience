@@ -818,7 +818,7 @@ def build_internal_transfer_graph(
             payload=dict(view),
         )
         await _publish(dependencies, event, config)
-        return _terminal_update("emit_internal_transfer_blocked", status="workflow_failed")
+        return _terminal_update("emit_internal_transfer_blocked", status="blocked")
 
     async def emit_internal_transfer_error(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         message = str(

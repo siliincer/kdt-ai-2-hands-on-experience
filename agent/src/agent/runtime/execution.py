@@ -413,6 +413,15 @@ class ExecutionRuntime:
     ) -> ExecutionRunResult:
         interrupt_payload = self._interrupt_payload_from_result(result)
         if interrupt_payload is None:
+            if result.get("status") == "workflow_failed":
+                # Workflow 오류 노드가 업무별 안전한 error Webhook을 이미 보냈다.
+                # Runtime은 실패 상태만 확정하고 error/done을 중복 전송하지 않는다.
+                with self._lock:
+                    record.status = "failed"
+                    record.pending_interaction = None
+                    record.webhook_message_id = None
+                    return self._result_from_record(record)
+
             completion_message_id = await self._report_completion(
                 record,
                 result=result,
@@ -444,7 +453,9 @@ class ExecutionRuntime:
         request_id: str,
     ) -> str | None:
         reporter = self._completion_reporter
-        if reporter is None or result.get("route_key") == "cancelled":
+        if reporter is None or result.get("route_key") == "cancelled" or result.get("status") == "blocked":
+            # 취소는 Backend가 사용자 요청 시점에 Stream을 닫고, blocked는
+            # Workflow가 보낸 blocked Webhook 자체를 Backend가 terminal로 처리한다.
             return None
         try:
             return await reporter.report_completion(

@@ -152,7 +152,7 @@ async def test_account_list_uses_backend_safe_error_message() -> None:
         )
         state = await testbed.state("thread_account_error")
 
-    assert result.status == "completed"
+    assert result.status == "failed"
     assert state["status"] == "workflow_failed"
     event = json.loads(backend.requests[-1].content)
     assert event["event_type"] == "error"

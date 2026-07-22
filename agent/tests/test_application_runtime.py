@@ -241,6 +241,54 @@ async def test_contract_runtime_routes_account_list_and_publishes_result() -> No
 
 
 @pytest.mark.asyncio
+async def test_contract_runtime_keeps_workflow_error_as_failed_terminal() -> None:
+    backend = MockBackend()
+    backend.add_json(
+        "GET",
+        "/api/v1/agent-tools/accounts",
+        {
+            "success": False,
+            "message": "계좌 조회 실패",
+            "data": None,
+            "error": {
+                "category": "business",
+                "code": "ACCOUNT_LOOKUP_FAILED",
+                "message": "계좌 정보를 불러오지 못했습니다.",
+                "retryable": False,
+                "details": {},
+            },
+        },
+        status_code=409,
+    )
+    backend.add_success(
+        "POST",
+        "/api/v1/webhooks/agent",
+        {"message_id": "message_account_error_123"},
+    )
+
+    async with create_workflow_testbed(
+        _config(),
+        graph_factory=_contract_graph_factory,
+        transport=httpx.MockTransport(backend.handler),
+        thread_id="thread_account_error",
+    ) as testbed:
+        result = await testbed.start(
+            message="내 계좌 다 보여줘",
+            request_id="req_account_error_123",
+            chat_session_id="chat_123",
+            execution_context_id="exec_123",
+        )
+        state = await testbed.state(result.agent_thread_id)
+        events = testbed.webhook_events(include_payload=True)
+
+    assert result.status == "failed"
+    assert state["status"] == "workflow_failed"
+    assert [event["event_type"] for event in events] == ["error"]
+    assert events[0]["payload"]["content"] == "계좌 정보를 불러오지 못했습니다."
+    backend.assert_all_responses_used()
+
+
+@pytest.mark.asyncio
 async def test_nested_graph_delivers_resume_to_recipient_selection() -> None:
     """최상위 Graph의 Resume 값이 타인송금 서브그래프 노드에 전달된다."""
 
