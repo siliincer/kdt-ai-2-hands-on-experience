@@ -21,24 +21,10 @@ import uuid
 
 import httpx
 
-BACKEND = "http://localhost:8000"
-AGENT = "http://localhost:8001"
-FINANCIAL = "http://localhost:8002"
+from .helpers import AGENT, BACKEND, FINANCIAL, _fail, _info, _ok
 
 SEED_BALANCE = 1_000_000  # provisioning._SIGNUP_SEED_BALANCE
 PASSWORD = "e2e-pass-1234"
-
-
-def _ok(msg: str) -> None:
-    print(f"  \033[32mPASS\033[0m {msg}")
-
-
-def _fail(msg: str) -> None:
-    print(f"  \033[31mFAIL\033[0m {msg}")
-
-
-def _info(msg: str) -> None:
-    print(f"  ...  {msg}")
 
 
 def check_health(client: httpx.Client) -> bool:
