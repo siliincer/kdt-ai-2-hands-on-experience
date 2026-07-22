@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
 import httpx
@@ -166,6 +167,7 @@ async def test_runtime_resources_are_built_from_environment(
 
 def test_fastapi_start_fails_when_tool_contract_registration_is_missing(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setenv("BACKEND_BASE_URL", "http://backend.test")
     monkeypatch.setenv("AGENT_SERVICE_TOKEN", "agent-service-token")
@@ -176,9 +178,20 @@ def test_fastapi_start_fails_when_tool_contract_registration_is_missing(
         lambda registry, tools: None,
     )
 
-    with pytest.raises(ContractToolRegistrationError):
+    with (
+        caplog.at_level(logging.CRITICAL, logger="agent.application_runtime"),
+        pytest.raises(ContractToolRegistrationError) as captured,
+    ):
         with TestClient(create_app()):
             pass
+
+    assert captured.value.missing_by_workflow
+    critical_record = next(
+        record for record in caplog.records if record.levelno == logging.CRITICAL
+    )
+    assert getattr(critical_record, "missing_contracts_by_workflow") == (
+        captured.value.missing_by_workflow
+    )
 
 
 @pytest.mark.asyncio
@@ -225,3 +238,55 @@ async def test_contract_runtime_routes_account_list_and_publishes_result() -> No
         "/api/v1/webhooks/agent",
     ]
     assert timeline[-1]["request"]["metadata"]["workflow_id"] == "wf_account_list"
+
+
+@pytest.mark.asyncio
+async def test_nested_graph_delivers_resume_to_recipient_selection() -> None:
+    """최상위 Graph의 Resume 값이 타인송금 서브그래프 노드에 전달된다."""
+
+    backend = MockBackend()
+    backend.add_success(
+        "POST",
+        "/api/v1/agent-tools/recipients:resolve",
+        {"outcome": "selection_required", "selection_reason": "multiple_matches"},
+    )
+    backend.add_success(
+        "POST",
+        "/api/v1/webhooks/agent",
+        {"message_id": "message_recipient_selection_123"},
+    )
+
+    async with create_workflow_testbed(
+        _config(),
+        graph_factory=_contract_graph_factory,
+        transport=httpx.MockTransport(backend.handler),
+        thread_id="thread_nested_recipient_selection",
+    ) as testbed:
+        waiting = await testbed.start(
+            message="철수에게 송금해줘",
+            request_id="req_nested_start_123",
+            chat_session_id="chat_123",
+            execution_context_id="exec_123",
+        )
+        assert waiting.pending_interaction is not None
+
+        completed = await testbed.resume_input(
+            agent_thread_id=waiting.agent_thread_id,
+            request_id="req_nested_resume_123",
+            chat_session_id="chat_123",
+            execution_context_id="exec_123",
+            input_request_id=waiting.pending_interaction["input_request_id"],
+            value={
+                "recipient_selection_outcome": "cancelled",
+                "to_recipient_id": None,
+                "to_recipient_candidate_id": None,
+            },
+        )
+        state = await testbed.state(waiting.agent_thread_id)
+
+    assert waiting.status == "waiting"
+    assert completed.status == "completed"
+    assert state["status"] == "completed"
+    assert state["route_key"] == "cancelled"
+    assert state["data"]["recipient_selection_outcome"] == "cancelled"
+    backend.assert_all_responses_used()

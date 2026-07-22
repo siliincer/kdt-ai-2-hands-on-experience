@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 
@@ -24,12 +25,17 @@ from agent.runtime import (
     WebhookExecutionFailureReporter,
 )
 from agent.tools.backend_agent_tools import register_backend_agent_tools
-from agent.tools.contract_registry import ContractToolRegistry
+from agent.tools.contract_registry import (
+    ContractToolRegistrationError,
+    ContractToolRegistry,
+)
 from agent.workflow_contracts import WorkflowContractStore
 from agent.workflows.contract_agent import (
     ContractAgentDependencies,
     build_contract_agent_graph,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class AgentRuntimeConfigurationError(RuntimeError):
@@ -63,7 +69,16 @@ async def create_agent_runtime_resources() -> AgentRuntimeResources:
         tool_registry = ContractToolRegistry(contract_store)
         backend_tools = BackendAgentTools(BackendToolClient(config, client=http_client))
         register_backend_agent_tools(tool_registry, backend_tools)
-        tool_registry.validate_workflow_contracts()
+        try:
+            tool_registry.validate_workflow_contracts()
+        except ContractToolRegistrationError as error:
+            logger.critical(
+                "Agent Runtime 필수 Tool 계약이 누락되어 시작할 수 없습니다.",
+                extra={
+                    "missing_contracts_by_workflow": error.missing_by_workflow,
+                },
+            )
+            raise
         webhook_client = BackendWebhookClient(config, client=http_client)
         interaction_runtime = InteractionPauseRuntime(webhook_client)
         webhook_builder = InteractionWebhookBuilder(contract_store)

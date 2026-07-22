@@ -178,6 +178,24 @@ async def test_relay_streams_events_until_done():
 
 
 @pytest.mark.asyncio
+async def test_relay_closes_stream_after_error():
+    chat_session_id = uuid4()
+    key = agent_stream_key(chat_session_id)
+    fake = FakeStreamRedis(
+        [
+            [[key, [("1-0", {"event_type": "error", "content": "처리 실패"})]]],
+        ]
+    )
+
+    events = [ev async for ev in relay_agent_stream(fake, chat_session_id)]  # type: ignore
+
+    error_events = [event for event in events if event.event == "error"]
+    assert len(error_events) == 1
+    assert error_events[0].data.content == "처리 실패"
+    assert any(event.raw_data == "[DONE]" for event in events)
+
+
+@pytest.mark.asyncio
 async def test_relay_resumes_from_last_event_id():
     chat_session_id = uuid4()
     key = agent_stream_key(chat_session_id)

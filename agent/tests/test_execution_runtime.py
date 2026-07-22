@@ -209,10 +209,10 @@ async def test_start_resume_maps_state_and_publishes_interrupt_once() -> None:
         def amount_node(state: RuntimeState) -> RuntimeState:
             nonlocal node_calls
             node_calls += 1
-            interaction_runtime.pause(event)
+            resumed = cast(dict[str, Any], interaction_runtime.pause(event))
             return {
-                "data": {"input_request_id": None},
-                "observed_amount": state.get("data", {}).get("amount"),
+                "data": {**resumed, "input_request_id": None},
+                "observed_amount": resumed.get("amount"),
                 "node_calls": node_calls,
             }
 

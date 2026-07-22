@@ -35,6 +35,8 @@ from agent.workflows.workflow_support import (
     new_input_request_id as _default_input_request_id,
 )
 from agent.workflows.workflow_support import publish_event as _publish
+from agent.workflows.workflow_support import resume_data_update as _resume_update
+from agent.workflows.workflow_support import resume_state_data as _resume_data
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
 from agent.workflows.workflow_support import step_request_id as _default_tool_request_id
@@ -162,9 +164,7 @@ def build_external_transfer_graph(
             content="받는 분을 선택해 주세요.",
             payload=payload,
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("recipient_selection_outcome")
         if outcome == "selected":
             to_recipient_id = resumed.get("to_recipient_id")
@@ -178,14 +178,14 @@ def build_external_transfer_graph(
             return {
                 "current_step_id": "request_recipient_selection",
                 "route_key": "selected",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_recipient_selection",
                 "route_key": "cancelled",
                 "status": "completed",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         return _tool_error_update(
             "request_recipient_selection",
@@ -259,11 +259,9 @@ def build_external_transfer_graph(
                 "actions": ["select", "cancel"],
             },
         )
-        dependencies.interaction_runtime.pause(event)
-
         # ResumeStateMapper가 resume.value.account_ids[0]을 from_account_id로
         # 이미 추출해서 넣어준다 — 배열을 다시 받아 검증하지 않는다.
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("account_selection_outcome")
         if outcome == "selected":
             from_account_id = resumed.get("from_account_id")
@@ -275,14 +273,14 @@ def build_external_transfer_graph(
             return {
                 "current_step_id": "request_external_from_account_selection",
                 "route_key": "selected",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_external_from_account_selection",
                 "route_key": "cancelled",
                 "status": "completed",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         return _tool_error_update(
             "request_external_from_account_selection",
@@ -329,9 +327,7 @@ def build_external_transfer_graph(
                 "actions": ["submit", "cancel"],
             },
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("amount_input_outcome")
         if outcome == "submitted":
             amount = resumed.get("amount")
@@ -343,14 +339,14 @@ def build_external_transfer_graph(
             return {
                 "current_step_id": "request_external_transfer_amount",
                 "route_key": "submitted",
-                "data": {"amount": amount, "input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_external_transfer_amount",
                 "route_key": "cancelled",
                 "status": "completed",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         return _tool_error_update(
             "request_external_transfer_amount",
@@ -430,14 +426,13 @@ def build_external_transfer_graph(
             content="송금 내용을 확인하고 승인해 주세요.",
             payload=_confirmation_payload(data.get("confirmation_view")),
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("approval_outcome")
         if outcome == "approved":
             return {
                 "current_step_id": "request_external_transfer_approval",
                 "route_key": "approved",
+                "data": _resume_update(resumed),
             }
         if outcome == "change_requested":
             target = resumed.get("change_target")
@@ -449,13 +444,14 @@ def build_external_transfer_graph(
             return {
                 "current_step_id": "request_external_transfer_approval",
                 "route_key": f"change_requested:{target}",
-                "data": {"change_target": target},
+                "data": _resume_update(resumed),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_external_transfer_approval",
                 "route_key": "cancelled",
                 "status": "completed",
+                "data": _resume_update(resumed),
             }
         return _tool_error_update(
             "request_external_transfer_approval",
@@ -558,9 +554,7 @@ def build_external_transfer_graph(
                 "options": targets,
             },
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("correction_selection_outcome")
         if outcome == "selected":
             target = resumed.get("change_target")
@@ -572,12 +566,14 @@ def build_external_transfer_graph(
             return {
                 "current_step_id": "request_external_transfer_correction",
                 "route_key": f"selected:{target}",
+                "data": _resume_update(resumed),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_external_transfer_correction",
                 "route_key": "cancelled",
                 "status": "completed",
+                "data": _resume_update(resumed),
             }
         return _tool_error_update(
             "request_external_transfer_correction",
@@ -654,25 +650,26 @@ def build_external_transfer_graph(
             content=str(view.get("title") or "추가 인증이 필요합니다."),
             payload=dict(view),
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         status = resumed.get("auth_status")
         if status == "verified":
             return {
                 "current_step_id": "request_external_authentication",
                 "route_key": "verified",
+                "data": _resume_update(resumed),
             }
         if status in {"failed", "expired"}:
             return {
                 "current_step_id": "request_external_authentication",
                 "route_key": "retriable",
+                "data": _resume_update(resumed),
             }
         if status == "cancelled":
             return {
                 "current_step_id": "request_external_authentication",
                 "route_key": "cancelled",
                 "status": "completed",
+                "data": _resume_update(resumed),
             }
         return _tool_error_update(
             "request_external_authentication",
@@ -694,20 +691,20 @@ def build_external_transfer_graph(
                 "options": ["retry", "cancel"],
             },
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("auth_retry_outcome")
         if outcome == "retry":
             return {
                 "current_step_id": "request_external_auth_retry",
                 "route_key": "retry",
+                "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_external_auth_retry",
                 "route_key": "cancelled",
                 "status": "completed",
+                "data": _resume_update(resumed, input_request_id=None),
             }
         return _tool_error_update(
             "request_external_auth_retry",
