@@ -8,20 +8,6 @@
 계좌번호로만 통과하므로, 먼저 수취인 사용자를 만들어 그 계좌번호를 사용한다.
 
 사용법: uv run python scripts/e2e_external_transfer.py
-
-[알려진 블로커 — 2026-07-22, Agent 팀 몫] recipient_select 재개(POST /agent/input)까지는
-정상 접수되나, 그 직후 워크플로우가 `emit_external_transfer_error` 로 빠진다. 원인은 Agent
-런타임의 서브그래프 resume 전파 버그다: 각 워크플로우가 부모 contract_agent 그래프의
-'서브그래프 노드'로 실행되고 HITL interrupt 가 서브그래프 안에서 발생하는데, 런타임이
-`Command(resume=payload, update={"data": state_values})` 로 재개하면 `resume` 는 서브그래프
-interrupt 에 전달되지만 `update`(매핑된 재개 값)는 부모 레벨에만 적용되고 재개되는 서브그래프
-노드의 state 뷰에는 전달되지 않는다. 그래서 `request_recipient_selection` 이
-`recipient_selection_outcome` 을 None 으로 읽어 error 로 라우팅한다(모든 HITL input-resume
-스텝 영향). 최소 재현: parent StateGraph 에 compile 된 서브그래프를 노드로 넣고 서브그래프
-안 노드에서 interrupt 후, `Command(resume=..., update={"data":{"outcome":"selected"}})` 로
-재개하면 서브그래프 노드는 outcome=None 을 읽는다(부모 최종 state 에는 값이 있음).
-Backend 는 재개 값을 정확히 검증·전달하고 Agent 매퍼도 정확히 매핑하므로 이 레포(BE/FE)
-코드 밖 이슈다. 잔액조회(단일 계좌 자동 resolved, input-resume 없음)는 정상 완주한다.
 """
 
 from __future__ import annotations
@@ -33,10 +19,9 @@ import uuid
 
 import httpx
 import redis.asyncio as aioredis
+from helpers import BACKEND, _as_str, _fail, _info, _ok
 
 from backend.core.load_environment_var import settings
-
-from .helpers import BACKEND, _as_str, _fail, _info, _ok
 
 PW = "e2e-pass-1234"
 AMOUNT = 50_000

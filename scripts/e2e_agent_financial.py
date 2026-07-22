@@ -20,8 +20,7 @@ import time
 import uuid
 
 import httpx
-
-from .helpers import AGENT, BACKEND, FINANCIAL, _fail, _info, _ok
+from helpers import AGENT, BACKEND, FINANCIAL, _fail, _info, _ok
 
 SEED_BALANCE = 1_000_000  # provisioning._SIGNUP_SEED_BALANCE
 PASSWORD = "e2e-pass-1234"
