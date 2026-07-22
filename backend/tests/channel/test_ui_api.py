@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -23,7 +24,7 @@ from backend.services.ui_service import (
 
 # 계정계 http 일원화(작업 B) 이후 UI 뷰는 계정계 원장/잔액을 실조회한다. 테스트는
 # repository 조회를 monkeypatch 로, 계정계 응답을 financial_stub(MockTransport)로 대체한다.
-_SESSION = object()  # http 경로는 세션을 repository 로만 넘기므로 sentinel 로 충분
+_SESSION: Any = object()  # http 경로는 세션을 repository 로만 넘기므로 sentinel 로 충분
 
 
 def _patch_mapped(monkeypatch, rows):

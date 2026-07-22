@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -150,7 +151,8 @@ async def test_register_from_event_skips_when_incomplete():
 # --- 설정 confirm_modal → Confirmation 생명주기 검증(재개 전 검증 계약) ----------
 
 
-def _confirmation(user_id, status=ConfirmationStatus.PENDING, expires_in=300):
+def _confirmation(user_id, status=ConfirmationStatus.PENDING, expires_in=300) -> Any:
+    # 실제 Confirmation ORM 대신 덕타이핑용 SimpleNamespace 를 반환한다(타입 검사 완화).
     return SimpleNamespace(
         id=uuid4(),
         user_id=user_id,
