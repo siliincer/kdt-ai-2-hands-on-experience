@@ -31,12 +31,28 @@ account_router = APIRouter(tags=["Agent Tools - Account"])
 async def list_accounts_endpoint(
     account_hint: str | None = Query(default=None, max_length=100),
     account_capability: AccountCapability | None = Query(default=None),
+    resolve_selection: bool = Query(default=False),
+    all_accounts_requested: bool = Query(default=False),
+    exclude_account_ids: list[str] = Query(default=[]),
     limit: int = Query(default=20, ge=1, le=100),
     context: ResolvedExecutionContext = Depends(require_scope(SCOPE_ACCOUNT_READ)),
     session: AsyncSession = Depends(get_db),
 ):
-    """사용자 소유 계좌 후보를 조회한다(마스킹, 잔액 미포함)."""
-    data = await account_service.list_accounts(session, context, account_hint, account_capability, limit)
+    """사용자 소유 계좌 후보를 조회한다(마스킹, 잔액 미포함).
+
+    resolve_selection=True 면 계좌 해소 결과(account_resolution_outcome·account_ids)를
+    함께 반환한다(계약 9.2). Agent read/transfer 워크플로우의 계좌 확정 관문이다.
+    """
+    data = await account_service.list_accounts(
+        session,
+        context,
+        account_hint,
+        account_capability,
+        limit,
+        resolve_selection=resolve_selection,
+        all_accounts_requested=all_accounts_requested,
+        exclude_account_ids=exclude_account_ids,
+    )
     return agent_success_response(message="계좌 목록을 조회했습니다.", data=data)
 
 

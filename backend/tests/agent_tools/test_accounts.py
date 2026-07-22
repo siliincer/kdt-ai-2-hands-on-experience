@@ -119,6 +119,103 @@ async def test_list_applies_limit(monkeypatch):
     assert len(data.accounts) == 2
 
 
+@pytest.mark.asyncio
+async def test_list_without_resolution_leaves_outcome_none(monkeypatch):
+    _patch_mapped(monkeypatch, [_acct(), _acct()])
+
+    data = await account_service.list_accounts(_NO_SESSION, _ctx(), None, None, 20)
+
+    assert data.account_resolution_outcome is None
+    assert data.account_ids == []
+
+
+# ── 계좌 해소(resolve_selection, 계약 9.2) ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_resolve_single_account_is_resolved(monkeypatch):
+    account = _acct()
+    _patch_mapped(monkeypatch, [account])
+
+    data = await account_service.list_accounts(_NO_SESSION, _ctx(), None, None, 20, resolve_selection=True)
+
+    assert data.account_resolution_outcome == "resolved"
+    assert data.account_ids == [str(account.id)]
+
+
+@pytest.mark.asyncio
+async def test_resolve_multiple_requires_selection(monkeypatch):
+    _patch_mapped(monkeypatch, [_acct(), _acct()])
+
+    data = await account_service.list_accounts(_NO_SESSION, _ctx(), None, None, 20, resolve_selection=True)
+
+    assert data.account_resolution_outcome == "selection_required"
+    assert data.account_ids == []
+    assert len(data.accounts) == 2  # 사용자 선택용 후보는 함께 내려준다
+
+
+@pytest.mark.asyncio
+async def test_resolve_all_accounts_requested_is_resolved(monkeypatch):
+    a1, a2 = _acct(), _acct()
+    _patch_mapped(monkeypatch, [a1, a2])
+
+    data = await account_service.list_accounts(
+        _NO_SESSION,
+        _ctx(),
+        None,
+        None,
+        20,
+        resolve_selection=True,
+        all_accounts_requested=True,
+    )
+
+    assert data.account_resolution_outcome == "resolved"
+    assert set(data.account_ids) == {str(a1.id), str(a2.id)}
+
+
+@pytest.mark.asyncio
+async def test_resolve_no_candidates_is_no_accounts(monkeypatch):
+    _patch_mapped(monkeypatch, [])
+
+    data = await account_service.list_accounts(_NO_SESSION, _ctx(), None, None, 20, resolve_selection=True)
+
+    assert data.account_resolution_outcome == "no_accounts"
+    assert data.account_ids == []
+
+
+@pytest.mark.asyncio
+async def test_resolve_hint_narrows_to_single_resolved(monkeypatch):
+    keep = _acct(alias="생활비 통장", bank_name="카카오뱅크")
+    other = _acct(alias="비상금", bank_name="신한은행")
+    _patch_mapped(monkeypatch, [keep, other])
+
+    data = await account_service.list_accounts(_NO_SESSION, _ctx(), "생활비", None, 20, resolve_selection=True)
+
+    assert data.account_resolution_outcome == "resolved"
+    assert data.account_ids == [str(keep.id)]
+
+
+@pytest.mark.asyncio
+async def test_resolve_excludes_account_ids(monkeypatch):
+    keep = _acct()
+    drop = _acct()
+    _patch_mapped(monkeypatch, [keep, drop])
+
+    data = await account_service.list_accounts(
+        _NO_SESSION,
+        _ctx(),
+        None,
+        None,
+        20,
+        resolve_selection=True,
+        exclude_account_ids=[str(drop.id)],
+    )
+
+    # drop 제외 후 단일 후보 → resolved
+    assert data.account_resolution_outcome == "resolved"
+    assert data.account_ids == [str(keep.id)]
+
+
 # ── API-BALANCE-QUERY ────────────────────────────────────────────────────────
 
 

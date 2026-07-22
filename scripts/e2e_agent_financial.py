@@ -177,12 +177,10 @@ def layer2_agent(client: httpx.Client, token: str) -> bool:
         return True
     _fail(
         "SSE 이벤트 미수신 — 실행 중인 Agent 프로세스가 Webhook 을 발행하지 못함.\n"
-        "       진단(2026-07-21): backend webhook→Redis·계정계·agent-tools·in-process\n"
-        "       Agent 런타임은 모두 정상. 원인은 '실행 중인 Agent 프로세스가 현재 .env 가\n"
-        "       아닌 stale 환경'일 가능성이 높다(셸 export 가 .env 를 가리거나 .env 확정 전\n"
-        "       기동). 조치: stale env 없는 셸에서 Agent 프로세스를 재기동 후 재실행.\n"
-        "       (별도로 wf_balance_inquiry 가 valid context 로도 emit_balance_error 로\n"
-        "        빠지는 Agent 워크플로우 이슈 존재 — LLM 슬롯추출 추정, Agent 팀 확인.)"
+        "       backend webhook→Redis·계정계·agent-tools 는 격리 검증상 정상이므로,\n"
+        "       실행 중 Agent 프로세스가 현재 .env 가 아닌 stale 환경일 가능성이 높다\n"
+        "       (셸 export 가 .env 를 가리거나 .env 확정 전 기동). 조치: 깨끗한 셸에서\n"
+        "       Agent 프로세스를 재기동 후 재실행."
     )
     return False
 
