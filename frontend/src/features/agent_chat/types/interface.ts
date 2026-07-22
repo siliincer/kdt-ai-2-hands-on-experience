@@ -20,6 +20,10 @@ export interface ChatToolPart {
   args?: Record<string, unknown>;
   /** need_approval 이벤트에서 온 승인 대기 id (confirm 카드 HITL) */
   approvalId?: string;
+  /** need_input 이벤트에서 온 일반 입력 대기 id (UI-HITL 계약 1.3) */
+  inputRequestId?: string;
+  /** authentication_required 이벤트에서 온 추가 인증 대기 id */
+  authContextId?: string;
 }
 export type ChatPart = ChatTextPart | ChatReasoningPart | ChatToolPart;
 
@@ -34,7 +38,10 @@ export interface ChatUiMessage {
 
 // --- API ---
 
-export type ApprovalDecision = 'approve' | 'reject';
+// 레거시 송금/자동이체 confirm 은 approve/reject.
+// confirm_modal(UI-HITL 계약 3.7)은 approve/change_requested/cancelled.
+export type ApprovalDecision =
+  'approve' | 'reject' | 'change_requested' | 'cancelled';
 
 export interface ChatResponse {
   chat_session_id: string;
@@ -68,4 +75,17 @@ export interface ChatRuntime {
     args?: Record<string, unknown>,
     component?: string,
   ) => Promise<void>;
+  /**
+   * 일반 입력·선택 대기(need_input) UI 에서 제출 시 호출(UI-HITL 계약 1.5).
+   * `value` 는 UI 계약별 `*_outcome` 필드를 포함한다(예: account_selection_outcome).
+   */
+  submitInput: (
+    inputRequestId: string,
+    value: Record<string, unknown>,
+  ) => Promise<void>;
+  /**
+   * 추가 인증(auth_request) UI 에서 비밀번호 재확인 제출 시 호출(계약 3.8).
+   * 비밀번호는 Backend 까지만 전달되고 후속은 SSE 로 흘러온다. 반환값은 검증 상태.
+   */
+  authenticate: (authContextId: string, password: string) => Promise<string>;
 }

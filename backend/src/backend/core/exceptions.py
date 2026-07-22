@@ -13,6 +13,7 @@ from ..services.financial import (
 )
 from ..utils.agent_response import agent_error_response
 from .agent_exceptions import AgentToolError
+from .request_context import get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,14 @@ async def orm_misuse_error_handler(request: Request, exc: InvalidRequestError):
 
 async def agent_tool_error_handler(request: Request, exc: AgentToolError):
     """Agent Tool API 오류를 계약 정본 envelope(category/retryable 포함)으로 번역."""
+    # Agent 로그의 같은 X-Request-Id 로 어느 단계에서 실패했는지 대조한다.
+    logger.warning(
+        "agent tool error request_id=%s path=%s code=%s status=%s",
+        get_request_id(),
+        request.url.path,
+        exc.code,
+        exc.status_code,
+    )
     return agent_error_response(
         status_code=exc.status_code,
         category=exc.category,

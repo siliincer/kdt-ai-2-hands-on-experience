@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.request_context import get_request_id
 from ..models.financial_audit_log import FinancialAuditLog
 from ..repository.financial_audit_repository import create_financial_audit_log
 from ..schemas.execution_context import ResolvedExecutionContext
@@ -34,7 +35,11 @@ async def record(
     request_id: str | None = None,
     actor_type: str = "agent_service",
 ) -> FinancialAuditLog:
-    """감사 이벤트 1건을 기록한다(실행 Context 로 주체 정보를 채움)."""
+    """감사 이벤트 1건을 기록한다(실행 Context 로 주체 정보를 채움).
+
+    `request_id` 를 넘기지 않으면 현재 요청에 바인딩된 `X-Request-Id` 를 사용한다
+    (Agent 로그와 같은 값으로 감사 추적을 잇는다).
+    """
     return await create_financial_audit_log(
         session,
         user_id=context.user_id,
@@ -42,7 +47,7 @@ async def record(
         operation=operation,
         outcome=outcome,
         actor_type=actor_type,
-        request_id=request_id,
+        request_id=request_id or get_request_id(),
         execution_context_id=context.execution_context_id,
         chat_session_id=context.chat_session_id,
         agent_thread_id=context.agent_thread_id,

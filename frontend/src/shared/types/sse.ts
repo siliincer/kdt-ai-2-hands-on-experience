@@ -5,7 +5,9 @@ export type AgentStreamEventType =
   | 'token'
   | 'tool_call'
   | 'component'
+  | 'need_input' // 일반 입력·선택 대기(UI-HITL 계약 1.4). metadata.input_request_id
   | 'need_approval'
+  | 'authentication_required' // 추가 인증 대기. metadata.auth_context_id
   | 'done'
   | 'error';
 

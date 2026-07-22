@@ -6,10 +6,14 @@ from pydantic import BaseModel, Field
 
 class AgentStreamEventType(str, Enum):
     STATUS = "status"
-    TOKEN = "token"
+    TOKEN = "token"  # agent가 내뱉는 토큰 스트리밍
     TOOL_CALL = "tool_call"
     COMPONENT = "component"  # 읽기전용 UI 카드 렌더 시그널(데이터는 FE가 별도 fetch)
-    NEED_APPROVAL = "need_approval"
+    # 일반 입력·선택 대기(UI-HITL 계약 1.4). 식별자는 metadata.input_request_id.
+    NEED_INPUT = "need_input"
+    NEED_APPROVAL = "need_approval"  # 승인 대기. approval_id(= confirmation_id) 사용
+    # 추가 인증 대기(계약 1.4). 식별자는 metadata.auth_context_id.
+    AUTHENTICATION_REQUIRED = "authentication_required"
     DONE = "done"
     ERROR = "error"
 
