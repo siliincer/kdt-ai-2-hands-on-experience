@@ -11,6 +11,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+override-dependencies = [
+    "pyasn1>=0.6.4"
+]
 
 [tool.uv.workspace]
 members = [
