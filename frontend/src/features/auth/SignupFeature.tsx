@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 import { RobotIcon } from '@/shared/ui/robotIcon';
@@ -24,12 +24,28 @@ export default function SignupFeature({
   const [showPwConfirm, setShowPwConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  // 하단 결과 배너(성공/서버오류). 성공 시 2.5초 뒤 로그인 화면으로 전환한다.
+  const [statusMsg, setStatusMsg] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 성공 전환 타이머는 언마운트 시 정리(2.5초 내 뒤로가기 대비).
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const isFormValid =
     email && password && passwordConfirm && password === passwordConfirm;
 
   const handleSignup = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || isLoading || isRedirecting) return;
 
     // 비밀번호 최소 길이 검증 (백엔드 min_length=8)
     if (password.length < 8) {
@@ -43,6 +59,7 @@ export default function SignupFeature({
     }
 
     setErrorMsg('');
+    setStatusMsg(null);
     setIsLoading(true);
 
     try {
@@ -51,13 +68,18 @@ export default function SignupFeature({
         password,
         name: name || undefined,
       });
-      onSignupSuccess();
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setErrorMsg(error.message);
-      } else {
-        setErrorMsg('회원가입 중 오류가 발생했습니다.');
-      }
+      // 성공 배너를 하단에 잠깐 띄우고 2초 뒤 로그인 화면으로 이동한다.
+      setStatusMsg({ ok: true, text: '회원가입에 성공하였습니다.' });
+      setIsRedirecting(true);
+      redirectTimerRef.current = setTimeout(() => {
+        onSignupSuccess();
+      }, 2000);
+    } catch {
+      // 서버 오류 실패는 고정 안내 문구로 하단에 표시한다.
+      setStatusMsg({
+        ok: false,
+        text: '회원가입에 실패하였습니다. 잠시 후 다시 시도해주세요.',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -271,17 +293,31 @@ export default function SignupFeature({
         {/* Signup button */}
         <button
           onClick={handleSignup}
-          disabled={!isFormValid || isLoading}
+          disabled={!isFormValid || isLoading || isRedirecting}
           className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-opacity"
           style={{
             background: MINT,
             color: NAVY,
             fontFamily: F,
-            opacity: !isFormValid ? 0.5 : 1,
+            opacity: !isFormValid || isRedirecting ? 0.5 : 1,
           }}
         >
           {isLoading ? '가입 중...' : '회원가입'}
         </button>
+
+        {/* Result banner (하단): 성공/서버오류 */}
+        {statusMsg && (
+          <div
+            className="mt-4 px-4 py-2.5 rounded-xl text-sm text-center"
+            style={{
+              background: statusMsg.ok ? '#ECFDF5' : '#FEF2F2',
+              color: statusMsg.ok ? '#059669' : '#DC2626',
+              fontFamily: F,
+            }}
+          >
+            {statusMsg.text}
+          </div>
+        )}
 
         {/* Login link */}
         <p
