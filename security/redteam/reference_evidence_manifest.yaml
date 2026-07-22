@@ -1,6 +1,6 @@
 version: 1
 status: completed
-agent_source_commit: aa6f8f984f9bfbd855ff974094119911e35e423f
+agent_source_commit: 2ad3b916ba0b6eb6b7dcf3d65bda3b09fa251059
 case_set_sha256: 0617d358cf4f38692f793199b50beaa6816e99b5ce9b0d7401fd1f47703a8ad4
 verification_test: security/redteam/tests/test_agent_reference_integration.py
 case_ids:
