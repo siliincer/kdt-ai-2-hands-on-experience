@@ -46,15 +46,19 @@ POSTGRES_PASSWORD=
 COMPOSE_DATABASE_URL=postgresql://app:<POSTGRES_PASSWORD>@postgres:5432/financial_agent
 JWT_SECRET_KEY=
 AGENT_WEBHOOK_SECRET=
+AGENT_SERVICE_TOKEN=
+BACKEND_SERVICE_TOKEN=
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://<MODEL_EC2_PRIVATE_IP_OR_DNS>:11434
-OLLAMA_MODEL=exaone3.5:7.8b
+OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
 현재 Backend는 `DATABASE_URL`을 사용하므로 DB 비밀번호가 URL에도 들어간다.
 `POSTGRES_PASSWORD`와 URL의 비밀번호는 같은 값이어야 한다.
 
-각 secret은 `openssl rand -hex 32` 등으로 별도 생성하고, 재배포 전에 값 자체를
+서비스 토큰 두 값은 각각 Backend의 Agent Tool 인증과 Agent 내부 실행 API 인증에
+사용하므로 서로 다른 값으로 생성한다. 각 secret은 `openssl rand -hex 32` 등으로
+별도 생성하고, 재배포 전에 값 자체를
 출력하지 않는 검증기를 실행한다.
 
 ```bash
@@ -76,7 +80,8 @@ sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.
 ## Ollama deployment boundary
 
 배포용 Ollama는 애플리케이션 EC2와 분리한다. 우선 Agent 팀에서 임시로 선택한
-`exaone3.5:7.8b`를 사용하며, 모델명은 환경변수로 관리해 평가 결과에 따라 교체한다.
+`exaone3.5:2.4b`(약 1.6GB)를 사용하며, 모델명은 환경변수로 관리해 평가 결과에
+따라 교체한다.
 
 - 모델 EC2는 애플리케이션 EC2와 같은 VPC에 둔다.
 - Ollama `11434/tcp` 인바운드는 애플리케이션 EC2 Security Group만 source로 허용한다.
@@ -90,7 +95,7 @@ EC2 배포 환경:
 ```env
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://10.0.1.20:11434
-OLLAMA_MODEL=exaone3.5:7.8b
+OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
 `OLLAMA_BASE_URL`에는 loopback, `host.docker.internal`, 공개 IP/DNS 또는 자격증명

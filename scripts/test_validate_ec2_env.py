@@ -10,9 +10,11 @@ def _valid_environment() -> dict[str, str]:
         ),
         "JWT_SECRET_KEY": "jwt-secret-" + "a" * 32,
         "AGENT_WEBHOOK_SECRET": "webhook-secret-" + "b" * 32,
+        "AGENT_SERVICE_TOKEN": "agent-service-" + "c" * 32,
+        "BACKEND_SERVICE_TOKEN": "backend-service-" + "d" * 32,
         "LLM_PROVIDER": "ollama",
         "OLLAMA_BASE_URL": "http://10.0.1.20:11434",
-        "OLLAMA_MODEL": "exaone3.5:7.8b",
+        "OLLAMA_MODEL": "exaone3.5:2.4b",
     }
 
 
@@ -85,3 +87,16 @@ def test_private_dns_model_host_is_allowed():
     )
 
     assert validate_environment(values) == []
+
+
+def test_malformed_database_urls_are_reported_without_crashing():
+    for malformed_url in (
+        "postgresql://app:password@[broken:5432/database",
+        "postgresql://app:password@postgres:not-a-port/database",
+    ):
+        values = _valid_environment()
+        values["COMPOSE_DATABASE_URL"] = malformed_url
+
+        errors = validate_environment(values)
+
+        assert "COMPOSE_DATABASE_URL is not a valid URL" in errors

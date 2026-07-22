@@ -16,7 +16,7 @@
 - 비용 최소화를 위해 현재 EC2는 `stopped` 상태로 둔다.
 - 도메인은 구매하지 않는다. 시연 시에는 Elastic IP를 직접 사용한다.
 - 배포용 Ollama는 같은 VPC의 별도 모델 EC2에 두는 구조로 정했다. 임시 모델은
-  `exaone3.5:7.8b`이며 인스턴스는 아직 생성 전이다.
+  `exaone3.5:2.4b`(약 1.6GB)이며 인스턴스는 아직 생성 전이다.
 
 ## AWS 리소스
 
@@ -42,7 +42,7 @@
 - 애플리케이션 EC2와 같은 VPC에 생성한다.
 - Ollama `11434/tcp`는 애플리케이션 EC2 Security Group에서 오는 연결만 허용한다.
 - Ollama API는 Nginx나 인터넷에 공개하지 않는다.
-- 임시 모델은 `exaone3.5:7.8b`이고 환경변수로 교체 가능하게 유지한다.
+- 임시 모델은 `exaone3.5:2.4b`(약 1.6GB)이고 환경변수로 교체 가능하게 유지한다.
 - 인스턴스 유형과 사설 주소는 모델 부하 시험 후 기록한다.
 - 현재 `t4g.small` 애플리케이션 EC2에는 모델을 함께 배치하지 않는다.
 
@@ -85,16 +85,17 @@ Private VPC traffic
 - `/opt/kdt-team3/app/frontend/dist`
 
 `docker-compose.ec2.yml`과 `nginx/ec2.conf`는 레포에 포함한다. EC2에서는 nginx
-`80/tcp`를 공개한다. backend/agent/postgres/redis 포트는 `127.0.0.1` 바인딩이라
-외부에는 열리지 않는다.
+`80/tcp`만 공개한다. backend/agent/postgres/Redis/mock service 포트는
+`127.0.0.1`에만 바인딩한다.
 
 현재 Backend 채팅은 `mock_agent_driver`로 UI/SSE 흐름을 만든다. 실제 LangGraph
 Agent 연결은 Backend가 Docker 내부의 `http://agent-service:8001`을 호출하고
 기존 SSE/webhook 흐름으로 결과를 중계하는 계약이 확정된 뒤 적용한다.
 
 EC2 재배포 전에 `/opt/kdt-team3/app/.env`에 `POSTGRES_PASSWORD`,
-`COMPOSE_DATABASE_URL`, `JWT_SECRET_KEY`, `AGENT_WEBHOOK_SECRET`, `LLM_PROVIDER`,
-`OLLAMA_BASE_URL`, `OLLAMA_MODEL`을 설정해야 한다.
+`COMPOSE_DATABASE_URL`, `JWT_SECRET_KEY`, `AGENT_WEBHOOK_SECRET`,
+`AGENT_SERVICE_TOKEN`, `BACKEND_SERVICE_TOKEN`, `LLM_PROVIDER`, `OLLAMA_BASE_URL`,
+`OLLAMA_MODEL`을 설정해야 한다.
 EC2 Compose는 이 값이 비어 있으면 알려진 로컬 기본값으로 기동하지 않고 실패한다.
 `python3 scripts/validate_ec2_env.py --env-file .env`는 빈 값뿐 아니라 알려진
 placeholder, 짧은 secret, DB 비밀번호 불일치도 거부한다. 실제 EC2 `.env` 갱신은
@@ -127,7 +128,7 @@ curl http://127.0.0.1:8001/health
 
 - 로컬 개발에서는 개발자 머신의 Ollama를 사용한다.
 - AWS 배포에서는 같은 VPC의 별도 모델 EC2를 사용한다.
-- AWS 임시 모델은 `exaone3.5:7.8b`이며 `OLLAMA_MODEL`로 교체할 수 있다.
+- AWS 임시 모델은 `exaone3.5:2.4b`(약 1.6GB)이며 `OLLAMA_MODEL`로 교체할 수 있다.
 - 모델 EC2의 `11434/tcp`는 애플리케이션 EC2 Security Group만 접근할 수 있다.
 - 레드팀 검증용 생성/판정 모델은 제품 Agent 배포 모델과 별도이며 AWS 제품 스택에
   함께 배포하지 않는다.
@@ -137,7 +138,7 @@ AWS 배포 환경:
 ```env
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://<MODEL_EC2_PRIVATE_IP_OR_DNS>:11434
-OLLAMA_MODEL=exaone3.5:7.8b
+OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
 로컬 직접 실행:

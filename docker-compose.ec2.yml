@@ -15,13 +15,19 @@ services:
       DATABASE_URL: ${COMPOSE_DATABASE_URL:?COMPOSE_DATABASE_URL is required for EC2}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required for EC2}
       AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:?AGENT_WEBHOOK_SECRET is required for EC2}
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN is required for EC2}
     restart: unless-stopped
 
   agent:
     environment:
       LLM_PROVIDER: ollama
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?OLLAMA_BASE_URL is required for EC2}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-exaone3.5:7.8b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-exaone3.5:2.4b}
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN is required for EC2}
+      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN:?BACKEND_SERVICE_TOKEN is required for EC2}
+    restart: unless-stopped
+
+  mock-financial-service:
     restart: unless-stopped
 
   nginx:
