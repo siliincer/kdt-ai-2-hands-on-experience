@@ -17,6 +17,9 @@ export interface AccountCardListArgs {
   title?: string;
   accounts?: AccountCardItem[];
   actions?: string[];
+  /** false면 단일 선택(라디오 동작) — 송금 출금계좌 등 값 하나만 쓰는 워크플로우.
+   * 미지정 시 단일 선택으로 취급한다(안전한 기본값). */
+  multiple?: boolean;
   /** convertMessage 가 실어 주는 need_input 대기 id */
   inputRequestId?: string;
   ui_contract_id?: string;

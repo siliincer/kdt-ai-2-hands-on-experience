@@ -146,6 +146,7 @@ def build_balance_inquiry_graph(
                 "title": "계좌를 선택해 주세요.",
                 "accounts": _account_options(data.get("accounts")),
                 "actions": ["select", "cancel"],
+                "multiple": True,
             },
         )
         resumed_data = _resume_data(state, dependencies.interaction_runtime, event)
@@ -195,6 +196,7 @@ def build_balance_inquiry_graph(
                 "title": "조회 가능한 계좌가 없습니다.",
                 "accounts": [],
                 "actions": [],
+                "multiple": True,
             },
         )
         await _publish(dependencies, event, config)
