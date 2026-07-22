@@ -399,7 +399,7 @@ async def test_transaction_history_protocol_error_uses_common_error_ui() -> None
         )
         state = await testbed.state("thread_protocol_error")
 
-    assert result.status == "completed"
+    assert result.status == "failed"
     assert state["status"] == "workflow_failed"
     event = json.loads(backend.requests[-1].content)
     assert event["event_type"] == "error"

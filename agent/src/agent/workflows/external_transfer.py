@@ -856,9 +856,7 @@ def build_external_transfer_graph(
             payload=dict(view),
         )
         await _publish(dependencies, event, config)
-        return _terminal_update(
-            "emit_external_transfer_blocked", status="workflow_failed"
-        )
+        return _terminal_update("emit_external_transfer_blocked", status="blocked")
 
     async def emit_external_transfer_error(
         state: AgentState, config: RunnableConfig

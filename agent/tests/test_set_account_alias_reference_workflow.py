@@ -922,7 +922,7 @@ async def test_set_account_alias_blocked_at_prepare() -> None:
         state = await testbed.state("thread_alias_blocked")
 
     assert completed.status == "completed"
-    assert state["status"] == "workflow_failed"
+    assert state["status"] == "blocked"
     event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content)
     assert event["metadata"]["step_id"] == "emit_account_alias_blocked"
     backend.assert_all_responses_used()

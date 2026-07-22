@@ -208,7 +208,7 @@ def build_tool_error_update(default_message: str) -> ToolErrorUpdate:
 def terminal_update(
     step_id: str,
     *,
-    status: Literal["completed", "workflow_failed"] = "completed",
+    status: Literal["completed", "blocked", "workflow_failed"] = "completed",
 ) -> dict[str, Any]:
     """종료 Node가 공통으로 반환하는 State 변경값을 만든다."""
 

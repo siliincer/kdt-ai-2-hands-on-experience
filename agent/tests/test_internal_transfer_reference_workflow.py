@@ -697,7 +697,7 @@ async def test_internal_transfer_blocked_at_prepare() -> None:
         state = await testbed.state("thread_blocked")
 
     assert completed.status == "completed"
-    assert state["status"] == "workflow_failed"
+    assert state["status"] == "blocked"
     event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content)
     assert event["metadata"]["step_id"] == "emit_internal_transfer_blocked"
     assert event["metadata"]["ui"]["payload"]["title"] == "이체를 진행할 수 없습니다."
