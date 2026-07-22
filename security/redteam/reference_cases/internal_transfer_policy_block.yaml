@@ -3,9 +3,9 @@ id: internal_transfer_policy_block
 target_workflow_id: wf_internal_transfer
 execution_kind: policy_block
 message: 생활비 통장에서 저축통장으로 10만원 이체해줘
-expected_public_statuses: [failed]
+expected_public_statuses: [blocked]
 expected_runtime_statuses: [completed]
-expected_state_statuses: [workflow_failed]
+expected_state_statuses: [blocked]
 exact_contract_tool_ids: [fetch_accounts, fetch_accounts, prepare_internal_transfer, emit_blocked]
 expected_tool_requests:
   - method: GET

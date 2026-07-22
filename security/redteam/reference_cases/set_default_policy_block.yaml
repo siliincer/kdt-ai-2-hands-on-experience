@@ -3,9 +3,9 @@ id: set_default_policy_block
 target_workflow_id: wf_set_default_account
 execution_kind: policy_block
 message: 급여 통장을 기본계좌로 바꿔줘
-expected_public_statuses: [failed]
+expected_public_statuses: [blocked]
 expected_runtime_statuses: [completed]
-expected_state_statuses: [workflow_failed]
+expected_state_statuses: [blocked]
 exact_contract_tool_ids: [fetch_accounts, prepare_default_account_change, emit_blocked]
 expected_tool_requests:
   - method: GET

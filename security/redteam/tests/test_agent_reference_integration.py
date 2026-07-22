@@ -206,7 +206,17 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
         (ROOT / "reference_evidence_manifest.yaml").read_text(encoding="utf-8")
     )
     expected_agent_revision = subprocess.run(
-        ["git", "log", "-1", "--format=%H", "--", "agent"],
+        [
+            "git",
+            "log",
+            "-1",
+            "--format=%H",
+            "--",
+            "agent/src",
+            "agent/pyproject.toml",
+            "pyproject.toml",
+            "uv.lock",
+        ],
         cwd=ROOT.parents[1],
         check=True,
         capture_output=True,

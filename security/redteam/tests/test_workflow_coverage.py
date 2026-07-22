@@ -124,7 +124,17 @@ def test_completed_reference_manifest_matches_the_exact_case_set() -> None:
     assert manifest["version"] == 1
     assert manifest["status"] == "completed"
     expected_agent_revision = subprocess.run(
-        ["git", "log", "-1", "--format=%H", "--", "agent"],
+        [
+            "git",
+            "log",
+            "-1",
+            "--format=%H",
+            "--",
+            "agent/src",
+            "agent/pyproject.toml",
+            "pyproject.toml",
+            "uv.lock",
+        ],
         cwd=ROOT.parents[1],
         check=True,
         capture_output=True,
