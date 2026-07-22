@@ -146,13 +146,26 @@ async def extract_account_alias_slots_llm_first(
     if extracted is None:
         return fallback
 
-    return {
-        "account_hint": (
-            _grounded_phrase(extracted.account_hint, message)
-            or fallback.get("account_hint")
-        ),
-        "alias": (_grounded_phrase(extracted.alias, message) or fallback.get("alias")),
-    }
+    account_hint = _grounded_phrase(extracted.account_hint, message) or fallback.get(
+        "account_hint"
+    )
+    alias = _grounded_phrase(extracted.alias, message) or fallback.get("alias")
+    if alias and _misassigned_alias(alias, account_hint, message):
+        alias = fallback.get("alias")
+
+    return {"account_hint": account_hint, "alias": alias}
+
+
+def _misassigned_alias(alias: str, account_hint: str | None, message: str) -> bool:
+    """새 별칭이 실은 계좌 힌트를 복붙했거나 문장 전체를 삼킨 오배정인지 본다.
+
+    grounded_phrase는 "원문에 있는 문자열이냐"만 보므로, 계좌 이름 자체나
+    문장 전체처럼 원문에 그대로 있지만 다른 필드로 잘못 배정된 값은 못 거른다.
+    """
+
+    if account_hint and alias == account_hint:
+        return True
+    return len(alias) >= len(message.strip()) * 0.8
 
 
 async def _invoke_structured(

@@ -350,12 +350,17 @@ async def extract_amount_summary_slots_llm_first(
     account_hint = _grounded_phrase(extracted.account_hint, message) or fallback.get(
         "account_hint"
     )
+    # summary_type은 자유 텍스트가 아니라 닫힌 선택지라 grounded_phrase로 원문
+    # 존재 여부를 못 따진다. 키워드 규칙이 신호를 못 찾은 발화(예: "거래 내역
+    # 정리해줘")에서도 LLM이 지출/수입 중 하나를 억지로 골라버리는 경우가
+    # 있어(작은 모델일수록 심함), 규칙이 찾은 신호를 우선한다.
+    summary_type = fallback.get("summary_type")
     return {
         "account_hint": account_hint,
         "all_accounts_requested": account_hint is None,
         "start_date": start_date or fallback.get("start_date"),
         "end_date": end_date or fallback.get("end_date"),
-        "summary_type": extracted.summary_type or fallback.get("summary_type"),
+        "summary_type": summary_type,
         "keyword": (
             _grounded_phrase(extracted.keyword, message) or fallback.get("keyword")
         ),
