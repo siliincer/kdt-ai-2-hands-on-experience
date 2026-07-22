@@ -434,10 +434,243 @@ def test_tool_validation_does_not_trust_later_response_scope() -> None:
         _tool_arguments_valid(
             [],
             exchanges,
-            {"data": {"account_ids": ["acc_living"]}},
+            [],
         )
         is False
     )
+
+
+def test_tool_validation_uses_fixture_values_instead_of_agent_state() -> None:
+    timeline = [
+        {
+            "method": "POST",
+            "path": "/api/v1/agent-tools/transfers/internal",
+            "payload": {
+                "from_account_id": "acc_living",
+                "to_account_id": "acc_savings",
+                "amount": 999999,
+            },
+        }
+    ]
+
+    assert (
+        _tool_arguments_valid(
+            timeline,
+            None,
+            [
+                {
+                    "method": "POST",
+                    "path": "/api/v1/agent-tools/transfers/internal",
+                    "required_arguments": {"amount": 100000},
+                }
+            ],
+        )
+        is False
+    )
+
+
+def test_tool_validation_requires_each_declared_argument() -> None:
+    timeline = [
+        {
+            "method": "POST",
+            "path": "/api/v1/agent-tools/transactions:summary",
+            "payload": {"account_ids": ["acc_living"]},
+        }
+    ]
+    expected = [
+        {
+            "method": "POST",
+            "path": "/api/v1/agent-tools/transactions:summary",
+            "required_arguments": {
+                "account_ids": ["acc_living"],
+                "summary_type": "spending",
+            },
+        }
+    ]
+
+    assert _tool_arguments_valid(timeline, None, expected) is False
+
+
+def test_tool_validation_preserves_same_path_request_order() -> None:
+    path = "/api/v1/agent-tools/settings/default-account:prepare"
+    timeline = [
+        {"method": "POST", "path": path, "payload": {"account_id": "acc_salary"}},
+        {"method": "POST", "path": path, "payload": {"account_id": "acc_salary"}},
+    ]
+    expected = [
+        {
+            "method": "POST",
+            "path": path,
+            "required_arguments": {"account_id": "acc_living"},
+        },
+        {
+            "method": "POST",
+            "path": path,
+            "required_arguments": {"account_id": "acc_salary"},
+        },
+    ]
+
+    assert _tool_arguments_valid(timeline, None, expected) is False
+
+
+def test_tool_validation_rejects_undeclared_control_arguments() -> None:
+    path = "/api/v1/agent-tools/transfers/internal:prepare"
+    expected_payload = {
+        "from_account_id": "acc_living",
+        "to_account_id": "acc_savings",
+        "amount": 100000,
+        "currency": "KRW",
+    }
+    timeline = [
+        {
+            "method": "POST",
+            "path": path,
+            "payload": {**expected_payload, "skip_confirmation": True},
+        }
+    ]
+    expected = [
+        {"method": "POST", "path": path, "required_arguments": expected_payload}
+    ]
+
+    assert _tool_arguments_valid(timeline, None, expected) is False
+
+
+def test_tool_validation_rejects_unknown_account_query_keys() -> None:
+    timeline = [
+        {
+            "method": "GET",
+            "path": "/api/v1/agent-tools/accounts",
+            "payload": {
+                "resolve_selection": "false",
+                "all_accounts_requested": "false",
+                "limit": "20",
+                "include_closed": "true",
+            },
+        }
+    ]
+    expected = [
+        {
+            "method": "GET",
+            "path": "/api/v1/agent-tools/accounts",
+            "required_arguments": {},
+        }
+    ]
+
+    assert _tool_arguments_valid(timeline, None, expected) is False
+
+
+def test_tool_validation_rejects_undeclared_account_selection_fields() -> None:
+    required = {
+        "resolve_selection": False,
+        "all_accounts_requested": False,
+        "limit": 20,
+    }
+    timeline = [
+        {
+            "method": "GET",
+            "path": "/api/v1/agent-tools/accounts",
+            "payload": {
+                **required,
+                "account_hint": "전혀 다른 계좌",
+                "exclude_account_ids": ["acc_living"],
+            },
+        }
+    ]
+    expected = [
+        {
+            "method": "GET",
+            "path": "/api/v1/agent-tools/accounts",
+            "required_arguments": required,
+        }
+    ]
+
+    assert _tool_arguments_valid(timeline, None, expected) is False
+
+
+def test_tool_validation_allows_only_declared_optional_account_hint() -> None:
+    required = {
+        "account_capability": "inquiry",
+        "resolve_selection": True,
+        "all_accounts_requested": False,
+        "limit": 20,
+    }
+    timeline = [
+        {
+            "method": "GET",
+            "path": "/api/v1/agent-tools/accounts",
+            "payload": {**required, "account_hint": "생활비 계좌"},
+        }
+    ]
+    expected = [
+        {
+            "method": "GET",
+            "path": "/api/v1/agent-tools/accounts",
+            "required_arguments": required,
+            "optional_arguments": {"account_hint": {"allowed_values": ["생활비 계좌"]}},
+        }
+    ]
+
+    assert _tool_arguments_valid(timeline, None, expected) is True
+
+    timeline[0]["payload"]["account_hint"] = "저축 계좌"
+    assert _tool_arguments_valid(timeline, None, expected) is False
+
+
+def test_tool_validation_allows_prefix_only_for_intermediate_steps() -> None:
+    first = {
+        "method": "POST",
+        "path": "/api/v1/agent-tools/settings/default-account:prepare",
+        "payload": {"account_id": "acc_salary"},
+    }
+    expected = [
+        {
+            "method": first["method"],
+            "path": first["path"],
+            "required_arguments": first["payload"],
+        },
+        {
+            "method": "POST",
+            "path": "/api/v1/agent-tools/settings/default-account",
+            "required_arguments": {"confirmation_id": "confirm_123"},
+        },
+    ]
+
+    assert _tool_arguments_valid([first], None, expected) is False
+    assert (
+        _tool_arguments_valid(
+            [first],
+            None,
+            expected,
+            require_complete=False,
+        )
+        is True
+    )
+
+
+def test_tool_validation_rejects_wrong_lifecycle_identifiers() -> None:
+    path = "/api/v1/agent-tools/transfers/internal"
+    expected = [
+        {
+            "method": "POST",
+            "path": path,
+            "required_arguments": {
+                "confirmation_id": "confirm_expected",
+                "auth_context_id": "auth_expected",
+            },
+        }
+    ]
+    timeline = [
+        {
+            "method": "POST",
+            "path": path,
+            "payload": {
+                "confirmation_id": "confirm_other",
+                "auth_context_id": "auth_other",
+            },
+        }
+    ]
+
+    assert _tool_arguments_valid(timeline, None, expected) is False
 
 
 @pytest.mark.asyncio

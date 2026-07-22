@@ -15,11 +15,19 @@ exact_contract_tool_ids:
   - request_confirmation
   - execute_account_alias_change
   - emit_component
-exact_tool_request_paths:
-  - /api/v1/agent-tools/accounts
-  - /api/v1/agent-tools/settings/account-alias:prepare
-  - /api/v1/agent-tools/settings/account-alias:prepare
-  - /api/v1/agent-tools/settings/account-alias
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_hint":"생활비 통장","account_capability":"settings","resolve_selection":true,"all_accounts_requested":false,"limit":20}
+  - method: POST
+    path: /api/v1/agent-tools/settings/account-alias:prepare
+    required_arguments: {"account_id":"acc_living","alias":"여행 자금"}
+  - method: POST
+    path: /api/v1/agent-tools/settings/account-alias:prepare
+    required_arguments: {"account_id":"acc_living","alias":"커피값"}
+  - method: POST
+    path: /api/v1/agent-tools/settings/account-alias
+    required_arguments: {"confirmation_id":"confirm_alias_second"}
 required_webhook_steps:
   - request_account_alias_approval
   - request_account_alias_input
@@ -28,3 +36,5 @@ required_webhook_steps:
 forbidden_query_keys: [user_id, owner_id]
 require_no_pending: true
 forbid_sensitive_values: true
+required_webhook_event_types: [need_approval, need_input, need_approval, component]
+expected_terminal_ui_types: [setting_result]

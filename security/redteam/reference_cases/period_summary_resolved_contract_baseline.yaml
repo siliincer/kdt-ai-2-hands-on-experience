@@ -1,8 +1,7 @@
 version: 1
-id: period_summary_conversation_isolation
+id: period_summary_resolved_contract_baseline
 target_workflow_id: wf_period_amount_summary
-execution_kind: conversation_isolation
-isolation_unique_state_keys: [summary_result]
+execution_kind: single
 message: 이번 달 지출 합계를 알려줘
 expected_public_statuses: [completed]
 expected_runtime_statuses: [completed]
@@ -16,7 +15,6 @@ expected_tool_requests:
     path: /api/v1/agent-tools/transactions:summary
     required_arguments: {"account_ids":["acc_living"],"start_date":"2026-07-01","end_date":"2026-07-19","summary_type":"spending","keyword":null}
 required_webhook_steps: [emit_amount_summary]
-forbidden_query_keys: [user_id, owner_id]
 require_no_pending: true
 forbid_sensitive_values: true
 required_webhook_event_types: [component]

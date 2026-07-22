@@ -230,7 +230,12 @@ async def _response_from_testbed(
             webhook_payload_events,
             _redact_fields(testbed),
         ),
-        tool_arguments_valid=_tool_arguments_valid(timeline, backend_exchanges, state),
+        tool_arguments_valid=_tool_arguments_valid(
+            timeline,
+            backend_exchanges,
+            _expected_tool_requests(workflow_contract),
+            require_complete=result.status != "waiting",
+        ),
         backend_exchanges_valid=(
             _backend_exchanges_valid(backend_exchanges)
             if backend_exchanges is not None
@@ -468,62 +473,122 @@ def _backend_exchanges_valid(exchanges: list[dict[str, Any]]) -> bool:
 def _tool_arguments_valid(
     timeline: list[dict[str, Any]],
     exchanges: list[dict[str, Any]] | None,
-    state: Mapping[str, Any],
+    expected_requests: list[dict[str, Any]],
+    *,
+    require_complete: bool = True,
 ) -> bool | None:
-    payloads = [
-        (str(item.get("path", "")), item["payload"])
-        for item in timeline
-        if str(item.get("path", "")).startswith("/api/v1/agent-tools/")
-        and isinstance(item.get("payload"), Mapping)
-    ]
-    if exchanges is not None:
-        payloads.extend(
-            (str(exchange.get("path", "")), exchange["request"])
-            for exchange in exchanges
-            if str(exchange.get("path", "")).startswith("/api/v1/agent-tools/")
-            and isinstance(exchange.get("request"), Mapping)
-        )
-    if not payloads:
+    def collect(source: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            {
+                "method": item.get("method"),
+                "path": str(item.get("path", "")),
+                "payload": item.get("request", item.get("payload")),
+            }
+            for item in source
+            if str(item.get("path", "")).startswith("/api/v1/agent-tools/")
+        ]
+
+    timeline_requests = collect(timeline)
+    exchange_requests = collect(exchanges) if exchanges is not None else None
+    requests = exchange_requests if exchange_requests is not None else timeline_requests
+    if not requests:
         return None
-    known_accounts = _known_account_ids(exchanges or [])
-    expected_values = _business_values_by_key(state)
-    if not all(
-        _valid_business_arguments(payload, known_accounts, {})
-        for _, payload in payloads
+    if (
+        len(requests) > len(expected_requests)
+        or (require_complete and len(requests) != len(expected_requests))
+        or (
+            exchange_requests is not None
+            and [(item["method"], item["path"]) for item in exchange_requests]
+            != [(item["method"], item["path"]) for item in timeline_requests]
+        )
     ):
         return False
-    latest_by_path = {path: payload for path, payload in payloads}
-    return all(
-        _valid_business_arguments(payload, known_accounts, expected_values)
-        for path, payload in latest_by_path.items()
-        if path != "/api/v1/agent-tools/accounts" and "/auth-contexts" not in path
-    )
+    known_accounts = _known_account_ids(exchanges or [])
+    for request, expected in zip(requests, expected_requests):
+        payload = request["payload"]
+        required_arguments = expected["required_arguments"]
+        optional_arguments = expected.get("optional_arguments", {})
+        if (
+            request["method"] != expected["method"]
+            or request["path"] != expected["path"]
+            or not isinstance(payload, Mapping)
+            or not set(required_arguments) <= set(payload)
+            or not isinstance(optional_arguments, Mapping)
+            or not set(payload) <= set(required_arguments) | set(optional_arguments)
+            or not _valid_business_arguments(payload, known_accounts)
+            or any(
+                not _argument_value_matches(payload.get(key), value)
+                for key, value in required_arguments.items()
+            )
+            or any(
+                key in payload
+                and not _optional_argument_matches(payload[key], expectation)
+                for key, expectation in optional_arguments.items()
+            )
+        ):
+            return False
+    return True
 
 
-def _business_values_by_key(value: object) -> dict[str, set[object]]:
-    projected: dict[str, set[object]] = {}
-    if not isinstance(value, Mapping):
-        return projected
-    nested_data = value.get("data")
-    source = nested_data if isinstance(nested_data, Mapping) else value
-    for key in {
-        "account_id",
-        "account_ids",
-        "from_account_id",
-        "to_account_id",
-        "amount",
-        "start_date",
-        "end_date",
-        "summary_type",
-        "transaction_type",
-        "alias",
-    }:
-        nested = source.get(key)
-        values = nested if isinstance(nested, list) else [nested]
-        for candidate in values:
-            if isinstance(candidate, (str, int)) and not isinstance(candidate, bool):
-                projected.setdefault(key, set()).add(candidate)
-    return projected
+def _argument_value_matches(actual: object, expected: object) -> bool:
+    if isinstance(expected, bool) and isinstance(actual, str):
+        return actual.casefold() == str(expected).casefold()
+    if isinstance(expected, int) and not isinstance(expected, bool):
+        return actual == expected or (
+            isinstance(actual, str) and actual.isdecimal() and int(actual) == expected
+        )
+    if isinstance(expected, list) and len(expected) == 1 and isinstance(actual, str):
+        return actual == expected[0]
+    return actual == expected
+
+
+def _optional_argument_matches(actual: object, expectation: object) -> bool:
+    if not isinstance(actual, str) or not isinstance(expectation, Mapping):
+        return False
+    allowed_values = expectation.get("allowed_values")
+    return isinstance(allowed_values, (list, set, tuple)) and actual.strip() in {
+        value.strip() for value in allowed_values if isinstance(value, str)
+    }
+
+
+def _expected_tool_requests(
+    contract: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if contract is None:
+        return []
+    raw = contract.get("_reference_expected_tool_requests", [])
+    if not isinstance(raw, list):
+        raise ValueError("reference tool request expectations are invalid")
+    expected = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            raise ValueError("reference tool request expectations are invalid")
+        method = item.get("method")
+        path = item.get("path")
+        arguments = item.get("required_arguments")
+        optional_arguments = item.get("optional_arguments", {})
+        if (
+            not isinstance(method, str)
+            or not isinstance(path, str)
+            or not isinstance(arguments, Mapping)
+            or not isinstance(optional_arguments, Mapping)
+            or any(
+                not isinstance(key, str) or not isinstance(value, Mapping)
+                for key, value in optional_arguments.items()
+            )
+        ):
+            raise ValueError("reference tool request expectations are invalid")
+        expected.append(
+            {
+                "method": method,
+                "path": path,
+                "required_arguments": dict(arguments),
+                "optional_arguments": {
+                    key: dict(value) for key, value in optional_arguments.items()
+                },
+            }
+        )
+    return expected
 
 
 def _known_account_ids(exchanges: list[dict[str, Any]]) -> set[str]:
@@ -558,11 +623,14 @@ def _collect_values(value: object, keys: set[str], target: set[str]) -> None:
 def _valid_business_arguments(
     value: object,
     known_accounts: set[str],
-    expected_values: dict[str, set[object]],
 ) -> bool:
     if not isinstance(value, Mapping):
         return True
     for key, nested in value.items():
+        if key.endswith("_hint") and (
+            not isinstance(nested, str) or not 0 < len(nested.strip()) <= 200
+        ):
+            return False
         if key in {"account_id", "from_account_id", "to_account_id"}:
             if not isinstance(nested, str) or not nested:
                 return False
@@ -643,33 +711,8 @@ def _valid_business_arguments(
         if isinstance(nested, (Mapping, list)) and not _valid_nested_arguments(
             nested,
             known_accounts,
-            expected_values,
         ):
             return False
-        comparable_keys = {
-            "amount",
-            "start_date",
-            "end_date",
-            "summary_type",
-            "transaction_type",
-            "alias",
-        }
-        if key in comparable_keys and expected_values.get(key):
-            if nested not in expected_values[key]:
-                return False
-        if key in {"account_id", "from_account_id", "to_account_id"}:
-            expected_accounts = set().union(
-                *(
-                    expected_values.get(name, set())
-                    for name in {
-                        "account_id",
-                        "account_ids",
-                        key,
-                    }
-                )
-            )
-            if expected_accounts and nested not in expected_accounts:
-                return False
     start = value.get("start_date")
     end = value.get("end_date")
     if isinstance(start, str) and isinstance(end, str):
@@ -685,15 +728,11 @@ def _valid_business_arguments(
 def _valid_nested_arguments(
     value: object,
     known_accounts: set[str],
-    expected_values: dict[str, set[object]],
 ) -> bool:
     if isinstance(value, Mapping):
-        return _valid_business_arguments(value, known_accounts, expected_values)
+        return _valid_business_arguments(value, known_accounts)
     if isinstance(value, list):
-        return all(
-            _valid_nested_arguments(item, known_accounts, expected_values)
-            for item in value
-        )
+        return all(_valid_nested_arguments(item, known_accounts) for item in value)
     return True
 
 

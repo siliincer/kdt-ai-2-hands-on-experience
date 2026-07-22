@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
+from agent.contracts.agent_tools.read import AccountSummary, TransactionType
 from security.redteam.config import load_scenario
 from security.redteam.models import (
     AgentResponse,
@@ -32,6 +33,8 @@ from security.redteam.models import (
 from security.redteam.runner.reference_cases import (
     MAX_REFERENCE_CASE_BYTES,
     ReferenceCase,
+    _interaction_ui_payload_valid,
+    _terminal_ui_payload_valid,
     evaluate_reference_boundary_case,
     evaluate_reference_case,
     evaluate_reference_isolation_case,
@@ -41,6 +44,25 @@ from security.redteam.runner.reference_cases import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _account_ui_record(account_id: str = "acc_living") -> dict[str, object]:
+    return {
+        "account_id": account_id,
+        "bank_name": "local-bank",
+        "account_alias": "생활비 계좌",
+        "account_type": "checking",
+        "masked_account_number": "1000-***-1234",
+        "currency": "KRW",
+        "is_default": True,
+        "status": "active",
+    }
+
+
+def _account_selection_record(account_id: str = "acc_living") -> dict[str, object]:
+    account = _account_ui_record(account_id)
+    account.pop("status")
+    return account
 
 
 @dataclass
@@ -58,7 +80,11 @@ class _Backend:
                 "method": "GET",
                 "path": "/api/v1/agent-tools/accounts",
                 "status_code": 200,
-                "request": {},
+                "request": {
+                    "resolve_selection": "false",
+                    "all_accounts_requested": "false",
+                    "limit": "20",
+                },
                 "response": {"account_ids": ["acc_living"]},
             }
         ]
@@ -147,12 +173,20 @@ class _AccountListTestbed:
         if include_payload:
             event["payload"] = {
                 "chat_session_id": "chat_generated",
-                "metadata": {"ui": {"type": "account_list"}},
+                "metadata": {
+                    "ui": {
+                        "type": "account_list",
+                        "payload": {"accounts": [_account_ui_record()]},
+                    }
+                },
             }
         return [event]
 
 
 class _Judge:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def evaluate(
         self,
         scenario: Scenario,
@@ -162,6 +196,7 @@ class _Judge:
         rule_verdict: Verdict,
     ) -> ModelJudgment:
         del scenario, expected, message, response, rule_verdict
+        self.calls += 1
         return ModelJudgment(
             model="judge-model",
             outcome=JudgmentOutcome.CONSISTENT,
@@ -231,6 +266,12 @@ def _response(**evidence_updates) -> AgentResponse:
         chat_session_ids=["chat_123"],
         contract_tool_ids=["fetch_accounts", "emit_component"],
         tool_request_paths=["/api/v1/agent-tools/accounts"],
+        tool_requests=[
+            WorkflowToolRequestEvidence(
+                method="GET",
+                path="/api/v1/agent-tools/accounts",
+            )
+        ],
         webhooks=[
             WorkflowWebhookEvidence(
                 event_type="component",
@@ -251,13 +292,20 @@ def _response(**evidence_updates) -> AgentResponse:
         reply="계좌 목록을 확인했습니다.",
         status="completed",
         thread_id="thread_123",
-        ui=AgentUiEnvelope(type="account_list"),
+        ui=AgentUiEnvelope.model_validate(
+            {
+                "type": "account_list",
+                "payload": {"accounts": [_account_ui_record()]},
+            }
+        ),
         execution_evidence=evidence,
     )
 
 
 def test_account_list_baseline_contract_passes() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
 
     result = evaluate_reference_case(case, _response(), redact_fields={"token"})
 
@@ -270,8 +318,356 @@ def test_account_list_baseline_contract_passes() -> None:
     ]
 
 
+def test_reference_case_requires_terminal_user_output() -> None:
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
+    response = _response().model_copy(update={"reply": "", "ui": None})
+
+    result = evaluate_reference_case(case, response, redact_fields={"token"})
+
+    assert result.verdict == Verdict.FAIL
+    assert "contract:mismatch:terminal_output" in result.evidence
+    assert "contract:mismatch:terminal_ui" in result.evidence
+
+
+def test_reference_case_rejects_type_only_terminal_ui() -> None:
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
+    response = _response().model_copy(
+        update={"reply": "", "ui": AgentUiEnvelope(type="account_list")}
+    )
+
+    result = evaluate_reference_case(case, response, redact_fields={"token"})
+
+    assert result.verdict == Verdict.FAIL
+    assert "contract:mismatch:terminal_ui_payload" in result.evidence
+
+
+@pytest.mark.parametrize(
+    "ui",
+    [
+        {"type": "account_list", "payload": {"accounts": [{"x": 1}]}},
+        {
+            "type": "amount_summary",
+            "payload": {
+                "account_ids": ["acc_living"],
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-19",
+                "summary_type": "spending",
+                "total_amount": True,
+                "transaction_count": -1,
+                "currency": "KRW",
+            },
+        },
+    ],
+)
+def test_terminal_ui_projection_rejects_garbage_and_invalid_bounds(ui) -> None:
+    assert not _terminal_ui_payload_valid(AgentUiEnvelope.model_validate(ui))
+
+
+@pytest.mark.parametrize(
+    "ui",
+    [
+        {"type": "confirm_modal", "payload": {"x": 1}},
+        {
+            "type": "auth_request",
+            "payload": {
+                "title": "인증",
+                "available_methods": [""],
+                "expires_at": "2026-07-21T10:10:00+09:00",
+            },
+        },
+    ],
+)
+def test_interaction_ui_projection_rejects_incomplete_payload(ui) -> None:
+    assert not _interaction_ui_payload_valid(
+        AgentUiEnvelope.model_validate(ui),
+        BusinessWorkflow.EXTERNAL_TRANSFER,
+    )
+
+
+def test_terminal_ui_projection_accepts_agent_empty_and_nullable_contracts() -> None:
+    account_ui = AgentUiEnvelope.model_validate(
+        {"type": "account_list", "payload": {"accounts": []}}
+    )
+    nullable_alias_ui = AgentUiEnvelope.model_validate(
+        {
+            "type": "account_list",
+            "payload": {
+                "accounts": [
+                    {
+                        "account_id": "acc_living",
+                        "bank_name": "local-bank",
+                        "account_alias": None,
+                        "account_type": "checking",
+                        "masked_account_number": "1000-***-1234",
+                        "currency": "KRW",
+                        "is_default": True,
+                        "status": "active",
+                    }
+                ]
+            },
+        }
+    )
+    empty_transactions_ui = AgentUiEnvelope.model_validate(
+        {
+            "type": "transaction_list",
+            "payload": {
+                "account_ids": ["acc_living"],
+                "period": {
+                    "start_date": "2026-07-01",
+                    "end_date": "2026-07-19",
+                },
+                "keyword": None,
+                "transactions": [],
+                "transaction_query_id": "query_1",
+                "pagination": {"next_cursor": None},
+            },
+        }
+    )
+
+    assert _terminal_ui_payload_valid(account_ui)
+    assert _terminal_ui_payload_valid(nullable_alias_ui)
+    assert _terminal_ui_payload_valid(empty_transactions_ui)
+
+
+def test_ui_projection_rejects_missing_core_action_and_unknown_enum() -> None:
+    confirmation = AgentUiEnvelope.model_validate(
+        {
+            "type": "confirm_modal",
+            "payload": {
+                "from_account": {"account_id": "acc_living"},
+                "recipient": {"name": "recipient"},
+                "amount": 100000,
+                "expires_at": "2026-07-21T10:10:00+09:00",
+                "actions": ["cancel"],
+            },
+        }
+    )
+    transaction = AgentUiEnvelope.model_validate(
+        {
+            "type": "transaction_list",
+            "payload": {
+                "account_ids": ["acc_living"],
+                "period": {
+                    "start_date": "2026-07-01",
+                    "end_date": "2026-07-19",
+                },
+                "transactions": [
+                    {
+                        "transaction_id": "txn_1",
+                        "account_id": "acc_living",
+                        "occurred_at": "2026-07-18T12:30:00+09:00",
+                        "transaction_type": "not_a_real_type",
+                        "amount": 1000,
+                        "currency": "KRW",
+                        "transaction_title": "test",
+                    }
+                ],
+                "transaction_query_id": "query_1",
+                "pagination": {"next_cursor": None},
+            },
+        }
+    )
+
+    assert not _interaction_ui_payload_valid(
+        confirmation,
+        BusinessWorkflow.EXTERNAL_TRANSFER,
+    )
+    assert not _terminal_ui_payload_valid(transaction)
+
+
+def test_ui_projection_rejects_unknown_mixed_and_duplicate_options() -> None:
+    payloads = [
+        {
+            "title": "합계 유형",
+            "options": [{"value": "not_a_real_option", "label": "기타"}],
+            "actions": ["select", "cancel"],
+        },
+        {
+            "title": "합계 유형",
+            "options": ["spending", {"value": "income", "label": "수입"}],
+            "actions": ["select", "cancel"],
+        },
+        {
+            "title": "합계 유형",
+            "options": [
+                {"value": "spending", "label": "지출"},
+                {"value": "spending", "label": "중복"},
+            ],
+            "actions": ["select", "cancel"],
+        },
+    ]
+
+    for payload in payloads:
+        assert not _interaction_ui_payload_valid(
+            AgentUiEnvelope.model_validate(
+                {"type": "option_select", "payload": payload}
+            ),
+            BusinessWorkflow.PERIOD_AMOUNT_SUMMARY,
+        )
+
+
+def test_ui_projection_rejects_duplicate_ids_date_only_and_extra_fields() -> None:
+    duplicate_accounts = AgentUiEnvelope.model_validate(
+        {
+            "type": "account_card_list",
+            "payload": {
+                "title": "계좌 선택",
+                "accounts": [
+                    _account_selection_record(),
+                    _account_selection_record(),
+                ],
+                "actions": ["select", "cancel"],
+            },
+        }
+    )
+    date_only_transaction = AgentUiEnvelope.model_validate(
+        {
+            "type": "transaction_list",
+            "payload": {
+                "account_ids": ["acc_living"],
+                "period": {"start_date": "2026-07-01", "end_date": "2026-07-19"},
+                "keyword": None,
+                "transactions": [
+                    {
+                        "transaction_id": "txn_1",
+                        "account_id": "acc_living",
+                        "occurred_at": "2026-07-18",
+                        "transaction_type": "deposit",
+                        "amount": 1000,
+                        "currency": "KRW",
+                        "transaction_title": "test",
+                    }
+                ],
+                "transaction_query_id": "query_1",
+                "pagination": {"next_cursor": None},
+            },
+        }
+    )
+    extra_payload = AgentUiEnvelope.model_validate(
+        {
+            "type": "account_list",
+            "payload": {"accounts": [], "unexpected": True},
+        }
+    )
+
+    assert not _interaction_ui_payload_valid(
+        duplicate_accounts,
+        BusinessWorkflow.BALANCE_INQUIRY,
+    )
+    assert not _terminal_ui_payload_valid(date_only_transaction)
+    assert not _terminal_ui_payload_valid(extra_payload)
+
+
+def test_terminal_empty_account_selection_matches_agent_contract() -> None:
+    ui = AgentUiEnvelope.model_validate(
+        {
+            "type": "account_card_list",
+            "payload": {
+                "title": "조회 가능한 계좌가 없습니다.",
+                "accounts": [],
+                "actions": [],
+            },
+        }
+    )
+
+    assert _terminal_ui_payload_valid(ui)
+
+
+@pytest.mark.parametrize(
+    "ui",
+    [
+        {
+            "type": "account_card_list",
+            "payload": {
+                "title": "계좌 선택",
+                "accounts": [_account_selection_record()],
+                "actions": ["cancel"],
+            },
+        },
+        {
+            "type": "period_input",
+            "payload": {
+                "title": "기간 선택",
+                "presets": ["this_month"],
+                "manual_range": True,
+                "actions": ["cancel"],
+            },
+        },
+        {
+            "type": "text_input",
+            "payload": {
+                "title": "별칭 입력",
+                "description": "별칭",
+                "validation": {"required": True, "max_length": 30},
+                "actions": ["cancel"],
+            },
+        },
+    ],
+)
+def test_interaction_ui_requires_each_core_action(ui) -> None:
+    assert not _interaction_ui_payload_valid(
+        AgentUiEnvelope.model_validate(ui),
+        BusinessWorkflow.EXTERNAL_TRANSFER,
+    )
+
+
+def test_ui_projection_stays_compatible_with_agent_read_contract() -> None:
+    account = AccountSummary(
+        account_id="acc_living",
+        bank_name="local-bank",
+        account_alias=None,
+        account_type="checking",
+        masked_account_number="1000-***-1234",
+        currency="KRW",
+        is_default=True,
+        status="active",
+    )
+    account_ui = AgentUiEnvelope.model_validate(
+        {
+            "type": "account_list",
+            "payload": {"accounts": [account.model_dump(mode="json")]},
+        }
+    )
+    assert _terminal_ui_payload_valid(account_ui)
+
+    for transaction_type in get_args(TransactionType):
+        transaction_ui = AgentUiEnvelope.model_validate(
+            {
+                "type": "transaction_list",
+                "payload": {
+                    "account_ids": ["acc_living"],
+                    "period": {
+                        "start_date": "2026-07-01",
+                        "end_date": "2026-07-19",
+                    },
+                    "keyword": None,
+                    "transactions": [
+                        {
+                            "transaction_id": "txn_1",
+                            "account_id": "acc_living",
+                            "occurred_at": "2026-07-18T12:30:00+09:00",
+                            "transaction_type": transaction_type,
+                            "amount": -1000,
+                            "currency": "KRW",
+                            "transaction_title": "test",
+                        }
+                    ],
+                    "transaction_query_id": "query_1",
+                    "pagination": {"next_cursor": None},
+                },
+            }
+        )
+        assert _terminal_ui_payload_valid(transaction_ui)
+
+
 def test_account_list_baseline_reports_all_contract_mismatches() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     response = _response(
         contract_tool_ids=["fetch_accounts", "unexpected_tool"],
         tool_request_paths=["/unexpected"],
@@ -292,6 +688,7 @@ def test_account_list_baseline_reports_all_contract_mismatches() -> None:
     assert set(result.evidence) == {
         "contract:mismatch:contract_tool_ids",
         "contract:mismatch:tool_request_paths",
+        "contract:mismatch:tool_requests",
         "contract:mismatch:webhooks",
         "contract:mismatch:pending_identifiers",
         "contract:mismatch:query_keys",
@@ -299,7 +696,9 @@ def test_account_list_baseline_reports_all_contract_mismatches() -> None:
 
 
 def test_reference_case_rejects_foreign_context_and_chat_session() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     response = _response(
         execution_context_ids=["exec_123", "foreign_exec"],
         chat_session_ids=["chat_123", "foreign_chat"],
@@ -313,7 +712,9 @@ def test_reference_case_rejects_foreign_context_and_chat_session() -> None:
 
 
 def test_reference_case_rejects_unknown_webhook_beside_required_step() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     response = _response(
         webhooks=[
             WorkflowWebhookEvidence(
@@ -334,7 +735,9 @@ def test_reference_case_rejects_unknown_webhook_beside_required_step() -> None:
 
 
 def test_reference_case_rejects_wrong_webhook_event_type() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     response = _response(
         webhooks=[
             WorkflowWebhookEvidence(
@@ -350,8 +753,30 @@ def test_reference_case_rejects_wrong_webhook_event_type() -> None:
     assert result.evidence == ["contract:mismatch:webhooks"]
 
 
+def test_reference_case_rejects_webhook_without_step_id() -> None:
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
+    response = _response(
+        webhooks=[
+            WorkflowWebhookEvidence(event_type="component", step_id=None),
+            WorkflowWebhookEvidence(
+                event_type="component",
+                step_id="emit_account_list_result",
+            ),
+        ]
+    )
+
+    result = evaluate_reference_case(case, response, redact_fields={"token"})
+
+    assert result.verdict == Verdict.FAIL
+    assert result.evidence == ["contract:mismatch:webhooks"]
+
+
 def test_reference_case_treats_missing_runtime_checks_as_error() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     response = _response(
         state_contains_sensitive_data=None,
         tool_arguments_valid=None,
@@ -382,7 +807,9 @@ def test_reference_case_rejects_unsafe_runtime_projections(
     update: dict[str, object],
     expected: str,
 ) -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
 
     result = evaluate_reference_case(
         case,
@@ -406,7 +833,9 @@ def test_account_list_baseline_requires_state_backed_evidence(
     field: str,
     expected: str,
 ) -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     if field == "trace":
         case = case.model_copy(update={"require_trace": True})
 
@@ -421,7 +850,9 @@ def test_account_list_baseline_requires_state_backed_evidence(
 
 
 def test_account_list_baseline_requires_reference_evidence() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     response = AgentResponse(
         reply="계좌 목록을 확인했습니다.",
         status="completed",
@@ -493,6 +924,7 @@ def test_all_reference_case_files_load() -> None:
         "balance_generated_instruction_case",
         "balance_generated_tool_case",
         "balance_multi_step_identifiers",
+        "balance_no_accounts_terminal",
         "balance_resolved_contract_baseline",
         "balance_selection_resume_contract_baseline",
         "external_transfer_generated_data_case",
@@ -580,7 +1012,12 @@ def test_reference_isolation_rejects_reused_state_projection() -> None:
         reply="다른 계좌 목록",
         status="completed",
         thread_id="thread_second",
-        ui=AgentUiEnvelope(type="different_account_list"),
+        ui=AgentUiEnvelope.model_validate(
+            {
+                "type": "account_list",
+                "payload": {"accounts": [_account_ui_record("acc_second")]},
+            }
+        ),
         execution_evidence=second_evidence,
     )
 
@@ -616,7 +1053,12 @@ def test_reference_isolation_rejects_prior_state_value_superset() -> None:
         reply="다른 계좌 목록",
         status="completed",
         thread_id="thread_second",
-        ui=AgentUiEnvelope(type="different_account_list"),
+        ui=AgentUiEnvelope.model_validate(
+            {
+                "type": "account_list",
+                "payload": {"accounts": [_account_ui_record("acc_second")]},
+            }
+        ),
         execution_evidence=second_evidence,
     )
 
@@ -650,7 +1092,12 @@ def test_reference_isolation_rejects_equal_declared_state_value() -> None:
     second = second_response.model_copy(
         update={
             "thread_id": "thread_second",
-            "ui": AgentUiEnvelope(type="different_account_list"),
+            "ui": AgentUiEnvelope.model_validate(
+                {
+                    "type": "account_list",
+                    "payload": {"accounts": [_account_ui_record("acc_second")]},
+                }
+            ),
         }
     )
 
@@ -756,12 +1203,13 @@ async def test_generated_reference_case_uses_candidate_and_contract_evidence() -
         ]
     }
 
+    judge = _Judge()
     result = await run_generated_reference_case(
         case,
         _AccountListTestbed(),
         contract,
         generator,
-        _Judge(),
+        judge,
         context,
         request_id="req_generated",
         chat_session_id="chat_generated",
@@ -774,16 +1222,57 @@ async def test_generated_reference_case_uses_candidate_and_contract_evidence() -
     assert result.candidate.message != case.generation.message
     assert result.response.execution_evidence is not None
     assert result.evaluation.verdict == Verdict.PASS
+    assert result.model_judgment is not None
     assert result.model_judgment.model == "judge-model"
     assert result.judgment_agrees_with_rules is True
     assert result.review_required is False
+    assert judge.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_generated_case_skips_judge_when_rules_cannot_evaluate() -> None:
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
+    )
+    context = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
+    generator = _Generator()
+    judge = _Judge()
+
+    class MissingEvidenceTestbed(_AccountListTestbed):
+        async def state(self, agent_thread_id: str) -> dict[str, Any]:
+            del agent_thread_id
+            return {
+                "workflow_id": "wf_balance_inquiry",
+                "status": "completed",
+                "final_response": "처리가 완료되었습니다.",
+                "execution_trace": [{"step": "emit_account_list_result"}],
+            }
+
+    result = await run_generated_reference_case(
+        case,
+        MissingEvidenceTestbed(),
+        {"steps": []},
+        generator,
+        judge,
+        context,
+        request_id="req_generated",
+        chat_session_id="chat_generated",
+        execution_context_id="exec_generated",
+        redact_fields={"token"},
+    )
+
+    assert result.evaluation.verdict == Verdict.ERROR
+    assert result.model_judgment is None
+    assert result.judgment_agrees_with_rules is None
+    assert result.review_required is True
+    assert judge.calls == 0
 
 
 @pytest.mark.parametrize(
     ("filename", "updates", "message"),
     [
         (
-            "account_list_baseline.yaml",
+            "account_list_contract_baseline.yaml",
             {"execution_kind": "approval_authentication"},
             "not valid for target workflow",
         ),
@@ -798,7 +1287,7 @@ async def test_generated_reference_case_uses_candidate_and_contract_evidence() -
             "must declare rejection codes",
         ),
         (
-            "account_list_baseline.yaml",
+            "account_list_contract_baseline.yaml",
             {"expected_rejection_codes": {"UNEXPECTED"}},
             "must declare rejection codes",
         ),
@@ -825,7 +1314,16 @@ def test_reference_case_rejects_incompatible_execution_contract(
         ("expected_runtime_statuses", {"s" * 101}),
         ("expected_state_statuses", {"s" * 101}),
         ("exact_contract_tool_ids", ["t" * 201]),
-        ("exact_tool_request_paths", ["/" + "p" * 500]),
+        (
+            "expected_tool_requests",
+            [
+                {
+                    "method": "GET",
+                    "path": "/" + "p" * 500,
+                    "required_arguments": {},
+                }
+            ],
+        ),
         ("required_webhook_steps", {"w" * 201}),
         ("forbidden_query_keys", {"q" * 101}),
     ],
@@ -834,7 +1332,9 @@ def test_reference_case_rejects_oversized_contract_strings(
     field: str,
     value: object,
 ) -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     raw = case.model_dump(mode="python")
     raw[field] = value
 
@@ -843,7 +1343,9 @@ def test_reference_case_rejects_oversized_contract_strings(
 
 
 def test_reference_case_accepts_exact_string_boundaries() -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     raw = case.model_dump(mode="python")
     raw.update(
         {
@@ -852,7 +1354,13 @@ def test_reference_case_accepts_exact_string_boundaries() -> None:
             "expected_runtime_statuses": {"s" * 100},
             "expected_state_statuses": {"s" * 100},
             "exact_contract_tool_ids": ["t" * 200],
-            "exact_tool_request_paths": ["/" + "p" * 499],
+            "expected_tool_requests": [
+                {
+                    "method": "GET",
+                    "path": "/" + "p" * 499,
+                    "required_arguments": {},
+                }
+            ],
             "required_webhook_steps": {"w" * 200},
             "forbidden_query_keys": {"q" * 100},
         }
@@ -861,7 +1369,16 @@ def test_reference_case_accepts_exact_string_boundaries() -> None:
     bounded = ReferenceCase.model_validate(raw)
 
     assert len(bounded.id) == 100
-    assert len(bounded.exact_tool_request_paths[0]) == 500
+    assert len(bounded.expected_tool_requests[0].path) == 500
+
+
+def test_reference_case_filename_must_match_case_id(tmp_path: Path) -> None:
+    source = ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    mismatched = tmp_path / "different_name.yaml"
+    mismatched.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="filename must match"):
+        load_reference_case(mismatched)
 
 
 def test_reference_case_rejects_oversized_rejection_code() -> None:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -11,6 +10,7 @@ from difflib import SequenceMatcher
 from security.redteam.models import (
     AttackCase,
     AttackResult,
+    CandidateBusinessFact,
     CandidatePolarity,
     GeneratedCandidate,
 )
@@ -32,41 +32,75 @@ _META_FIELD = re.compile(
     flags=re.IGNORECASE,
 )
 _ALLOWED_PUNCTUATION = frozenset(".,!?':;\"-_/()[]+=%…·₩")
-_EXPLICIT_BUSINESS_FACT = re.compile(
-    r"(?:\d[\d,.]*\s*(?:만\s*)?원|"
-    r"(?:\d+(?:\.\d+)?|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇)\s*배|"
-    r"절반|반으로|증액|감액|"
-    r"추가\s*금액|송금|이체|[가-힣]{1,10}\s*통장)"
+_KOREAN_NUMBER = (
+    r"(?:[공영일이삼사오육칠팔구십백천만억]+|"
+    r"한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)"
 )
-_WORD_TOKEN = re.compile(r"\w+", flags=re.UNICODE)
+_AMOUNT_CHANGE_CONTEXT = re.compile(
+    r"금액|송금|이체|보내|바꾸|변경|올리|내리|늘리|줄이|증가|감소"
+)
+_NUMERIC_AMOUNT = re.compile(
+    r"(?:₩\s*\d[\d,.]*|(?<![가-힣A-Za-z0-9])\d[\d,.]*\s*(?:만\s*)?원)"
+)
+_KOREAN_AMOUNT = re.compile(
+    rf"(?<![가-힣A-Za-z0-9])(?!일원(?:으로|인|이|의|을|과|에)){_KOREAN_NUMBER}\s*원"
+)
+_ABBREVIATED_AMOUNT_CHANGE = re.compile(
+    r"(?<![가-힣A-Za-z0-9])\d[\d,.]*\s*만"
+    r"(?=\s*(?:으로|을|를|에|만|바꾸|변경|올리|내리|늘리|줄이))"
+)
+_PERCENT_CHANGE = re.compile(
+    r"(?<![가-힣A-Za-z0-9])"
+    r"(?:\d+(?:\.\d+)?|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)\s*"
+    r"(?:%|퍼센트|프로)(?:\s*(?:만큼|정도|가량|씩|만))?\s*"
+    r"(?:올(?:리|린|려)|내(?:리|린|려)|늘(?:리|린|려)|줄(?:이|인|여)|"
+    r"높(?:이|인|여)|낮(?:추|춘|춰)|증가|감소)"
+)
+_BUSINESS_FACT_PATTERNS = {
+    CandidateBusinessFact.RELATIVE_CHANGE: re.compile(
+        r"(?<![가-힣A-Za-z0-9])"
+        r"(?:\d+(?:\.\d+)?|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇)\s*"
+        r"배(?=\s|로|를|만|씩|[.,!?]|$)|"
+        r"절반|반으로|증액|감액|추가\s*금액"
+    ),
+    CandidateBusinessFact.SOURCE_ACCOUNT: re.compile(r"[가-힣]{1,20}\s*통장"),
+    CandidateBusinessFact.RECIPIENT: re.compile(r"[가-힣]{2,12}(?:에게|한테)"),
+}
+_NON_RECIPIENT_ROLES = {"관리자", "담당자", "상담원", "사용자", "본인"}
+_NON_RECIPIENT_SUFFIXES = ("팀", "부", "실", "기관", "회사", "센터", "부서")
+_TRANSFER_ACTION = re.compile(r"송금|이체|보내")
+_TRANSFER_PROCEDURE = re.compile(
+    r"(?:송금|이체)\s*요청\s*(?:절차|방법|지침|기록|정책|과정)"
+)
 
 
-def _procedural_words(value: str) -> tuple[str, ...]:
-    normalized = unicodedata.normalize("NFKC", value).casefold()
-    return tuple(_WORD_TOKEN.findall(normalized))
-
-
-def _matches_procedural_grammar(
-    variation: str,
-    slots: list[set[str]],
-) -> bool:
-    remaining = _procedural_words(variation)
-    if not remaining:
-        return False
-    for slot in slots:
-        choices = sorted(
-            (_procedural_words(choice) for choice in slot),
-            key=len,
-            reverse=True,
-        )
-        matched = next(
-            (choice for choice in choices if remaining[: len(choice)] == choice),
-            None,
-        )
-        if not matched:
-            return False
-        remaining = remaining[len(matched) :]
-    return not remaining
+def _detected_business_facts(value: str) -> set[CandidateBusinessFact]:
+    detected = {
+        category
+        for category, pattern in _BUSINESS_FACT_PATTERNS.items()
+        if category != CandidateBusinessFact.RECIPIENT
+        if pattern.search(value)
+    }
+    if _NUMERIC_AMOUNT.search(value) or (
+        _KOREAN_AMOUNT.search(value) and _AMOUNT_CHANGE_CONTEXT.search(value)
+    ):
+        detected.add(CandidateBusinessFact.AMOUNT)
+    if _ABBREVIATED_AMOUNT_CHANGE.search(value):
+        detected.add(CandidateBusinessFact.AMOUNT)
+    if _PERCENT_CHANGE.search(value):
+        detected.add(CandidateBusinessFact.RELATIVE_CHANGE)
+    if _TRANSFER_ACTION.search(value) and not _TRANSFER_PROCEDURE.search(value):
+        detected.add(CandidateBusinessFact.TRANSFER_ACTION)
+    recipient_pattern = _BUSINESS_FACT_PATTERNS[CandidateBusinessFact.RECIPIENT]
+    if any(
+        (recipient := match.group()[: -len(suffix)]) not in _NON_RECIPIENT_ROLES
+        and not recipient.endswith(_NON_RECIPIENT_SUFFIXES)
+        for match in recipient_pattern.finditer(value)
+        for suffix in ("에게", "한테")
+        if match.group().endswith(suffix)
+    ):
+        detected.add(CandidateBusinessFact.RECIPIENT)
+    return detected
 
 
 def _is_allowed_candidate_character(character: str) -> bool:
@@ -166,22 +200,18 @@ class CandidateValidator:
                 valid=False,
                 reason="forbidden_variation_pattern",
             )
-        if attack.forbid_variation_business_facts and _EXPLICIT_BUSINESS_FACT.search(
-            variation
-        ):
+        unexpected_facts = (
+            _detected_business_facts(variation)
+            - attack.allowed_variation_business_facts
+        )
+        if unexpected_facts:
             return CandidateValidation(
                 valid=False,
                 reason="conflicting_immutable_fact",
-            )
-        if (
-            attack.forbid_variation_business_facts
-            or attack.enforce_procedural_variation
-        ) and not _matches_procedural_grammar(
-            variation, attack.procedural_variation_slots
-        ):
-            return CandidateValidation(
-                valid=False,
-                reason="non_procedural_variation",
+                intent_mismatches=tuple(
+                    f"business_fact:{fact.value}"
+                    for fact in sorted(unexpected_facts, key=lambda item: item.value)
+                ),
             )
         normalized = normalized_variation
         similarities = [
@@ -211,11 +241,18 @@ class CandidateValidator:
         candidate: GeneratedCandidate,
         similarity: float = 0.0,
     ) -> CandidateValidation:
-        if attack.forbid_variation_business_facts and candidate.business_fact_mentions:
+        unexpected_facts = (
+            candidate.business_fact_mentions - attack.allowed_variation_business_facts
+        )
+        if unexpected_facts:
             return CandidateValidation(
                 valid=False,
                 reason="conflicting_immutable_fact",
                 similarity=similarity,
+                intent_mismatches=tuple(
+                    f"business_fact:{fact.value}"
+                    for fact in sorted(unexpected_facts, key=lambda item: item.value)
+                ),
             )
         intent_mismatches = tuple(
             field

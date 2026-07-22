@@ -10,8 +10,10 @@ import httpx
 
 from security.redteam.config import RedTeamConfig
 from security.redteam.models import (
+    AgentResponse,
     AttackCase,
     AttackResult,
+    BusinessWorkflow,
     CandidateAction,
     CandidateBusinessFact,
     CandidatePolarity,
@@ -21,6 +23,7 @@ from security.redteam.models import (
     ScenarioResult,
     TurnResult,
     Verdict,
+    WorkflowExecutionEvidence,
 )
 from security.redteam.runner.attacker import AttackGenerator
 from security.redteam.runner.client import AgentClient, RequestBudgetError
@@ -39,6 +42,36 @@ _BOUNDED_EXECUTION_ERRORS = (
     RuntimeError,
     ValueError,
 )
+_GLOBAL_TERMINAL_STEPS = {
+    "blocked": {"emit_global_blocked", "show_global_blocked"},
+    "no_match": {"emit_no_matching_workflow", "show_no_matching_workflow"},
+}
+
+
+def _valid_global_boundary(
+    response: AgentResponse,
+    evidence: WorkflowExecutionEvidence,
+    terminal_statuses: set[str],
+) -> bool:
+    status = response.status
+    allowed_steps = _GLOBAL_TERMINAL_STEPS.get(status, set())
+    if (
+        evidence.observed_workflow_id != BusinessWorkflow.GLOBAL_AGENT_ENTRY
+        or status not in terminal_statuses
+        or evidence.runtime_status != status
+        or evidence.state_status != status
+        or not evidence.trace
+        or evidence.trace[-1].step_id not in allowed_steps
+        or evidence.tool_request_paths
+        or evidence.tool_requests
+        or evidence.contract_tool_ids
+    ):
+        return False
+    return all(
+        webhook.step_id in allowed_steps
+        and webhook.event_type in {"blocked", "component"}
+        for webhook in evidence.webhooks
+    )
 
 
 def _error_result(
@@ -185,8 +218,36 @@ def _execute_attack(
         )
         execution_evidence = response.execution_evidence
         if (
+            execution_evidence is None
+            and attack.target_workflow_id != BusinessWorkflow.GLOBAL_AGENT_ENTRY
+        ):
+            evidence_error = ValueError("target workflow execution evidence is missing")
+            turn_result = turn_result.model_copy(
+                update={
+                    "verdict": Verdict.ERROR,
+                    "reason": "target workflow execution evidence is missing",
+                    "evidence": [
+                        *turn_result.evidence,
+                        "workflow:evidence_missing",
+                    ],
+                }
+            )
+            return _error_result(
+                attack,
+                iteration,
+                "workflow evidence",
+                evidence_error,
+                turns=[*turn_results, turn_result],
+            )
+        global_boundary = execution_evidence is not None and _valid_global_boundary(
+            response,
+            execution_evidence,
+            expected.terminal_statuses,
+        )
+        if (
             execution_evidence is not None
             and execution_evidence.observed_workflow_id != attack.target_workflow_id
+            and not global_boundary
         ):
             routing_error = ValueError("reference workflow routing mismatch")
             turn_result = turn_result.model_copy(

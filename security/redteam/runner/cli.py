@@ -221,6 +221,35 @@ def _scenario_names(value: str) -> tuple[str, ...]:
     return SCENARIO_PROFILES.get(value, (value,))
 
 
+def _select_attack(scenario: Scenario, attack_id: str | None) -> Scenario:
+    if attack_id is None:
+        return scenario
+    selected = [attack for attack in scenario.attacks if attack.id == attack_id]
+    if not selected:
+        raise ValueError(f"scenario does not contain attack id: {attack_id}")
+    return scenario.model_copy(update={"attacks": selected})
+
+
+def _execution_plan(config: RedTeamConfig, scenario: Scenario) -> dict[str, int]:
+    adaptive_cases = sum(attack.adaptive for attack in scenario.attacks)
+    control_cases = len(scenario.attacks) - adaptive_cases
+    case_executions = sum(
+        config.adaptive_attack.max_iterations_per_attack if attack.adaptive else 1
+        for attack in scenario.attacks
+    )
+    maximum_chat_turns = sum(
+        len(attack.expanded_turns())
+        * (config.adaptive_attack.max_iterations_per_attack if attack.adaptive else 1)
+        for attack in scenario.attacks
+    )
+    return {
+        "adaptive_cases": adaptive_cases,
+        "control_cases": control_cases,
+        "case_executions": case_executions,
+        "maximum_chat_turns": maximum_chat_turns,
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run local adaptive QA scenarios")
     parser.add_argument(
@@ -260,6 +289,11 @@ def _parser() -> argparse.ArgumentParser:
         type=_seed,
         help="override the configured generation seed",
     )
+    parser.add_argument(
+        "--attack-id",
+        type=_scenario_name,
+        help="run only one attack id from the selected scenario",
+    )
     return parser
 
 
@@ -268,9 +302,16 @@ def _run_named_scenario(
     scenario_name: str,
     user_id: str,
     output_dir: Path,
+    attack_id: str | None = None,
 ) -> tuple[Verdict, tuple[Path, Path]]:
     scenario_path = REDTEAM_ROOT / "scenarios" / f"{scenario_name}.yaml"
-    scenario = load_scenario(scenario_path)
+    scenario = _select_attack(load_scenario(scenario_path), attack_id)
+    plan = _execution_plan(config, scenario)
+    print(
+        f"Plan [{scenario_name}]: adaptive={plan['adaptive_cases']}, "
+        f"control={plan['control_cases']}, runs={plan['case_executions']}, "
+        f"max_chat_turns={plan['maximum_chat_turns']}"
+    )
     run_started_at = datetime.now(UTC)
     run_started_monotonic = time.monotonic()
     budget = RequestBudget(
@@ -318,7 +359,7 @@ def _run_named_scenario(
 
 
 _CLI_ERRORS = (
-    FileNotFoundError,
+    OSError,
     ValidationError,
     ValueError,
     SafetyPolicyError,
@@ -376,6 +417,9 @@ def main() -> int:
     config_started_monotonic = time.monotonic()
     initial_redact_fields = DEFAULT_REDACT_FIELDS | load_redact_fields(args.config)
     try:
+        attack_id = getattr(args, "attack_id", None)
+        if attack_id is not None and args.scenario in SCENARIO_PROFILES:
+            raise ValueError("--attack-id requires one scenario, not a profile")
         config = _with_model_overrides(
             load_config(args.config),
             model=getattr(args, "model", None),
@@ -404,11 +448,11 @@ def main() -> int:
         scenario_started_at = datetime.now(UTC)
         scenario_started_monotonic = time.monotonic()
         try:
-            verdict, paths = _run_named_scenario(
-                config,
-                scenario_name,
-                args.user_id,
-                args.output_dir,
+            run_args = (config, scenario_name, args.user_id, args.output_dir)
+            verdict, paths = (
+                _run_named_scenario(*run_args, attack_id=attack_id)
+                if attack_id is not None
+                else _run_named_scenario(*run_args)
             )
         except _CLI_ERRORS as exc:
             message = _redacted_error_message(exc, config.safety.redact_fields)

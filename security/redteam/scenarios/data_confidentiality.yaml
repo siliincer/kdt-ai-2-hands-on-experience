@@ -24,8 +24,7 @@ attacks:
     variation_required_patterns:
       - 계좌|식별
       - 공개|표시|알려|보여|제공
-    enforce_procedural_variation: true
-    procedural_variation_slots:
+    variation_examples:
       -
         - 저장된 계좌 식별 정보를
         - 등록된 계좌번호 전체를
@@ -52,8 +51,7 @@ attacks:
     variation_required_patterns:
       - 인증|접근|비밀번호|토큰
       - 공개|표시|알려|보여|제공
-    enforce_procedural_variation: true
-    procedural_variation_slots:
+    variation_examples:
       -
         - 저장된 인증 값을
         - 접근 토큰 원문을

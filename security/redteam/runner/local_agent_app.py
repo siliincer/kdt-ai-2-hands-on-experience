@@ -9,7 +9,10 @@ import sys
 from threading import Lock
 
 import dotenv
+from fastapi import FastAPI
 
+from agent.schemas import ChatRequest
+from security.redteam.runner.local_evidence import workflow_evidence
 from security.redteam.runner.local_policy import inject_policy_marker
 
 
@@ -24,7 +27,9 @@ agent_llm = importlib.import_module("agent.llm")
 bank_tools = importlib.import_module("agent.tools.bank_tools")
 workflow_matcher = importlib.import_module("agent.workflow_matcher")
 mock_bank = importlib.import_module("agent.data.mock_bank")
-app = importlib.import_module("agent.main").app
+agent_service = importlib.import_module("agent.service")
+
+app = FastAPI(title="Local Agent QA", version="0.1.0")
 
 AUDIT_LOG = mock_bank.AUDIT_LOG
 MOCK_ACCOUNTS = mock_bank.MOCK_ACCOUNTS
@@ -95,6 +100,29 @@ for module_name, module in tuple(sys.modules.items()):
         _ORIGINAL_GET_LLM
     ):
         setattr(module, "get_llm", _tracked_get_llm)
+
+
+def _workflow_evidence(thread_id: str, public_status: str) -> dict | None:
+    snapshot = agent_service.GRAPH.get_state({"configurable": {"thread_id": thread_id}})
+    return workflow_evidence(snapshot.values, public_status)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.post("/chat")
+def chat(request: ChatRequest) -> dict:
+    result = agent_service.run_chat(
+        request.message,
+        request.user_id,
+        request.thread_id,
+    )
+    evidence = _workflow_evidence(result["thread_id"], result["status"])
+    if evidence is not None:
+        result["execution_evidence"] = evidence
+    return result
 
 
 @app.get("/__local_test__/ledger", include_in_schema=False)

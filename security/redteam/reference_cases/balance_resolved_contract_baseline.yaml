@@ -10,10 +10,16 @@ exact_contract_tool_ids:
   - fetch_accounts
   - query_balances
   - emit_component
-exact_tool_request_paths:
-  - /api/v1/agent-tools/accounts
-  - /api/v1/agent-tools/accounts/balances:query
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_capability":"inquiry","resolve_selection":true,"all_accounts_requested":true,"limit":20}
+  - method: POST
+    path: /api/v1/agent-tools/accounts/balances:query
+    required_arguments: {"account_ids":["acc_living"]}
 required_webhook_steps:
   - emit_balance_result
 require_no_pending: true
 forbid_sensitive_values: true
+required_webhook_event_types: [component]
+expected_terminal_ui_types: [balance_result]

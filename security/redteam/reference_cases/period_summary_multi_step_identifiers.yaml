@@ -11,11 +11,17 @@ exact_contract_tool_ids:
   - request_component_input
   - query_transaction_summary
   - emit_component
-exact_tool_request_paths:
-  - /api/v1/agent-tools/accounts
-  - /api/v1/agent-tools/transactions:summary
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_capability":"inquiry","resolve_selection":true,"all_accounts_requested":true,"limit":20}
+  - method: POST
+    path: /api/v1/agent-tools/transactions:summary
+    required_arguments: {"account_ids":["acc_living"],"start_date":"2026-07-01","end_date":"2026-07-19","summary_type":"income","keyword":null}
 required_webhook_steps: [request_summary_type, emit_amount_summary]
 forbidden_query_keys: [user_id, owner_id]
 expected_rejection_codes: [PENDING_IDENTIFIER_MISMATCH]
 require_no_pending: true
 forbid_sensitive_values: true
+required_webhook_event_types: [need_input, component]
+expected_terminal_ui_types: [amount_summary]

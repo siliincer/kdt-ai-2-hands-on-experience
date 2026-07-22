@@ -58,6 +58,20 @@ def _ledger_payload(
     }
 
 
+def _workflow_evidence(workflow_id: str) -> dict:
+    return {
+        "observed_workflow_id": workflow_id,
+        "runtime_status": "running",
+        "state_status": "running",
+        "tool_request_paths": [],
+        "tool_requests": [],
+        "contract_tool_ids": [],
+        "webhooks": [],
+        "pending_identifiers": {},
+        "trace": [],
+    }
+
+
 class _SeedGenerator:
     def __init__(self):
         self.calls = 0
@@ -277,6 +291,82 @@ def test_reference_workflow_routing_mismatch_is_execution_error(tmp_path):
     assert "- Observed workflow: `wf_balance_inquiry`" in markdown
     assert "- Runtime/state status: `completed` / `completed`" in markdown
     assert "- Tool request paths: none" in markdown
+
+
+def test_business_workflow_without_execution_evidence_is_error():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "approval_bypass.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[0]]})
+
+    with AgentClient(
+        config.target,
+        RequestBudget(config.execution.max_requests_per_run),
+        httpx.MockTransport(_handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", _SeedGenerator())
+
+    assert result.verdict == Verdict.ERROR
+    assert result.results[0].execution_error == "workflow evidence:ValueError"
+    assert "workflow:evidence_missing" in result.results[0].evidence
+
+
+def test_business_workflow_accepts_proven_global_terminal_boundary():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "approval_bypass.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[0]]})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/chat":
+            response = _handler(request)
+            payload = json.loads(response.content)
+            payload["execution_evidence"] = {
+                **_workflow_evidence("wf_global_agent_entry"),
+                "runtime_status": "blocked",
+                "state_status": "blocked",
+                "trace": [{"step_id": "emit_global_blocked", "route_key": None}],
+            }
+            return httpx.Response(200, json=payload)
+        return _handler(request)
+
+    with AgentClient(
+        config.target,
+        RequestBudget(config.execution.max_requests_per_run),
+        httpx.MockTransport(handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", _SeedGenerator())
+
+    assert result.verdict == Verdict.PASS
+    assert all(item.verdict == Verdict.PASS for item in result.results)
+
+
+def test_business_workflow_rejects_unproven_global_terminal_boundary():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = load_scenario(ROOT / "scenarios" / "approval_bypass.yaml")
+    scenario = scenario.model_copy(update={"attacks": [scenario.attacks[0]]})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/chat":
+            response = _handler(request)
+            payload = json.loads(response.content)
+            payload["execution_evidence"] = {
+                **_workflow_evidence("wf_global_agent_entry"),
+                "runtime_status": "blocked",
+                "state_status": "blocked",
+                "tool_request_paths": ["/api/v1/agent-tools/transfers"],
+                "trace": [{"step_id": "emit_global_blocked", "route_key": None}],
+            }
+            return httpx.Response(200, json=payload)
+        return _handler(request)
+
+    with AgentClient(
+        config.target,
+        RequestBudget(config.execution.max_requests_per_run),
+        httpx.MockTransport(handler),
+    ) as client:
+        result = run_scenario(config, scenario, client, "user_001", _SeedGenerator())
+
+    assert result.verdict == Verdict.ERROR
+    assert result.results[0].execution_error == "workflow routing:ValueError"
 
 
 def test_model_disagreement_requires_review_without_overriding_rules():
@@ -797,6 +887,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
                     "thread_id": thread_id,
                     "prompt_for": "transfer.approval_decision",
                     "ui": {"type": "confirm_modal"},
+                    "execution_evidence": _workflow_evidence("wf_external_transfer"),
                 },
             )
         if message == "승인" and thread_states[thread_id] == "confirmation":
@@ -809,6 +900,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
                     "thread_id": thread_id,
                     "prompt_for": "transfer.auth_result",
                     "ui": {"type": "auth_request"},
+                    "execution_evidence": _workflow_evidence("wf_external_transfer"),
                 },
             )
         if message == "인증완료" and thread_states[thread_id] == "authentication":
@@ -830,6 +922,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
                     "thread_id": thread_id,
                     "prompt_for": None,
                     "ui": None,
+                    "execution_evidence": _workflow_evidence("wf_external_transfer"),
                 },
             )
         audit_log_count += 1
@@ -849,6 +942,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
                 "thread_id": thread_id,
                 "prompt_for": None,
                 "ui": None,
+                "execution_evidence": _workflow_evidence("wf_external_transfer"),
             },
         )
 
@@ -888,6 +982,9 @@ def test_multi_turn_scenario_rejects_thread_drift():
                         "thread_id": "thread-1",
                         "prompt_for": "transfer.approval_decision",
                         "ui": {"type": "confirm_modal"},
+                        "execution_evidence": _workflow_evidence(
+                            "wf_external_transfer"
+                        ),
                     },
                 )
             return httpx.Response(
@@ -898,6 +995,7 @@ def test_multi_turn_scenario_rejects_thread_drift():
                     "thread_id": "thread-2",
                     "prompt_for": "transfer.auth_result",
                     "ui": {"type": "auth_request"},
+                    "execution_evidence": _workflow_evidence("wf_external_transfer"),
                 },
             )
         return _handler(request)
@@ -970,6 +1068,10 @@ def test_terminal_safe_status_stops_remaining_turns():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/chat":
             messages.append(json.loads(request.content)["message"])
+            response = _handler(request)
+            payload = json.loads(response.content)
+            payload["execution_evidence"] = _workflow_evidence("wf_external_transfer")
+            return httpx.Response(response.status_code, json=payload)
         return _handler(request)
 
     with AgentClient(
@@ -1002,6 +1104,7 @@ def test_terminal_failure_stops_remaining_turns():
                     "status": "blocked",
                     "thread_id": "thread-terminal",
                     "ui": None,
+                    "execution_evidence": _workflow_evidence("wf_external_transfer"),
                 },
             )
         return _handler(request)
@@ -1252,6 +1355,7 @@ def test_failure_survives_followup_chat_error(tmp_path):
                     "thread_id": "thread_001",
                     "prompt_for": None,
                     "ui": None,
+                    "execution_evidence": _workflow_evidence("wf_external_transfer"),
                 },
             )
         return _handler(request)

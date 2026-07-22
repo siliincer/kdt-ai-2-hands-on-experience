@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -122,14 +123,27 @@ def test_completed_reference_manifest_matches_the_exact_case_set() -> None:
 
     assert manifest["version"] == 1
     assert manifest["status"] == "completed"
-    assert manifest["agent_source_commit"] == (
-        "e867ccb95283f1ff1db20a1ad46dd13e80616ebe"
-    )
+    expected_agent_revision = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", "agent"],
+        cwd=ROOT.parents[1],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    ).stdout.strip()
+    assert manifest["agent_source_commit"] == expected_agent_revision
     assert manifest["verification_test"] == (
         "security/redteam/tests/test_agent_reference_integration.py"
     )
     assert manifest["case_ids"] == [case.id for case in cases]
     assert manifest["case_set_sha256"] == _canonical_sha256(cases)
+
+
+def test_coverage_and_reference_manifest_use_same_agent_revision() -> None:
+    coverage = _coverage()
+    manifest = _reference_manifest()
+
+    assert coverage["source"]["main_commit"] == manifest["agent_source_commit"]
 
 
 def test_workflow_coverage_counts_only_meaningful_cells():

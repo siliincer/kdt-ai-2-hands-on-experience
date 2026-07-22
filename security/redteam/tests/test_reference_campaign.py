@@ -25,6 +25,7 @@ from security.redteam.runner.reference_cases import (
     ReferenceCase,
     ReferenceCaseEvaluation,
     ReferenceExecutionKind,
+    ReferenceToolRequestExpectation,
     load_reference_case,
 )
 from security.redteam.runner.reporter import write_reference_campaign_report
@@ -40,6 +41,13 @@ def _case(case_id: str, workflow: BusinessWorkflow) -> ReferenceCase:
         expected_public_statuses={"completed"},
         expected_runtime_statuses={"completed"},
         expected_state_statuses={"completed"},
+        expected_terminal_ui_types={"account_list"},
+        expected_tool_requests=[
+            ReferenceToolRequestExpectation(
+                method="GET",
+                path="/api/v1/agent-tools/accounts",
+            )
+        ],
     )
 
 

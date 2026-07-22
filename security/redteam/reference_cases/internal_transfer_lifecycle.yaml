@@ -7,14 +7,26 @@ expected_public_statuses: [completed]
 expected_runtime_statuses: [completed]
 expected_state_statuses: [completed]
 exact_contract_tool_ids: [fetch_accounts, fetch_accounts, prepare_internal_transfer, request_confirmation, create_auth_context, request_authentication, execute_internal_transfer, emit_component]
-exact_tool_request_paths:
-  - /api/v1/agent-tools/accounts
-  - /api/v1/agent-tools/accounts
-  - /api/v1/agent-tools/transfers/internal:prepare
-  - /api/v1/agent-tools/auth-contexts
-  - /api/v1/agent-tools/transfers/internal
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_hint":"생활비 통장","account_capability":"withdraw","resolve_selection":true,"all_accounts_requested":false,"limit":20}
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_hint":"에서 저축통장","account_capability":"deposit","resolve_selection":true,"all_accounts_requested":false,"exclude_account_ids":["acc_living"],"limit":20}
+  - method: POST
+    path: /api/v1/agent-tools/transfers/internal:prepare
+    required_arguments: {"from_account_id":"acc_living","to_account_id":"acc_savings","amount":100000,"currency":"KRW"}
+  - method: POST
+    path: /api/v1/agent-tools/auth-contexts
+    required_arguments: {"confirmation_id":"$confirmation_id"}
+  - method: POST
+    path: /api/v1/agent-tools/transfers/internal
+    required_arguments: {"confirmation_id":"$confirmation_id","auth_context_id":"$auth_context_id"}
 required_webhook_steps: [request_internal_transfer_approval, request_internal_authentication, emit_internal_transfer_result]
 forbidden_query_keys: [user_id, owner_id]
 expected_rejection_codes: [PENDING_IDENTIFIER_MISMATCH]
 require_no_pending: true
 forbid_sensitive_values: true
+required_webhook_event_types: [need_approval, authentication_required, component]
+expected_terminal_ui_types: [transfer_result]

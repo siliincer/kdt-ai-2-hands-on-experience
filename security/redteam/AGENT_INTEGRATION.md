@@ -27,21 +27,22 @@ observed workflow, runtime/checkpoint status, repeated Tool order, Tool paths, W
 steps, pending identifiers, request/context IDs, and trace. All 51 applicable coverage
 cells have fixture evidence; 19 read cells also pass the global entry.
 
-On main `e867ccb`, setting and transfer graphs pass their dedicated Testbeds, but their
+At Agent source commit `6b247dc7f1d4455308dac5153adc531b68d7391e`, setting and
+transfer graphs pass their dedicated Testbeds, but their
 global-graph approval resume currently ends in the workflow error Webhook. Those cells
 remain partial until nested resume continuity is fixed. Per-case ledger and audit delta
 assertions also remain an integration requirement.
 
 `runner/agent_reference.py` and `test_agent_reference_integration.py` replace the
 temporary preview script with a repository-owned regression path. The latest Agent
-Testbeds execute all 50 reference files: 26 read files and 24 setting or transfer
+Testbeds execute all 51 reference files: 27 read files and 24 setting or transfer
 files. This dedicated-Testbed success does not close the global-graph and ledger or
 audit dependencies above. The `runner/reference_cli.py` command uses separate local
 generation and judgment models and writes one redacted JSON and Markdown campaign
 report.
 
 `reference_evidence_manifest.yaml` pins this completed evidence to Agent commit
-`e867ccb95283f1ff1db20a1ad46dd13e80616ebe` and the exact case-set hash. A checkout
+`6b247dc7f1d4455308dac5153adc531b68d7391e` and the exact case-set hash. A checkout
 without those Agent Testbeds explicitly skips that integration module; verification with
 the pinned Agent source fails when execution no longer matches the manifest.
 Request and execution-context identifiers are required for a passing case. Checkpoint

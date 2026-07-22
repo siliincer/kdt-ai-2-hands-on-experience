@@ -67,6 +67,7 @@ class ExecutionConfig(BaseModel):
 
     max_turns_per_scenario: int = Field(gt=0, le=50)
     max_requests_per_run: int = Field(gt=0, le=500)
+    max_reference_requests_per_run: int = Field(default=1600, gt=0, le=2000)
     max_run_seconds: float = Field(gt=0, le=3600)
     agent_startup_timeout_seconds: float = Field(gt=0, le=60)
     report_finalization_timeout_seconds: float = Field(default=10, gt=0, le=60)
@@ -211,11 +212,11 @@ def _validate_yaml_shape(value: object) -> None:
 
 
 def _load_yaml(path: Path, *, max_bytes: int) -> dict:
-    if not path.is_file():
-        raise ValueError(f"YAML path is not a regular file: {path}")
-    if path.stat().st_size > max_bytes:
-        raise ValueError(f"YAML file exceeds {max_bytes} bytes: {path}")
     try:
+        if not path.is_file():
+            raise ValueError(f"YAML path is not a regular file: {path}")
+        if path.stat().st_size > max_bytes:
+            raise ValueError(f"YAML file exceeds {max_bytes} bytes: {path}")
         with path.open(encoding="utf-8") as stream:
             data = yaml.safe_load(stream)
     except (OSError, UnicodeError, yaml.YAMLError) as exc:
@@ -243,10 +244,16 @@ def load_redact_fields(path: Path) -> set[str]:
         raw = _load_yaml(path, max_bytes=MAX_CONFIG_BYTES)
         safety = raw.get("safety")
         values = safety.get("redact_fields") if isinstance(safety, dict) else None
-        if not isinstance(values, list) or not all(
-            isinstance(item, str) for item in values
-        ):
+        if not isinstance(values, list):
             return set()
-        return SafetyConfig.normalize_redact_fields(set(values))
+        normalized = set()
+        for item in values:
+            if not isinstance(item, str):
+                continue
+            try:
+                normalized.update(SafetyConfig.normalize_redact_fields({item}))
+            except (TypeError, ValueError):
+                continue
+        return normalized
     except (OSError, TypeError, ValueError):
         return set()

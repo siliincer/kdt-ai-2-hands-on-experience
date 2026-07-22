@@ -7,7 +7,10 @@ import pytest
 import security.redteam.runner.reference_cli as reference_cli
 from security.redteam.config import load_config
 from security.redteam.runner.managed_agent import ManagedAgentError
-from security.redteam.runner.reference_cases import MAX_REFERENCE_CASE_BYTES
+from security.redteam.runner.reference_cases import (
+    MAX_REFERENCE_CASE_BYTES,
+    load_reference_case,
+)
 from security.redteam.runner.reporter import ReportWriteError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +41,82 @@ def test_reference_cli_overrides_iteration_count() -> None:
     assert config.adaptive_attack.max_iterations_per_attack == 7
 
 
-def test_reference_cli_resolves_existing_commit_and_rejects_missing_commit() -> None:
+@pytest.mark.parametrize("value", ["UPPER", "with-dash", "../case"])
+def test_reference_cli_rejects_invalid_case_id(value: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError):
+        reference_cli._case_id(value)
+
+
+def test_reference_cli_selects_one_case() -> None:
+    cases = [
+        load_reference_case(path)
+        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))[:2]
+    ]
+
+    selected = reference_cli._select_cases(cases, cases[1].id)
+
+    assert [case.id for case in selected] == [cases[1].id]
+    with pytest.raises(ValueError, match="do not contain case id"):
+        reference_cli._select_cases(cases, "missing_case")
+
+
+def test_reference_cli_resolves_selected_file_before_loading_other_cases(
+    tmp_path: Path,
+) -> None:
+    case_id = "account_list_generated_instruction_case"
+    source = ROOT / "reference_cases" / f"{case_id}.yaml"
+    (tmp_path / source.name).write_text(source.read_text(encoding="utf-8"))
+    (tmp_path / "unrelated.yaml").write_text("not: [valid", encoding="utf-8")
+
+    paths = reference_cli._case_paths(tmp_path, case_id)
+    cases = [load_reference_case(path) for path in paths]
+
+    assert paths == [tmp_path / f"{case_id}.yaml"]
+    assert [case.id for case in cases] == [case_id]
+
+
+def test_reference_request_plan_fits_dedicated_default_budget() -> None:
+    config = load_config(ROOT / "config.example.yaml")
+    cases = [
+        load_reference_case(path)
+        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))
+    ]
+
+    required = reference_cli._required_reference_requests(config, cases)
+
+    assert required == 969
+    assert required <= config.execution.max_reference_requests_per_run
+    assert required > config.execution.max_requests_per_run
+
+
+def test_reference_request_plan_counts_only_generated_model_calls() -> None:
+    config = load_config(ROOT / "config.example.yaml")
+    generated = load_reference_case(
+        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
+    )
+    fixed = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
+
+    assert reference_cli._required_reference_requests(config, [fixed]) == 3
+    assert reference_cli._required_reference_requests(config, [generated]) == 45
+    assert reference_cli._required_reference_requests(config, [fixed, generated]) == 45
+
+
+def test_reference_request_plan_allows_six_default_iterations() -> None:
+    config = load_config(ROOT / "config.example.yaml")
+    raw = config.model_dump(mode="python")
+    raw["adaptive_attack"]["max_iterations_per_attack"] = 6
+    config = type(config).model_validate(raw)
+    cases = [
+        load_reference_case(path)
+        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))
+    ]
+
+    assert reference_cli._required_reference_requests(config, cases) == 1935
+
+
+def test_reference_cli_accepts_commit_format_without_assuming_runner_checkout() -> None:
     expected = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=ROOT.parents[1],
@@ -47,9 +125,8 @@ def test_reference_cli_resolves_existing_commit_and_rejects_missing_commit() -> 
         text=True,
     ).stdout.strip()
 
-    assert reference_cli._resolve_commit(expected[:7]) == expected
-    with pytest.raises(argparse.ArgumentTypeError, match="does not exist"):
-        reference_cli._resolve_commit("deadbee")
+    assert reference_cli._resolve_commit(expected[:7]) == expected[:7]
+    assert reference_cli._resolve_commit("deadbee") == "deadbee"
 
 
 def test_reference_cli_records_execution_error_artifact(monkeypatch, tmp_path) -> None:

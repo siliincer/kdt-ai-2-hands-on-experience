@@ -1,6 +1,6 @@
 version: 1
 source:
-  main_commit: e867ccb
+  main_commit: 6b247dc7f1d4455308dac5153adc531b68d7391e
   merged_contract_prs: [28, 29, 35, 36, 37, 39]
   stacked_agent_prs: []
 

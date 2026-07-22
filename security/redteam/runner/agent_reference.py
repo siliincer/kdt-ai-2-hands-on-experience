@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import re
 import secrets
 import subprocess
 from collections.abc import Awaitable
@@ -63,6 +64,7 @@ class _AgentApi:
     factories: dict[BusinessWorkflow, Any]
     source_commit: str
     source_dirty: bool
+    source_root: Path
 
 
 class _InstrumentedTestbed:
@@ -175,8 +177,10 @@ class AgentReferenceExecutor:
         self._active_case_id: str | None = None
         self._active_candidate: GeneratedCandidate | None = None
         self._active_step_groups: list[list[ReferenceExecutionStep]] = []
+        self._active_adaptive_attempts: list[ReferenceAdaptiveAttempt] = []
         self._generation_history: list[AttackResult] = []
         self._digest_key = secrets.token_bytes(32)
+        self._contract_store = self._api.contract_store()
 
     @property
     def agent_source_commit(self) -> str:
@@ -186,8 +190,34 @@ class AgentReferenceExecutor:
     def agent_source_dirty(self) -> bool:
         return self._api.source_dirty
 
+    def resolve_source_commit(self, value: str) -> str:
+        try:
+            completed = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(self._api.source_root),
+                    "rev-parse",
+                    "--verify",
+                    f"{value}^{{commit}}",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise ValueError(
+                "Agent source commit does not exist in the imported checkout"
+            ) from exc
+        resolved = completed.stdout.strip()
+        if not re.fullmatch(r"[0-9a-f]{40,64}", resolved):
+            raise ValueError("Agent source commit did not resolve to an object id")
+        return resolved
+
     async def __call__(self, case: ReferenceCase) -> ReferenceCampaignEntry:
         self._active_case_id = case.id
+        self._active_adaptive_attempts = []
         self._generation_history = []
         if case.generation is not None and self._max_iterations_per_generated_case > 1:
             return await self._adaptive(case)
@@ -237,13 +267,14 @@ class AgentReferenceExecutor:
             )
 
     async def _adaptive(self, case: ReferenceCase) -> ReferenceCampaignEntry:
-        attempts: list[ReferenceAdaptiveAttempt] = []
         history: list[AttackResult] = []
         final_entry: ReferenceCampaignEntry | None = None
         for iteration in range(1, self._max_iterations_per_generated_case + 1):
             self._generation_history = history
             entry = await self._execute_once(case)
-            attempts.append(self._adaptive_attempt(iteration, entry))
+            self._active_adaptive_attempts.append(
+                self._adaptive_attempt(iteration, entry)
+            )
             final_entry = entry
             if entry.evaluation is None or entry.evaluation.verdict != Verdict.PASS:
                 break
@@ -252,8 +283,10 @@ class AgentReferenceExecutor:
         if final_entry is None:
             raise RuntimeError("adaptive reference execution produced no result")
         payload = final_entry.model_dump(mode="python")
-        payload["adaptive_attempts"] = attempts
-        payload["review_required"] = any(item.review_required for item in attempts)
+        payload["adaptive_attempts"] = self._active_adaptive_attempts
+        payload["review_required"] = any(
+            item.review_required for item in self._active_adaptive_attempts
+        )
         return ReferenceCampaignEntry.model_validate(payload)
 
     @staticmethod
@@ -331,7 +364,7 @@ class AgentReferenceExecutor:
     ) -> ReferenceCampaignEntry:
         timeout_error = RequestBudgetError("reference case deadline exhausted")
         timeout_error.__cause__ = error
-        return _partial_error_entry(
+        partial = _partial_error_entry(
             case,
             "case_execution_timeout",
             timeout_error,
@@ -344,6 +377,16 @@ class AgentReferenceExecutor:
                 else []
             ),
         )
+        if self._active_case_id != case.id or case.generation is None:
+            return partial
+        attempts = [
+            *self._active_adaptive_attempts,
+            self._adaptive_attempt(len(self._active_adaptive_attempts) + 1, partial),
+        ]
+        payload = partial.model_dump(mode="python")
+        payload["adaptive_attempts"] = attempts
+        payload["review_required"] = any(item.review_required for item in attempts)
+        return ReferenceCampaignEntry.model_validate(payload)
 
     async def _bounded(self, awaitable: Awaitable[Any]) -> Any:
         if self._request_budget is None:
@@ -371,7 +414,7 @@ class AgentReferenceExecutor:
 
     async def _single(self, case: ReferenceCase) -> ReferenceCampaignEntry:
         backend = self._api.mock_backend()
-        self._prepare_backend(backend, case.target_workflow_id, suffix=case.id)
+        self._prepare_backend(backend, case, suffix=case.id)
         contract = self._contract(case)
         candidate: GeneratedCandidate | None = None
         steps: list[ReferenceExecutionStep] = []
@@ -469,7 +512,7 @@ class AgentReferenceExecutor:
         backend = self._api.mock_backend()
         self._prepare_backend(
             backend,
-            case.target_workflow_id,
+            case,
             suffix=case.id,
             resume=True,
         )
@@ -587,7 +630,7 @@ class AgentReferenceExecutor:
             backend = self._api.mock_backend()
             self._prepare_backend(
                 backend,
-                case.target_workflow_id,
+                case,
                 suffix=suffix,
             )
             async with self._testbed(
@@ -926,7 +969,11 @@ class AgentReferenceExecutor:
                 value,
                 confirmation_id,
             )
-        contract = self._contract(case)
+        contract = self._contract(
+            case,
+            alternate=alternate,
+            identifier_suffix=suffix,
+        )
         factory = self._api.factories[case.target_workflow_id]
         async with factory(
             backend,
@@ -1642,7 +1689,7 @@ class AgentReferenceExecutor:
         execution_steps = steps if steps is not None else []
         backend = self._api.mock_backend()
         self._add_transfer_backend(backend, suffix, internal=internal)
-        contract = self._contract(case)
+        contract = self._contract(case, identifier_suffix=suffix)
         factory = self._api.factories[case.target_workflow_id]
         async with factory(
             backend,
@@ -1978,8 +2025,38 @@ class AgentReferenceExecutor:
             self._digest_key,
         )
 
-    def _contract(self, case: ReferenceCase) -> dict[str, Any]:
-        return self._api.contract_store().get_workflow(case.target_workflow_id.value)
+    def _contract(
+        self,
+        case: ReferenceCase,
+        *,
+        alternate: bool = False,
+        identifier_suffix: str | None = None,
+    ) -> dict[str, Any]:
+        contract = dict(
+            self._contract_store.get_workflow(case.target_workflow_id.value)
+        )
+        requests = (
+            case.alternate_expected_tool_requests
+            if alternate and case.alternate_expected_tool_requests
+            else case.expected_tool_requests
+        )
+        replacements = (
+            {
+                "$confirmation_id": f"confirm_{identifier_suffix}",
+                "$auth_context_id": f"auth_{identifier_suffix}",
+            }
+            if identifier_suffix is not None
+            else {}
+        )
+        contract["_reference_expected_tool_requests"] = []
+        for item in requests:
+            dumped = item.model_dump(mode="python")
+            dumped["required_arguments"] = {
+                key: replacements.get(value, value) if isinstance(value, str) else value
+                for key, value in dumped["required_arguments"].items()
+            }
+            contract["_reference_expected_tool_requests"].append(dumped)
+        return contract
 
     def _backend_config(self) -> Any:
         return self._api.backend_config(
@@ -1992,11 +2069,15 @@ class AgentReferenceExecutor:
     def _prepare_backend(
         self,
         backend: Any,
-        workflow: BusinessWorkflow,
+        case: ReferenceCase,
         *,
         suffix: str,
         resume: bool = False,
     ) -> None:
+        workflow = case.target_workflow_id
+        empty_account_terminal = case.expected_terminal_ui_types == {
+            "account_card_list"
+        }
         if workflow == BusinessWorkflow.ACCOUNT_LIST:
             backend.add_success(
                 "GET",
@@ -2007,8 +2088,18 @@ class AgentReferenceExecutor:
             backend.add_success(
                 "GET",
                 "/api/v1/agent-tools/accounts",
-                _account_resolution(
-                    selection=(resume and workflow == BusinessWorkflow.BALANCE_INQUIRY)
+                (
+                    {
+                        "account_resolution_outcome": "no_accounts",
+                        "accounts": [],
+                        "account_ids": [],
+                    }
+                    if empty_account_terminal
+                    else _account_resolution(
+                        selection=(
+                            resume and workflow == BusinessWorkflow.BALANCE_INQUIRY
+                        )
+                    )
                 ),
             )
         if resume:
@@ -2017,7 +2108,7 @@ class AgentReferenceExecutor:
                 "/api/v1/webhooks/agent",
                 {"message_id": f"message_input_{suffix}"},
             )
-        if workflow == BusinessWorkflow.BALANCE_INQUIRY:
+        if workflow == BusinessWorkflow.BALANCE_INQUIRY and not empty_account_terminal:
             backend.add_success(
                 "POST",
                 "/api/v1/agent-tools/accounts/balances:query",
@@ -2096,7 +2187,7 @@ def _load_agent_api() -> _AgentApi:
     source_file = getattr(account_list, "__file__", None)
     if not isinstance(source_file, str):
         raise RuntimeError("Agent module does not expose a source path")
-    source_commit, source_dirty = _agent_git_state(Path(source_file))
+    source_commit, source_dirty, source_root = _agent_git_state(Path(source_file))
     return _AgentApi(
         backend_config=clients.BackendClientConfig,
         mock_backend=testing.MockBackend,
@@ -2104,6 +2195,7 @@ def _load_agent_api() -> _AgentApi:
         resume_request=hitl.ExecutionResumeRequest,
         source_commit=source_commit,
         source_dirty=source_dirty,
+        source_root=source_root,
         factories={
             BusinessWorkflow.ACCOUNT_LIST: (
                 account_list.create_account_list_mock_testbed
@@ -2131,7 +2223,7 @@ def _load_agent_api() -> _AgentApi:
     )
 
 
-def _agent_git_state(source_file: Path) -> tuple[str, bool]:
+def _agent_git_state(source_file: Path) -> tuple[str, bool, Path]:
     try:
         root = Path(
             subprocess.run(
@@ -2142,16 +2234,21 @@ def _agent_git_state(source_file: Path) -> tuple[str, bool]:
                 timeout=5,
             ).stdout.strip()
         ).resolve()
+        agent_root = source_file.resolve().parents[3]
+        if agent_root.name != "agent" or agent_root.parent != root:
+            raise ValueError("Agent source path is outside the expected package")
+        scopes = ["agent/src", "agent/pyproject.toml", "pyproject.toml", "uv.lock"]
         commit = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            ["git", "-C", str(root), "log", "-1", "--format=%H", "--", *scopes],
             check=True,
             capture_output=True,
             text=True,
             timeout=5,
         ).stdout.strip()
-        scope = source_file.resolve().relative_to(root).parts[0]
+        if not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+            raise ValueError("Agent source has no committed revision")
         status = subprocess.run(
-            ["git", "-C", str(root), "status", "--porcelain", "--", scope],
+            ["git", "-C", str(root), "status", "--porcelain", "--", *scopes],
             check=True,
             capture_output=True,
             text=True,
@@ -2161,7 +2258,7 @@ def _agent_git_state(source_file: Path) -> tuple[str, bool]:
         raise RuntimeError(
             "Agent source must come from a readable Git checkout"
         ) from exc
-    return commit, bool(status.strip())
+    return commit, bool(status.strip()), root
 
 
 def _account(suffix: str) -> dict[str, Any]:

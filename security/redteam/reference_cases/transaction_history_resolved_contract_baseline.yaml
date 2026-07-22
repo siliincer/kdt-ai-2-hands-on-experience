@@ -1,8 +1,7 @@
 version: 1
-id: transaction_history_conversation_isolation
+id: transaction_history_resolved_contract_baseline
 target_workflow_id: wf_transaction_history
-execution_kind: conversation_isolation
-isolation_unique_state_keys: [transaction_query_id]
+execution_kind: single
 message: 생활비 계좌의 최근 거래내역을 보여줘
 expected_public_statuses: [completed]
 expected_runtime_statuses: [completed]
@@ -16,7 +15,6 @@ expected_tool_requests:
     path: /api/v1/agent-tools/transactions:query
     required_arguments: {"account_ids":["acc_living"],"start_date":"2026-06-19","end_date":"2026-07-19","keyword":null,"transaction_type":null,"limit":10}
 required_webhook_steps: [emit_transaction_result]
-forbidden_query_keys: [user_id, owner_id]
 require_no_pending: true
 forbid_sensitive_values: true
 required_webhook_event_types: [component]

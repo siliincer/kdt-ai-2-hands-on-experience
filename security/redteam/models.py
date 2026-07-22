@@ -6,7 +6,6 @@ import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
-from math import prod
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -18,18 +17,31 @@ from pydantic import (
     model_validator,
 )
 
-MAX_PROCEDURAL_VARIATION_SLOTS = 16
-MAX_PROCEDURAL_CHOICES_PER_SLOT = 20
-MAX_PROCEDURAL_COMBINATIONS = 4096
+MAX_VARIATION_EXAMPLE_GROUPS = 16
+MAX_VARIATION_EXAMPLES_PER_GROUP = 20
 MAX_REGEX_PATTERNS = 50
 MAX_REGEX_PATTERN_LENGTH = 200
 MAX_ATTACK_TURNS = 20
 MAX_SCENARIO_ATTACKS = 100
 MAX_SCENARIO_PRECONDITIONS = 100
+MAX_GENERATION_GUIDANCE_ITEMS = 50
+MAX_SCENARIO_NAME_LENGTH = 200
+MAX_SCENARIO_GOAL_LENGTH = 2000
+MAX_PROMPT_COMPONENT_LENGTH = 2000
+MAX_VARIATION_EXAMPLE_LENGTH = 400
 
-_UNSAFE_REGEX = re.compile(
-    r"\\[1-9]|\\k<|\(\?[=!<]|\([^)]*[+*{][^)]*\)[+*{]|(?:\.\*){2,}|(?:\.\+){2,}"
-)
+_UNSAFE_REGEX = re.compile(r"\\[1-9]|\\k<|[(){}]")
+
+
+def _uses_unsupported_quantifier(pattern: str) -> bool:
+    """Allow only bounded optional character classes as quantifiers."""
+
+    if "*" in pattern or "+" in pattern:
+        return True
+    for index, character in enumerate(pattern):
+        if character == "?" and (index == 0 or pattern[index - 1] != "]"):
+            return True
+    return False
 
 
 def validate_bounded_regex(pattern: str) -> None:
@@ -37,7 +49,7 @@ def validate_bounded_regex(pattern: str) -> None:
 
     if len(pattern) > MAX_REGEX_PATTERN_LENGTH:
         raise ValueError("reply pattern is too long")
-    if _UNSAFE_REGEX.search(pattern):
+    if _UNSAFE_REGEX.search(pattern) or _uses_unsupported_quantifier(pattern):
         raise ValueError("reply pattern uses an unsafe regex construct")
     try:
         re.compile(pattern)
@@ -47,6 +59,12 @@ def validate_bounded_regex(pattern: str) -> None:
 
 Sha256Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 GitCommit = Annotated[str, Field(pattern=r"^[0-9a-f]{40,64}$")]
+PromptComponent = Annotated[
+    str, Field(min_length=1, max_length=MAX_PROMPT_COMPONENT_LENGTH)
+]
+VariationExample = Annotated[
+    str, Field(min_length=1, max_length=MAX_VARIATION_EXAMPLE_LENGTH)
+]
 
 
 class Severity(StrEnum):
@@ -239,7 +257,7 @@ class AttackCase(BaseModel):
     adaptive: bool = False
     expected_intent_action: CandidateAction | None = None
     expected_intent_target: CandidateTarget | None = None
-    candidate_template: str | None = None
+    candidate_template: PromptComponent | None = None
     candidate_required_patterns: list[str] = Field(
         default_factory=list, max_length=MAX_REGEX_PATTERNS
     )
@@ -252,10 +270,13 @@ class AttackCase(BaseModel):
     immutable_fact_patterns: list[str] = Field(
         default_factory=list, max_length=MAX_REGEX_PATTERNS
     )
-    forbid_variation_business_facts: bool = False
-    enforce_procedural_variation: bool = False
-    procedural_variation_slots: list[set[str]] = Field(default_factory=list)
-    generation_guidance: list[str] = Field(default_factory=list)
+    allowed_variation_business_facts: set[CandidateBusinessFact] = Field(
+        default_factory=set
+    )
+    variation_examples: list[set[VariationExample]] = Field(default_factory=list)
+    generation_guidance: list[PromptComponent] = Field(
+        default_factory=list, max_length=MAX_GENERATION_GUIDANCE_ITEMS
+    )
 
     @model_validator(mode="after")
     def has_exactly_one_turn_format(self) -> AttackCase:
@@ -288,28 +309,18 @@ class AttackCase(BaseModel):
             for pattern in self.immutable_fact_patterns
         ):
             raise ValueError("candidate template does not contain immutable facts")
-        if (
-            self.forbid_variation_business_facts or self.enforce_procedural_variation
-        ) and not self.procedural_variation_slots:
-            raise ValueError("enforced variation requires procedural variation slots")
         if any(
             not slot or any(not choice.strip() for choice in slot)
-            for slot in self.procedural_variation_slots
+            for slot in self.variation_examples
         ):
-            raise ValueError("procedural variation slots require non-empty choices")
-        if len(self.procedural_variation_slots) > MAX_PROCEDURAL_VARIATION_SLOTS:
-            raise ValueError("procedural variation has too many slots")
+            raise ValueError("variation example groups require non-empty choices")
+        if len(self.variation_examples) > MAX_VARIATION_EXAMPLE_GROUPS:
+            raise ValueError("variation has too many example groups")
         if any(
-            len(slot) > MAX_PROCEDURAL_CHOICES_PER_SLOT
-            for slot in self.procedural_variation_slots
+            len(slot) > MAX_VARIATION_EXAMPLES_PER_GROUP
+            for slot in self.variation_examples
         ):
-            raise ValueError("procedural variation slot has too many choices")
-        if (
-            self.procedural_variation_slots
-            and prod(len(slot) for slot in self.procedural_variation_slots)
-            > MAX_PROCEDURAL_COMBINATIONS
-        ):
-            raise ValueError("procedural variation has too many combinations")
+            raise ValueError("variation example group has too many choices")
         return self
 
     def expanded_turns(self) -> list[AttackTurn]:
@@ -323,13 +334,13 @@ class Scenario(BaseModel):
 
     version: Literal[1]
     id: str = Field(pattern=r"^wf_[a-z0-9_]+$")
-    name: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=MAX_SCENARIO_NAME_LENGTH)
     type: Literal["adaptive_attack"]
     category: ScenarioCategory
     coverage: set[CoverageTag] = Field(min_length=1)
-    goal: str = Field(min_length=1)
+    goal: str = Field(min_length=1, max_length=MAX_SCENARIO_GOAL_LENGTH)
     severity: Severity
-    preconditions: list[str] = Field(
+    preconditions: list[PromptComponent] = Field(
         default_factory=list, max_length=MAX_SCENARIO_PRECONDITIONS
     )
     attacks: list[AttackCase] = Field(min_length=1, max_length=MAX_SCENARIO_ATTACKS)

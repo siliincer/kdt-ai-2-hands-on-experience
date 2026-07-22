@@ -15,6 +15,7 @@ target:
 execution:
   max_turns_per_scenario: 30
   max_requests_per_run: 350
+  max_reference_requests_per_run: 1600
   max_run_seconds: 1200
   agent_startup_timeout_seconds: 15
   report_finalization_timeout_seconds: 10

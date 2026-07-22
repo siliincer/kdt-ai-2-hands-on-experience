@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import subprocess
 import warnings
 from collections.abc import Sequence
 from dataclasses import replace
@@ -132,9 +133,10 @@ def _metadata(
     cases: list,
     generator: _Generator,
     judge: _Judge,
+    agent_source_commit: str,
 ) -> ReferenceCampaignMetadata:
     return ReferenceCampaignMetadata(
-        agent_source_commit="e867ccb95283f1ff1db20a1ad46dd13e80616ebe",
+        agent_source_commit=agent_source_commit,
         case_set_kind="default",
         runner_git_commit=None,
         runner_git_dirty=None,
@@ -167,11 +169,22 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
         scenarios,
         {"account_number", "authorization", "token"},
     )
+    assert executor.agent_source_dirty is False
+    assert executor.resolve_source_commit(executor.agent_source_commit[:7]) == (
+        executor.agent_source_commit
+    )
+    with pytest.raises(ValueError, match="imported checkout"):
+        executor.resolve_source_commit("f" * 40)
 
     result = await run_reference_campaign(
         cases,
         executor,
-        metadata_factory=lambda: _metadata(cases, generator, judge),
+        metadata_factory=lambda: _metadata(
+            cases,
+            generator,
+            judge,
+            executor.agent_source_commit,
+        ),
     )
 
     failures = [
@@ -181,10 +194,10 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
     ]
     assert failures == []
     assert result.totals == {
-        "executed": 50,
+        "executed": 51,
         "not_supported": 0,
         "not_executed": 0,
-        "PASS": 50,
+        "PASS": 51,
         "FAIL": 0,
         "ERROR": 0,
         "review_required": 0,
@@ -192,6 +205,15 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
     manifest = yaml.safe_load(
         (ROOT / "reference_evidence_manifest.yaml").read_text(encoding="utf-8")
     )
+    expected_agent_revision = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", "agent"],
+        cwd=ROOT.parents[1],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    ).stdout.strip()
+    assert result.metadata.agent_source_commit == expected_agent_revision
     assert result.metadata.agent_source_commit == manifest["agent_source_commit"]
     assert result.metadata.case_set_sha256 == manifest["case_set_sha256"]
     assert [entry.case_id for entry in result.entries] == manifest["case_ids"]
@@ -422,7 +444,7 @@ async def test_agent_reference_preserves_candidate_when_agent_execution_fails(
 @pytest.mark.asyncio
 async def test_reference_steps_reject_sensitive_intermediate_response() -> None:
     case = load_reference_case(
-        ROOT / "reference_cases" / "balance_selection_resume_baseline.yaml"
+        ROOT / "reference_cases" / "balance_selection_resume_contract_baseline.yaml"
     )
     executor = AgentReferenceExecutor(
         _Generator(),
@@ -457,7 +479,9 @@ async def test_reference_steps_reject_sensitive_intermediate_response() -> None:
 async def test_agent_reference_preserves_response_when_evaluator_returns_error(
     monkeypatch,
 ) -> None:
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
 
     def error_evaluation(*args, **kwargs):
         del args, kwargs
@@ -606,7 +630,9 @@ async def test_agent_reference_bounds_hanging_testbed_execution(monkeypatch) -> 
         await asyncio.Event().wait()
 
     monkeypatch.setattr(agent_reference_module, "execute_reference_start", hang)
-    case = load_reference_case(ROOT / "reference_cases" / "account_list_baseline.yaml")
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
+    )
     executor = AgentReferenceExecutor(
         _Generator(),
         _Judge(),
@@ -697,13 +723,65 @@ async def test_campaign_timeout_preserves_generated_candidate_telemetry() -> Non
     result = await run_reference_campaign(
         [case],
         generate_then_hang,
-        metadata_factory=lambda: _metadata([case], generator, judge),
+        metadata_factory=lambda: _metadata(
+            [case], generator, judge, executor.agent_source_commit
+        ),
         remaining_seconds=lambda: 0.01,
         timeout_entry_factory=executor.timeout_entry,
     )
 
     assert result.entries[0].candidate is not None
     assert result.metadata.generator_telemetry.successes == 1
+
+
+@pytest.mark.asyncio
+async def test_campaign_timeout_preserves_prior_adaptive_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = load_reference_case(
+        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
+    )
+    generator = _Generator()
+    judge = _Judge()
+    executor = AgentReferenceExecutor(
+        generator,
+        judge,
+        {
+            name: load_scenario(ROOT / "scenarios" / f"{name}.yaml")
+            for name in ("prompt_injection", "tool_governance", "data_confidentiality")
+        },
+        {"token"},
+        max_iterations_per_generated_case=3,
+    )
+    original_execute_once = executor._execute_once
+    calls = 0
+
+    async def complete_once_then_hang(active_case: ReferenceCase):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return await original_execute_once(active_case)
+        executor._active_candidate = executor._generate(active_case)
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    monkeypatch.setattr(executor, "_execute_once", complete_once_then_hang)
+    result = await run_reference_campaign(
+        [case],
+        executor,
+        metadata_factory=lambda: _metadata(
+            [case], generator, judge, executor.agent_source_commit
+        ),
+        remaining_seconds=lambda: 0.05,
+        timeout_entry_factory=executor.timeout_entry,
+    )
+
+    entry = result.entries[0]
+    assert len(entry.adaptive_attempts) == 2
+    assert entry.adaptive_attempts[0].evaluation.verdict == Verdict.PASS
+    assert entry.adaptive_attempts[1].evaluation.verdict == Verdict.ERROR
+    assert result.metadata.generator_telemetry.successes == 2
+    assert result.metadata.judgment_telemetry.successes == 1
 
 
 def test_timeout_entry_flattens_live_isolation_step_groups() -> None:

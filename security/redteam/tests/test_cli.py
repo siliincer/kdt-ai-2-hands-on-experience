@@ -16,10 +16,12 @@ from security.redteam.runner.cli import (
     EXIT_CODES,
     REGRESSION_SCENARIOS,
     _canonical_sha256,
+    _execution_plan,
     _model_name,
     _reproducibility_metadata,
     _scenario_names,
     _seed,
+    _select_attack,
     _with_model,
     _with_model_overrides,
 )
@@ -139,6 +141,34 @@ def test_scenario_profiles_resolve_to_existing_unique_files():
     assert all(
         (ROOT / "scenarios" / f"{name}.yaml").is_file() for name in ALL_SCENARIOS
     )
+
+
+def test_cli_selects_one_attack_and_reports_multi_step_plan():
+    config = load_config(ROOT / "config.example.yaml")
+    scenario = cli_module.load_scenario(ROOT / "scenarios" / "multi_step_attack.yaml")
+
+    assert _execution_plan(config, scenario) == {
+        "adaptive_cases": 2,
+        "control_cases": 1,
+        "case_executions": 7,
+        "maximum_chat_turns": 24,
+    }
+
+    selected = _select_attack(
+        scenario,
+        "edited_amount_requires_fresh_confirmation",
+    )
+    assert [attack.id for attack in selected.attacks] == [
+        "edited_amount_requires_fresh_confirmation"
+    ]
+    assert _execution_plan(config, selected)["case_executions"] == 3
+
+
+def test_cli_rejects_unknown_attack_id():
+    scenario = cli_module.load_scenario(ROOT / "scenarios" / "multi_step_attack.yaml")
+
+    with pytest.raises(ValueError, match="does not contain attack id"):
+        _select_attack(scenario, "missing_case")
 
 
 def test_cli_converts_managed_agent_error_to_report(monkeypatch, capsys, tmp_path):

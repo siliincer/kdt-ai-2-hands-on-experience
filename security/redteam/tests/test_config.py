@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 from pydantic import ValidationError
 
-from security.redteam.config import RedTeamConfig, load_config, load_scenario
+from security.redteam.config import (
+    RedTeamConfig,
+    load_config,
+    load_redact_fields,
+    load_scenario,
+)
 from security.redteam.models import ExpectedResponse, Scenario
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +25,77 @@ def test_reply_patterns_reject_nested_quantifiers() -> None:
             allowed_statuses={"blocked"},
             forbidden_reply_patterns=[r"(a+)+$"],
         )
+
+
+def test_reply_patterns_reject_quantified_alternation() -> None:
+    with pytest.raises(ValidationError, match="unsafe regex"):
+        ExpectedResponse(
+            allowed_statuses={"blocked"},
+            forbidden_reply_patterns=[r"(?:a|aa)+$"],
+        )
+
+
+def test_reply_patterns_reject_nested_group_wrapper() -> None:
+    with pytest.raises(ValidationError, match="unsafe regex"):
+        ExpectedResponse(
+            allowed_statuses={"blocked"},
+            forbidden_reply_patterns=[r"(?:(?:a)|(?:aa))+$"],
+        )
+
+
+def test_reply_patterns_reject_unbounded_wildcard() -> None:
+    with pytest.raises(ValidationError, match="unsafe regex"):
+        ExpectedResponse(
+            allowed_statuses={"blocked"},
+            forbidden_reply_patterns=[r"start.*finish"],
+        )
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [r"\s*\s*\s*\s*\s*X", r"a*X", r"[a-z]+X"],
+)
+def test_reply_patterns_reject_all_unbounded_quantifiers(pattern: str) -> None:
+    with pytest.raises(ValidationError, match="unsafe regex"):
+        ExpectedResponse(
+            allowed_statuses={"blocked"},
+            forbidden_reply_patterns=[pattern],
+        )
+
+
+@pytest.mark.parametrize("pattern", [r"\*X", r"\\*X", (r"\\*" * 8) + "X"])
+def test_reply_patterns_reject_quantifiers_regardless_of_escape_parity(
+    pattern: str,
+) -> None:
+    with pytest.raises(ValidationError, match="unsafe regex"):
+        ExpectedResponse(
+            allowed_statuses={"blocked"},
+            forbidden_reply_patterns=[pattern],
+        )
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [r"완료|취소", r"50[,.]?[ ]?000[ ]?원", r"본인[ ]?인증"],
+)
+def test_allowed_reply_pattern_finishes_at_maximum_input(pattern: str) -> None:
+    ExpectedResponse(
+        allowed_statuses={"blocked"},
+        forbidden_reply_patterns=[pattern],
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import re,sys; re.search(sys.argv[1], ' ' * 2000)",
+            pattern,
+        ],
+        check=False,
+        capture_output=True,
+        timeout=2,
+    )
+
+    assert completed.returncode == 0
 
 
 def test_config_loader_rejects_oversized_yaml_before_parsing(tmp_path) -> None:
@@ -53,15 +131,13 @@ def test_example_config_allows_only_local_agent():
     assert config.execution.report_finalization_timeout_seconds == 10
 
 
-def test_attack_case_rejects_unbounded_procedural_product() -> None:
+def test_attack_case_rejects_too_many_variation_example_groups() -> None:
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
     attack = scenario.attacks[1]
     raw = attack.model_dump(mode="python")
-    raw["procedural_variation_slots"] = [
-        {f"choice_{index}_a", f"choice_{index}_b"} for index in range(13)
-    ]
+    raw["variation_examples"] = [{f"choice_{index}"} for index in range(17)]
 
-    with pytest.raises(ValidationError, match="too many combinations"):
+    with pytest.raises(ValidationError, match="too many example groups"):
         type(attack).model_validate(raw)
 
 
@@ -141,6 +217,16 @@ def test_config_normalizes_canonical_redact_field_duplicates(tmp_path):
     config = load_config(path)
 
     assert config.safety.redact_fields == {"apikey"}
+
+
+def test_redact_field_recovery_keeps_valid_items_from_invalid_config(tmp_path):
+    raw = yaml.safe_load((ROOT / "config.example.yaml").read_text())
+    raw["safety"]["redact_fields"] = ["demo_private", 3, "---"]
+    raw["unknown"] = True
+    path = tmp_path / "partially-invalid-redact-fields.yaml"
+    path.write_text(yaml.safe_dump(raw))
+
+    assert load_redact_fields(path) == {"demoprivate"}
 
 
 def test_remote_target_is_rejected():
@@ -259,8 +345,7 @@ def test_data_confidentiality_scenario_contract():
         "state_integrity",
     }
     assert len(scenario.attacks) == 2
-    assert all(attack.enforce_procedural_variation for attack in scenario.attacks)
-    assert all(attack.procedural_variation_slots for attack in scenario.attacks)
+    assert all(attack.variation_examples for attack in scenario.attacks)
     assert all(
         attack.expected_ledger is not None and attack.expected_ledger.unchanged
         for attack in scenario.attacks
@@ -280,7 +365,7 @@ def test_tool_governance_scenario_contract():
     }
     adaptive_cases = [attack for attack in scenario.attacks if attack.adaptive]
     assert len(adaptive_cases) == 2
-    assert all(attack.enforce_procedural_variation for attack in adaptive_cases)
+    assert all(attack.variation_examples for attack in adaptive_cases)
     assert all(
         attack.expected_ledger is not None and attack.expected_ledger.unchanged
         for attack in adaptive_cases
@@ -303,7 +388,7 @@ def test_conversation_state_scenario_contract():
     }
     adaptive = scenario.attacks[0]
     assert adaptive.adaptive is True
-    assert adaptive.enforce_procedural_variation is True
+    assert adaptive.variation_examples
     assert len(adaptive.turns) == 2
     assert adaptive.expected_ledger is not None
     assert adaptive.expected_ledger.unchanged is True
@@ -329,7 +414,7 @@ def test_risk_manipulation_scenario_contract():
     }
     adaptive_cases = [attack for attack in scenario.attacks if attack.adaptive]
     assert len(adaptive_cases) == 2
-    assert all(attack.enforce_procedural_variation for attack in adaptive_cases)
+    assert all(attack.variation_examples for attack in adaptive_cases)
     assert all(
         attack.expected_ledger is not None and attack.expected_ledger.unchanged
         for attack in adaptive_cases

@@ -41,6 +41,7 @@ from security.redteam.runner.reference_campaign import (
 )
 from security.redteam.runner.reference_cases import (
     MAX_REFERENCE_CASE_SET_BYTES,
+    ReferenceCase,
     load_reference_case,
 )
 from security.redteam.runner.reporter import (
@@ -67,34 +68,56 @@ def _iteration_count(value: str) -> int:
     return parsed
 
 
-def _source_commit() -> str:
-    completed = subprocess.run(
-        ["git", "rev-parse", "origin/main"],
-        cwd=REDTEAM_ROOT.parents[1],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=5,
+def _case_id(value: str) -> str:
+    if not re.fullmatch(r"[a-z0-9_]+", value):
+        raise argparse.ArgumentTypeError(
+            "case id must contain lowercase letters, numbers, and _"
+        )
+    return value
+
+
+def _select_cases(
+    cases: list[ReferenceCase],
+    case_id: str | None,
+) -> list[ReferenceCase]:
+    if case_id is None:
+        return cases
+    selected = [case for case in cases if case.id == case_id]
+    if not selected:
+        raise ValueError(f"reference cases do not contain case id: {case_id}")
+    return selected
+
+
+def _case_paths(cases_dir: Path, case_id: str | None) -> list[Path]:
+    if case_id is None:
+        return sorted(cases_dir.glob("*.yaml"))
+    path = cases_dir / f"{case_id}.yaml"
+    if not path.is_file():
+        raise ValueError(f"reference cases do not contain case id: {case_id}")
+    return [path]
+
+
+def _required_reference_requests(
+    config: RedTeamConfig,
+    cases: list[ReferenceCase],
+) -> int:
+    generated = sum(case.generation is not None for case in cases)
+    preflight_requests = 1 + len({config.adaptive_attack.model, config.judgment.model})
+    generated_iteration_requests = (
+        2 * config.adaptive_attack.max_generation_attempts
+        + config.adaptive_attack.candidates_per_generation
+        - 1
+        + config.judgment.max_attempts_per_evaluation
     )
-    return _commit(completed.stdout.strip())
+    return preflight_requests + (
+        generated
+        * config.adaptive_attack.max_iterations_per_attack
+        * generated_iteration_requests
+    )
 
 
 def _resolve_commit(value: str) -> str:
-    candidate = _commit(value)
-    try:
-        completed = subprocess.run(
-            ["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"],
-            cwd=REDTEAM_ROOT.parents[1],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except subprocess.SubprocessError as exc:
-        raise argparse.ArgumentTypeError(
-            "Agent source commit does not exist in this repository"
-        ) from exc
-    return _commit(completed.stdout.strip())
+    return _commit(value)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -126,11 +149,16 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--case-id",
+        type=_case_id,
+        help="run only one reference case id",
+    )
+    parser.add_argument(
         "--agent-source-commit",
         "--source-commit",
         dest="agent_source_commit",
         type=_resolve_commit,
-        help="Git commit containing the Agent testbeds (defaults to origin/main)",
+        help="expected Agent subtree revision (defaults to the imported Agent source)",
     )
     return parser
 
@@ -166,10 +194,14 @@ async def _run(
     config: RedTeamConfig | None = None,
 ) -> int:
     config = config or _load_reference_config(args)
-    case_paths = sorted(args.cases_dir.glob("*.yaml"))
+    case_id = getattr(args, "case_id", None)
+    case_paths = _case_paths(args.cases_dir, case_id)
     if len(case_paths) > 100:
         raise ValueError("reference campaign supports at most 100 cases")
-    case_set_bytes = sum(path.stat().st_size for path in case_paths)
+    try:
+        case_set_bytes = sum(path.stat().st_size for path in case_paths)
+    except OSError as exc:
+        raise ValueError("failed to inspect reference case set") from exc
     if case_set_bytes > MAX_REFERENCE_CASE_SET_BYTES:
         raise ValueError(
             f"reference campaign case files exceed {MAX_REFERENCE_CASE_SET_BYTES} bytes"
@@ -177,12 +209,30 @@ async def _run(
     cases = [load_reference_case(path) for path in case_paths]
     if not cases:
         raise ValueError("reference cases directory is empty")
+    cases = _select_cases(cases, case_id)
+    generated_cases = sum(case.generation is not None for case in cases)
+    planned_iterations = (
+        generated_cases * config.adaptive_attack.max_iterations_per_attack
+        + len(cases)
+        - generated_cases
+    )
+    required_requests = _required_reference_requests(config, cases)
+    request_limit = config.execution.max_reference_requests_per_run
+    if required_requests > request_limit:
+        raise ValueError(
+            "reference request budget is smaller than the worst-case execution plan: "
+            f"required={required_requests}, configured={request_limit}"
+        )
+    print(
+        f"Plan [reference]: cases={len(cases)}, generated={generated_cases}, "
+        f"max_case_runs={planned_iterations}, max_requests={required_requests}"
+    )
     scenarios = {
         name: load_scenario(REDTEAM_ROOT / "scenarios" / f"{name}.yaml")
         for name in ("prompt_injection", "tool_governance", "data_confidentiality")
     }
     budget = RequestBudget(
-        config.execution.max_requests_per_run,
+        request_limit,
         config.execution.max_run_seconds,
     )
     model_digests = require_ollama_models(
@@ -193,11 +243,6 @@ async def _run(
     runner_git_commit, runner_git_dirty = _git_state()
     config_sha256 = _canonical_sha256(config)
     case_set_sha256 = _canonical_sha256(cases)
-    agent_source_commit = (
-        args.agent_source_commit
-        if args.agent_source_commit is not None
-        else _source_commit()
-    )
     with OllamaAttackGenerator(
         config.adaptive_attack,
         budget,
@@ -214,7 +259,12 @@ async def _run(
                     config.adaptive_attack.max_iterations_per_attack
                 ),
             )
-            if executor.agent_source_commit != agent_source_commit:
+            agent_source_commit = executor.agent_source_commit
+            if (
+                args.agent_source_commit is not None
+                and executor.resolve_source_commit(args.agent_source_commit)
+                != agent_source_commit
+            ):
                 raise ValueError(
                     "imported Agent checkout does not match --agent-source-commit"
                 )
@@ -227,7 +277,8 @@ async def _run(
                     agent_source_commit=agent_source_commit,
                     case_set_kind=(
                         "default"
-                        if args.cases_dir.resolve()
+                        if case_id is None
+                        and args.cases_dir.resolve()
                         == (REDTEAM_ROOT / "reference_cases").resolve()
                         else "custom"
                     ),
@@ -276,7 +327,7 @@ def main() -> int:
     try:
         config = _load_reference_config(args)
     except (
-        FileNotFoundError,
+        OSError,
         RuntimeError,
         ValidationError,
         ValueError,
@@ -297,7 +348,7 @@ def main() -> int:
     try:
         return asyncio.run(_run(args, config))
     except (
-        FileNotFoundError,
+        OSError,
         ReportWriteError,
         RuntimeError,
         subprocess.SubprocessError,
