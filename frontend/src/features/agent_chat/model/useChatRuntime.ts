@@ -31,18 +31,26 @@ export function useChatRuntime(): ChatRuntime {
   const agent = useAgentStream({ maxRetries: 5 });
 
   const messages = useChatStore((state) => state.messages);
+  const runningId = useChatStore((state) => state.runningId);
   const setMessages = useChatStore((state) => state.setMessages);
   const startTurn = useChatStore((state) => state.startTurn);
   const foldIntoRunning = useChatStore((state) => state.foldIntoRunning);
+  const failRunning = useChatStore((state) => state.failRunning);
+  const reset = useChatStore((state) => state.reset);
 
   const chatSessionIdRef = useRef<string | null>(null);
   const processedRef = useRef(0);
 
+  // HITL 상호작용 에러는 채팅 UI 안에서 인라인 처리한다. TanStack 전역 기본값
+  // (mutations.throwOnError)이 켜져 있어 mutateAsync 를 로컬에서 잡아도 렌더 중
+  // 재throw 되어 ErrorBoundary 로 튀므로, 이 mutation 들에서는 명시적으로 끈다.
   const sendMutation = useMutation({
+    throwOnError: false,
     mutationFn: (vars: { message: string; chatSessionId: string | null }) =>
       sendChat(vars.message, vars.chatSessionId),
   });
   const approveMutation = useMutation({
+    throwOnError: false,
     mutationFn: (vars: {
       chatSessionId: string;
       approvalId: string;
@@ -59,6 +67,7 @@ export function useChatRuntime(): ChatRuntime {
       ),
   });
   const submitInputMutation = useMutation({
+    throwOnError: false,
     mutationFn: (vars: {
       chatSessionId: string;
       inputRequestId: string;
@@ -66,6 +75,7 @@ export function useChatRuntime(): ChatRuntime {
     }) => submitAgentInput(vars.chatSessionId, vars.inputRequestId, vars.value),
   });
   const authenticateMutation = useMutation({
+    throwOnError: false,
     mutationFn: (vars: {
       chatSessionId: string;
       authContextId: string;
@@ -78,6 +88,7 @@ export function useChatRuntime(): ChatRuntime {
       ),
   });
   const verifyRecipientMutation = useMutation({
+    throwOnError: false,
     mutationFn: (vars: {
       chatSessionId: string;
       accountNumber: string;
@@ -90,18 +101,32 @@ export function useChatRuntime(): ChatRuntime {
       ),
   });
 
+  // 로그인 세션마다 깨끗이 시작한다. AssistantProvider 는 로그인 상태에서만 마운트되지만
+  // useChatStore 는 모듈 전역 싱글턴이라 로그아웃/언마운트를 넘어 이전 대화가 남는다.
+  // 마운트(=새 로그인)마다 스토어·스트림·커서를 리셋해 이전 기록 렌더를 막는다.
+  useEffect(() => {
+    reset();
+    agent.reset();
+    chatSessionIdRef.current = null;
+    processedRef.current = 0;
+    // 마운트 1회만. reset/agent.reset 은 안정적 참조.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // agent 가 바인딩한 세션 id 추적(재연결 시 사용)
   useEffect(() => {
     if (agent.chatSessionId) chatSessionIdRef.current = agent.chatSessionId;
   }, [agent.chatSessionId]);
 
-  // 새 SSE 이벤트를 running assistant 메시지에 fold (zustand 로 축적)
+  // 새 SSE 이벤트를 running assistant 메시지에 fold (zustand 로 축적).
+  // running 대상이 없으면 커서를 전진시키지 않는다(소비-후-폐기로 인한 유실 방지).
   useEffect(() => {
+    if (!runningId) return;
     if (processedRef.current >= agent.events.length) return;
     const fresh = agent.events.slice(processedRef.current);
     processedRef.current = agent.events.length;
     foldIntoRunning(fresh);
-  }, [agent.events, foldIntoRunning]);
+  }, [agent.events, runningId, foldIntoRunning]);
 
   const onNew = useCallback(
     async (message: AppendMessage) => {
@@ -109,15 +134,25 @@ export function useChatRuntime(): ChatRuntime {
       if (!text) return;
 
       startTurn(text);
-      const { chat_session_id } = await sendMutation.mutateAsync({
-        message: text,
-        chatSessionId: chatSessionIdRef.current,
-      });
-      chatSessionIdRef.current = chat_session_id;
-      // 이 턴을 위해 스트림 (재)연결(replay-from-last-event-id)
-      agent.start(chat_session_id);
+      try {
+        const { chat_session_id } = await sendMutation.mutateAsync({
+          message: text,
+          chatSessionId: chatSessionIdRef.current,
+        });
+        chatSessionIdRef.current = chat_session_id;
+        // 이 턴을 위해 스트림 (재)연결(replay-from-last-event-id)
+        agent.start(chat_session_id);
+      } catch (error) {
+        // 전송 실패 시 빈 running 버블을 남기지 않고 에러로 마감한다(롤백).
+        // 401 은 customFetch 가 emitUnauthorized → App 이 로그인 화면으로 전환한다.
+        const reason =
+          error instanceof Error && error.message
+            ? error.message
+            : '메시지를 보내지 못했어요. 잠시 후 다시 시도해 주세요.';
+        failRunning(reason);
+      }
     },
-    [agent, startTurn, sendMutation],
+    [agent, startTurn, sendMutation, failRunning],
   );
 
   const approve = useCallback(
