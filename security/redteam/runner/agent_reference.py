@@ -116,7 +116,9 @@ def _partial_error_entry(
     rule_evaluation: ReferenceCaseEvaluation | None = None,
 ) -> ReferenceCampaignEntry:
     preserved_steps = list(steps or [])
-    reason = f"{stage.replace('_', ' ')} failed"
+    base_reason = f"{stage.replace('_', ' ')} failed"
+    error_detail = str(error).strip()
+    reason = f"{base_reason}: {error_detail[:300]}" if error_detail else base_reason
     return ReferenceCampaignEntry(
         case_id=case.id,
         workflow_id=case.target_workflow_id,
