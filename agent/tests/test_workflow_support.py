@@ -19,6 +19,8 @@ from agent.workflows.workflow_support import (
     new_input_request_id,
     publish_event,
     required_input_request_id,
+    resume_data_update,
+    resume_state_data,
     route_key,
     state_data,
     step_request_id,
@@ -57,6 +59,24 @@ class _Dependencies:
         self.webhook_client = _RecordingWebhookClient()
 
 
+class _StubInteractionPauser:
+    def __init__(self, resume_value: Any) -> None:
+        self.resume_value = resume_value
+
+    def pause(self, event: AgentWebhookRequest) -> Any:
+        del event
+        return self.resume_value
+
+
+def _done_event() -> AgentWebhookRequest:
+    return AgentWebhookRequest(
+        chat_session_id="chat_123",
+        event_type="done",
+        content="",
+        metadata={},
+    )
+
+
 def test_state_data_returns_copy_without_mutating_state() -> None:
     state: AgentState = {"data": {"account_id": "account_123"}}
 
@@ -64,6 +84,41 @@ def test_state_data_returns_copy_without_mutating_state() -> None:
     copied["account_id"] = "account_456"
 
     assert state["data"] == {"account_id": "account_123"}
+
+
+def test_resume_state_data_merges_interrupt_return_without_mutating_state() -> None:
+    state: AgentState = {"data": {"account_id": "account_123"}}
+
+    resumed = resume_state_data(
+        state,
+        _StubInteractionPauser(
+            {
+                "account_selection_outcome": "selected",
+                "account_id": "account_456",
+            }
+        ),
+        _done_event(),
+    )
+
+    assert resumed == {
+        "account_id": "account_456",
+        "account_selection_outcome": "selected",
+    }
+    assert resume_data_update(resumed, input_request_id=None) == {
+        "account_id": "account_456",
+        "account_selection_outcome": "selected",
+        "input_request_id": None,
+    }
+    assert state["data"] == {"account_id": "account_123"}
+
+
+def test_resume_state_data_rejects_non_mapping_interrupt_return() -> None:
+    with pytest.raises(ValueError, match="Mapping"):
+        resume_state_data(
+            {"data": {}},
+            _StubInteractionPauser("invalid"),
+            _done_event(),
+        )
 
 
 def test_common_request_id_factories_preserve_trace_format() -> None:

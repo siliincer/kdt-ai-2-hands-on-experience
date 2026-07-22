@@ -38,6 +38,8 @@ from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import (
     required_input_request_id as _required_input_request_id,
 )
+from agent.workflows.workflow_support import resume_data_update as _resume_update
+from agent.workflows.workflow_support import resume_state_data as _resume_data
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
 from agent.workflows.workflow_support import step_request_id as _default_tool_request_id
@@ -179,15 +181,14 @@ def build_transaction_history_graph(
                 "actions": ["select", "cancel"],
             },
         )
-        dependencies.interaction_runtime.pause(event)
-        resumed_data = _data(state)
+        resumed_data = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed_data.get("account_selection_outcome")
         route_key = outcome if outcome in {"selected", "cancelled"} else "error"
         return {
             "current_step_id": "request_transaction_account_selection",
             "route_key": route_key,
             "status": "completed" if route_key == "cancelled" else "running",
-            "data": {"input_request_id": None},
+            "data": _resume_update(resumed_data, input_request_id=None),
         }
 
     async def emit_transaction_accounts_empty(
@@ -266,15 +267,14 @@ def build_transaction_history_graph(
                 "actions": ["select", "cancel"],
             },
         )
-        dependencies.interaction_runtime.pause(event)
-        resumed_data = _data(state)
+        resumed_data = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed_data.get("period_selection_outcome")
         route_key = outcome if outcome in {"selected", "cancelled"} else "error"
         return {
             "current_step_id": "request_period_selection",
             "route_key": route_key,
             "status": "completed" if route_key == "cancelled" else "running",
-            "data": {"input_request_id": None},
+            "data": _resume_update(resumed_data, input_request_id=None),
         }
 
     async def query_transactions(

@@ -41,6 +41,12 @@ class WebhookDependencies(Protocol):
     def webhook_client(self) -> WebhookPublisher: ...
 
 
+class InteractionPauser(Protocol):
+    """HITL 노드가 사용하는 LangGraph interrupt 최소 표면."""
+
+    def pause(self, event: AgentWebhookRequest) -> Any: ...
+
+
 ToolErrorUpdate = Callable[[str, Exception], dict[str, Any]]
 _MASKED_ACCOUNT_FIELDS = (
     "account_id",
@@ -102,6 +108,34 @@ def state_data(state: AgentState) -> dict[str, Any]:
     """누적 State의 data를 Node에서 안전하게 수정할 수 있는 복사본으로 반환한다."""
 
     return dict(state.get("data") or {})
+
+
+def resume_state_data(
+    state: AgentState,
+    interaction_runtime: InteractionPauser,
+    event: AgentWebhookRequest,
+) -> dict[str, Any]:
+    """interrupt 반환값을 현재 Workflow data와 합쳐 재개 노드에 제공한다.
+
+    ExecutionRuntime은 외부 Resume을 현재 Pending과 대조하고 관리시트에 선언된
+    State 값만 매핑한 뒤 ``Command(resume=...)``으로 전달한다. 중첩 Graph에서는
+    이 값이 부모 State update가 아니라 ``interrupt()``의 반환값으로 들어오므로,
+    HITL 노드는 이 반환값을 직접 소비해야 한다.
+    """
+
+    resume_values = interaction_runtime.pause(event)
+    if not isinstance(resume_values, Mapping):
+        raise ValueError("검증된 Resume State 값이 Mapping 형식이 아닙니다.")
+    return {**state_data(state), **dict(resume_values)}
+
+
+def resume_data_update(
+    resumed: Mapping[str, Any],
+    **updates: Any,
+) -> dict[str, Any]:
+    """검증된 Resume 값을 다음 노드용 data delta에 보존한다."""
+
+    return {**dict(resumed), **updates}
 
 
 def route_key(state: AgentState) -> str:
