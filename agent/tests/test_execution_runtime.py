@@ -128,6 +128,22 @@ def _cancel_node(state: RuntimeState) -> RuntimeState:
     }
 
 
+def _workflow_failed_node(state: RuntimeState) -> RuntimeState:
+    return {
+        "status": "workflow_failed",
+        "route_key": "completed",
+        "node_calls": state.get("node_calls", 0) + 1,
+    }
+
+
+def _blocked_node(state: RuntimeState) -> RuntimeState:
+    return {
+        "status": "blocked",
+        "route_key": "completed",
+        "node_calls": state.get("node_calls", 0) + 1,
+    }
+
+
 def _start_request(*, message: str = "홍길동에게 송금해줘") -> ExecutionStartRequest:
     return ExecutionStartRequest(
         request_id="req_start_123",
@@ -209,10 +225,10 @@ async def test_start_resume_maps_state_and_publishes_interrupt_once() -> None:
         def amount_node(state: RuntimeState) -> RuntimeState:
             nonlocal node_calls
             node_calls += 1
-            interaction_runtime.pause(event)
+            resumed = cast(dict[str, Any], interaction_runtime.pause(event))
             return {
-                "data": {"input_request_id": None},
-                "observed_amount": state.get("data", {}).get("amount"),
+                "data": {**resumed, "input_request_id": None},
+                "observed_amount": resumed.get("amount"),
                 "node_calls": node_calls,
             }
 
@@ -344,6 +360,87 @@ async def test_cancelled_completion_does_not_publish_duplicate_done() -> None:
     assert completed.status == "completed"
     assert completed.webhook_message_id is None
     assert reporter.reports == []
+
+
+@pytest.mark.asyncio
+async def test_blocked_completion_does_not_publish_duplicate_done() -> None:
+    reporter = RecordingCompletionReporter()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return _webhook_response()
+
+    async with httpx.AsyncClient(
+        base_url="http://backend.test",
+        transport=httpx.MockTransport(handler),
+    ) as http_client:
+        builder = StateGraph(RuntimeState)
+        builder.add_node("blocked", _blocked_node)
+        builder.set_entry_point("blocked")
+        builder.add_edge("blocked", END)
+        runtime = ExecutionRuntime(
+            graph=cast(
+                ExecutionGraph,
+                builder.compile(checkpointer=MemorySaver()),
+            ),
+            interaction_runtime=InteractionPauseRuntime(
+                BackendWebhookClient(_client_config(), client=http_client)
+            ),
+            resume_mapper=ResumeStateMapper(WorkflowContractStore()),
+            completion_reporter=reporter,
+            thread_id_factory=lambda: "thread_123",
+        )
+
+        completed = await runtime.start(_start_request())
+        replayed = await runtime.start(_start_request())
+
+    assert completed.status == "completed"
+    assert completed.webhook_message_id is None
+    assert replayed.status == "completed"
+    assert replayed.replayed is True
+    assert reporter.reports == []
+
+
+@pytest.mark.asyncio
+async def test_workflow_failure_does_not_publish_duplicate_terminal_event() -> None:
+    failure_reporter = RecordingFailureReporter()
+    completion_reporter = RecordingCompletionReporter()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return _webhook_response()
+
+    async with httpx.AsyncClient(
+        base_url="http://backend.test",
+        transport=httpx.MockTransport(handler),
+    ) as http_client:
+        builder = StateGraph(RuntimeState)
+        builder.add_node("workflow_failed", _workflow_failed_node)
+        builder.set_entry_point("workflow_failed")
+        builder.add_edge("workflow_failed", END)
+        runtime = ExecutionRuntime(
+            graph=cast(
+                ExecutionGraph,
+                builder.compile(checkpointer=MemorySaver()),
+            ),
+            interaction_runtime=InteractionPauseRuntime(
+                BackendWebhookClient(_client_config(), client=http_client)
+            ),
+            resume_mapper=ResumeStateMapper(WorkflowContractStore()),
+            failure_reporter=failure_reporter,
+            completion_reporter=completion_reporter,
+            thread_id_factory=lambda: "thread_123",
+        )
+
+        failed = await runtime.start(_start_request())
+        replayed = await runtime.start(_start_request())
+
+    assert failed.status == "failed"
+    assert failed.webhook_message_id is None
+    assert replayed.status == "failed"
+    assert replayed.replayed is True
+    assert failure_reporter.reports == []
+    assert completion_reporter.reports == []
 
 
 @pytest.mark.asyncio

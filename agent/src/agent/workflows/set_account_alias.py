@@ -36,6 +36,8 @@ from agent.workflows.workflow_support import (
     new_input_request_id as _default_input_request_id,
 )
 from agent.workflows.workflow_support import publish_event as _publish
+from agent.workflows.workflow_support import resume_data_update as _resume_update
+from agent.workflows.workflow_support import resume_state_data as _resume_data
 from agent.workflows.workflow_support import route_key as _route_key
 from agent.workflows.workflow_support import state_data as _data
 from agent.workflows.workflow_support import step_request_id as _default_tool_request_id
@@ -186,9 +188,7 @@ def build_set_account_alias_graph(
                 "actions": ["select", "cancel"],
             },
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("account_selection_outcome")
         if outcome == "selected":
             account_id = resumed.get("account_id")
@@ -200,14 +200,14 @@ def build_set_account_alias_graph(
             return {
                 "current_step_id": "request_account_alias_selection",
                 "route_key": "selected",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_account_alias_selection",
                 "route_key": "cancelled",
                 "status": "completed",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         return _tool_error_update(
             "request_account_alias_selection",
@@ -261,9 +261,7 @@ def build_set_account_alias_graph(
                 "actions": ["submit", "cancel"],
             },
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("alias_input_outcome")
         if outcome == "submitted":
             alias = resumed.get("alias")
@@ -275,14 +273,14 @@ def build_set_account_alias_graph(
             return {
                 "current_step_id": "request_account_alias_input",
                 "route_key": "submitted",
-                "data": {"alias": alias, "input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_account_alias_input",
                 "route_key": "cancelled",
                 "status": "completed",
-                "data": {"input_request_id": None},
+                "data": _resume_update(resumed, input_request_id=None),
             }
         return _tool_error_update(
             "request_account_alias_input",
@@ -398,7 +396,7 @@ def build_set_account_alias_graph(
             payload=dict(view),
         )
         await _publish(dependencies, event, config)
-        return _terminal_update("emit_account_alias_blocked", status="workflow_failed")
+        return _terminal_update("emit_account_alias_blocked", status="blocked")
 
     async def request_account_alias_approval(
         state: AgentState, config: RunnableConfig
@@ -419,14 +417,13 @@ def build_set_account_alias_graph(
             content="계좌 별칭 변경 내용을 확인하고 승인해 주세요.",
             payload=_confirmation_payload(data.get("confirmation_view")),
         )
-        dependencies.interaction_runtime.pause(event)
-
-        resumed = _data(state)
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
         outcome = resumed.get("approval_outcome")
         if outcome == "approved":
             return {
                 "current_step_id": "request_account_alias_approval",
                 "route_key": "approved",
+                "data": _resume_update(resumed),
             }
         if outcome == "change_requested":
             target = resumed.get("change_target")
@@ -438,13 +435,14 @@ def build_set_account_alias_graph(
             return {
                 "current_step_id": "request_account_alias_approval",
                 "route_key": f"change_requested:{target}",
-                "data": {"change_target": target},
+                "data": _resume_update(resumed),
             }
         if outcome == "cancelled":
             return {
                 "current_step_id": "request_account_alias_approval",
                 "route_key": "cancelled",
                 "status": "completed",
+                "data": _resume_update(resumed),
             }
         return _tool_error_update(
             "request_account_alias_approval",

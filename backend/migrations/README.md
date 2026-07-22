@@ -1,14 +1,18 @@
 # Alembic 초기화 및 SQL 파일 위치 지정, 마이그레이션 실행 자동화
 
-한 줄 요약)
+## 한 줄 요약
 
 적용하려면 alembic upgrade head
 
-롤백하려면 alembic downgrade -1
+(루트경로에서는 uv run alembic -c backend/alembic.ini upgrade head)
+
+한 단계 전으로 롤백하려면 alembic downgrade -1
 
 자세한 건 https://github.com/siliincer/kdt-ai-2-hands-on-experience/wiki/Wiki_BE_Alembic 참조
 
-1. Alembic 초기화 (완료)
+## 자세한 migration guide
+
+1. Alembic 초기화 (이미 완료)
 
 $ cd backend
 $ alembic init migrations

@@ -9,7 +9,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useAgentStream } from '@/features/agent_transfer/model/useAgentStream';
 
 import { approveAgentAction } from '../api/approve';
+import { authenticateAgentAction } from '../api/authenticate';
 import { sendChat } from '../api/sendChat';
+import { submitAgentInput } from '../api/submitInput';
 import { convertMessage } from './chatMessage';
 import { useChatStore } from './chatStore';
 import { extractText } from '../utils/extractText';
@@ -53,6 +55,25 @@ export function useChatRuntime(): ChatRuntime {
         vars.decision,
         vars.args,
         vars.component,
+      ),
+  });
+  const submitInputMutation = useMutation({
+    mutationFn: (vars: {
+      chatSessionId: string;
+      inputRequestId: string;
+      value: Record<string, unknown>;
+    }) => submitAgentInput(vars.chatSessionId, vars.inputRequestId, vars.value),
+  });
+  const authenticateMutation = useMutation({
+    mutationFn: (vars: {
+      chatSessionId: string;
+      authContextId: string;
+      password: string;
+    }) =>
+      authenticateAgentAction(
+        vars.chatSessionId,
+        vars.authContextId,
+        vars.password,
       ),
   });
 
@@ -107,6 +128,35 @@ export function useChatRuntime(): ChatRuntime {
     [approveMutation],
   );
 
+  const submitInput = useCallback(
+    async (inputRequestId: string, value: Record<string, unknown>) => {
+      const chatSessionId = chatSessionIdRef.current;
+      if (!chatSessionId) return;
+      await submitInputMutation.mutateAsync({
+        chatSessionId,
+        inputRequestId,
+        value,
+      });
+      // 후속 이벤트는 열려 있는 스트림으로 흘러와 현재 메시지에 이어 fold 된다.
+    },
+    [submitInputMutation],
+  );
+
+  const authenticate = useCallback(
+    async (authContextId: string, password: string) => {
+      const chatSessionId = chatSessionIdRef.current;
+      if (!chatSessionId) return 'failed';
+      const { auth_status } = await authenticateMutation.mutateAsync({
+        chatSessionId,
+        authContextId,
+        password,
+      });
+      // 후속 이벤트(결과 또는 재인증)는 열려 있는 스트림으로 흘러온다.
+      return auth_status;
+    },
+    [authenticateMutation],
+  );
+
   const isRunning =
     agent.status === 'connecting' ||
     agent.status === 'streaming' ||
@@ -120,5 +170,5 @@ export function useChatRuntime(): ChatRuntime {
     convertMessage,
   });
 
-  return { runtime, approve };
+  return { runtime, approve, submitInput, authenticate };
 }

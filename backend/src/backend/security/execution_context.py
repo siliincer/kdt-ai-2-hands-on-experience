@@ -14,6 +14,7 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.agent_exceptions import AgentToolError
+from ..core.request_context import bind_request_id
 from ..db.postgres import get_db
 from ..schemas.execution_context import ResolvedExecutionContext
 from ..services.execution_context_service import resolve_context
@@ -22,6 +23,9 @@ from .agent_service_auth import verify_agent_service_token
 
 async def get_agent_tool_context(
     _: None = Depends(verify_agent_service_token),
+    # X-Request-Id 를 요청 스코프에 바인딩한다(로그 상관관계 전용, 계약 6장).
+    # 값 자체는 여기서 쓰지 않고 로그·감사 기록이 ContextVar 로 꺼내 쓴다.
+    _request_id: str = Depends(bind_request_id),
     x_execution_context_id: str | None = Header(
         default=None, alias="X-Execution-Context-Id"
     ),

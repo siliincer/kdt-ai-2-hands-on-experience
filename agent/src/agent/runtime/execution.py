@@ -144,7 +144,6 @@ class _ExecutionRecord:
 
 @dataclass(frozen=True)
 class _PreparedResume:
-    command_payload: dict[str, Any]
     state_values: dict[str, Any]
 
 
@@ -330,7 +329,6 @@ class ExecutionRuntime:
             record.active_resume_request_id = request.request_id
             record.resume_requests[request.request_id] = request
             record.prepared_resumes[request.request_id] = _PreparedResume(
-                command_payload=validated.command_payload(),
                 state_values=state_update.values,
             )
             return ExecutionResumeAccepted(
@@ -364,10 +362,7 @@ class ExecutionRuntime:
 
         try:
             result = await self._graph.ainvoke(
-                Command(
-                    resume=prepared.command_payload,
-                    update={"data": prepared.state_values},
-                ),
+                Command(resume=prepared.state_values),
                 config=config,
             )
             run_result = await self._finish_invocation(
@@ -421,6 +416,15 @@ class ExecutionRuntime:
     ) -> ExecutionRunResult:
         interrupt_payload = self._interrupt_payload_from_result(result)
         if interrupt_payload is None:
+            if result.get("status") == "workflow_failed":
+                # Workflow 오류 노드가 업무별 안전한 error Webhook을 이미 보냈다.
+                # Runtime은 실패 상태만 확정하고 error/done을 중복 전송하지 않는다.
+                with self._lock:
+                    record.status = "failed"
+                    record.pending_interaction = None
+                    record.webhook_message_id = None
+                    return self._result_from_record(record)
+
             completion_message_id = await self._report_completion(
                 record,
                 result=result,
@@ -452,7 +456,13 @@ class ExecutionRuntime:
         request_id: str,
     ) -> str | None:
         reporter = self._completion_reporter
-        if reporter is None or result.get("route_key") == "cancelled":
+        if (
+            reporter is None
+            or result.get("route_key") == "cancelled"
+            or result.get("status") == "blocked"
+        ):
+            # 취소는 Backend가 사용자 요청 시점에 Stream을 닫고, blocked는
+            # Workflow가 보낸 blocked Webhook 자체를 Backend가 terminal로 처리한다.
             return None
         try:
             return await reporter.report_completion(

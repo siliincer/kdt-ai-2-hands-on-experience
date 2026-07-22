@@ -21,12 +21,16 @@ class ChatResponse(BaseModel):
 
 
 class ApprovalDecision(str, Enum):
+    # 레거시 송금/자동이체 confirm 은 approve/reject 를 쓴다.
     APPROVE = "approve"
     REJECT = "reject"
+    # confirm_modal(UI-HITL 계약 3.7): 승인/수정/취소.
+    CHANGE_REQUESTED = "change_requested"
+    CANCELLED = "cancelled"
 
 
 class ApproveRequest(BaseModel):
-    """POST /api/v1/agent/approve — confirm 카드(HITL) 승인/거절."""
+    """POST /api/v1/agent/approve — confirm 카드(HITL) 승인/거절/수정."""
 
     chat_session_id: UUID
     approval_id: str
@@ -37,5 +41,35 @@ class ApproveRequest(BaseModel):
     )
     component: str | None = Field(
         default=None,
-        description="어떤 confirm 인지(transfer/autotransfer). 후속 턴 분기에 사용.",
+        description="어떤 confirm 인지(transfer/autotransfer/account_alias 등).",
     )
+    change_target: str | None = Field(
+        default=None,
+        description="change_requested 일 때 수정 대상(계약 3.7, 예: alias).",
+    )
+
+
+class AgentInputRequest(BaseModel):
+    """POST /api/v1/agent/input — 일반 입력·선택 대기 회신(UI-HITL 계약 1.5).
+
+    승인(approve)과 구분되는 입력 제출이다. `input_request_id` 로 대기 행을 매칭하고
+    `value` 는 UI 계약별 `*_outcome` 필드를 포함한다(예: account_selection_outcome).
+    """
+
+    chat_session_id: UUID
+    input_request_id: str = Field(
+        min_length=1, description="Agent 가 발급한 입력 요청 id"
+    )
+    value: dict = Field(description="UI 계약별 제출값(outcome 필드 포함)")
+
+
+class AgentAuthenticateRequest(BaseModel):
+    """POST /api/v1/agent/authenticate — 추가 인증(비밀번호 재확인, 계약 3.8).
+
+    인증 원문은 Backend 까지만 전달하고 Agent 로 넘기지 않는다(계약 7.2). Backend 가
+    검증한 결과 상태만 Agent 재개에 사용한다.
+    """
+
+    chat_session_id: UUID
+    auth_context_id: str = Field(min_length=1, description="Backend 가 발급한 인증 id")
+    password: str = Field(min_length=1, description="비밀번호 재확인 원문")
