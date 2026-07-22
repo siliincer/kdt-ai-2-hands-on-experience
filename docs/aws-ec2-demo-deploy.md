@@ -13,7 +13,7 @@ VPC의 별도 모델 EC2에서 실행하는 구조를 기준으로 한다.
 - App path: `/opt/kdt-team3/app`
 - Compose override: `docker-compose.ec2.yml`
 - Nginx config: `nginx/ec2.conf`
-- Model EC2: 아직 생성 전(인스턴스 유형, ID, 사설 주소는 모델 부하 시험 후 기록)
+- Model EC2: `i-029d4908457de6d7c` (`t4g.medium`, private `172.31.15.220`, public `43.203.215.16`)
 
 ## Routing
 
@@ -49,7 +49,7 @@ AGENT_WEBHOOK_SECRET=
 AGENT_SERVICE_TOKEN=
 BACKEND_SERVICE_TOKEN=
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://<MODEL_EC2_PRIVATE_IP_OR_DNS>:11434
+OLLAMA_BASE_URL=http://172.31.15.220:11434
 OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
@@ -94,7 +94,7 @@ EC2 배포 환경:
 
 ```env
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://10.0.1.20:11434
+OLLAMA_BASE_URL=http://172.31.15.220:11434
 OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
@@ -185,7 +185,7 @@ aws ec2 stop-instances \
 EC2를 stop하면 인스턴스 실행 비용은 멈춘다. 남을 수 있는 비용은 다음과 같다.
 
 - EBS root volume: `vol-07152b79beb161283`
-- 모델 EC2 EBS volume(생성 후 ID 기록)
+- 모델 EC2 EBS volume: `i-029d4908457de6d7c` 종료 시 함께 삭제되도록 생성
 - Elastic IP / public IPv4: `15.164.26.234`
 - RDS `kdt-team3-postgres` stopped 상태의 스토리지/백업/Secret
 
