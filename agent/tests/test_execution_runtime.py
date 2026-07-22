@@ -136,6 +136,14 @@ def _workflow_failed_node(state: RuntimeState) -> RuntimeState:
     }
 
 
+def _blocked_node(state: RuntimeState) -> RuntimeState:
+    return {
+        "status": "blocked",
+        "route_key": "completed",
+        "node_calls": state.get("node_calls", 0) + 1,
+    }
+
+
 def _start_request(*, message: str = "홍길동에게 송금해줘") -> ExecutionStartRequest:
     return ExecutionStartRequest(
         request_id="req_start_123",
@@ -351,6 +359,45 @@ async def test_cancelled_completion_does_not_publish_duplicate_done() -> None:
 
     assert completed.status == "completed"
     assert completed.webhook_message_id is None
+    assert reporter.reports == []
+
+
+@pytest.mark.asyncio
+async def test_blocked_completion_does_not_publish_duplicate_done() -> None:
+    reporter = RecordingCompletionReporter()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return _webhook_response()
+
+    async with httpx.AsyncClient(
+        base_url="http://backend.test",
+        transport=httpx.MockTransport(handler),
+    ) as http_client:
+        builder = StateGraph(RuntimeState)
+        builder.add_node("blocked", _blocked_node)
+        builder.set_entry_point("blocked")
+        builder.add_edge("blocked", END)
+        runtime = ExecutionRuntime(
+            graph=cast(
+                ExecutionGraph,
+                builder.compile(checkpointer=MemorySaver()),
+            ),
+            interaction_runtime=InteractionPauseRuntime(
+                BackendWebhookClient(_client_config(), client=http_client)
+            ),
+            resume_mapper=ResumeStateMapper(WorkflowContractStore()),
+            completion_reporter=reporter,
+            thread_id_factory=lambda: "thread_123",
+        )
+
+        completed = await runtime.start(_start_request())
+        replayed = await runtime.start(_start_request())
+
+    assert completed.status == "completed"
+    assert completed.webhook_message_id is None
+    assert replayed.status == "completed"
+    assert replayed.replayed is True
     assert reporter.reports == []
 
 
