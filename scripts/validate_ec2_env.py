@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 from enum import StrEnum
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -20,6 +21,10 @@ KNOWN_PLACEHOLDERS = {
     "mypassword",
     "password",
 }
+PRIVATE_VPC_NETWORKS = tuple(
+    ipaddress.ip_network(cidr)
+    for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
 
 
 class ValidationError(StrEnum):
@@ -37,6 +42,23 @@ class ValidationError(StrEnum):
     DATABASE_URL_PARTS = "COMPOSE_DATABASE_URL must include host, user, and password"
     DATABASE_URL_PASSWORD = "COMPOSE_DATABASE_URL password must match POSTGRES_PASSWORD"
     DATABASE_URL_HOST = "COMPOSE_DATABASE_URL host must be postgres for EC2 Compose"
+    LLM_PROVIDER = "LLM_PROVIDER must be ollama for the EC2 model-host deployment"
+    OLLAMA_BASE_URL_MISSING = "OLLAMA_BASE_URL is missing or empty"
+    OLLAMA_BASE_URL_FORMAT = (
+        "OLLAMA_BASE_URL must be an HTTP URL with port 11434 and no credentials, "
+        "query, or fragment"
+    )
+    OLLAMA_BASE_URL_LOCAL = (
+        "OLLAMA_BASE_URL must target the separate model host, not localhost or "
+        "host.docker.internal"
+    )
+    OLLAMA_BASE_URL_PUBLIC_IP = (
+        "OLLAMA_BASE_URL IP address must be in an RFC1918 private VPC range"
+    )
+    OLLAMA_BASE_URL_PUBLIC_DNS = (
+        "OLLAMA_BASE_URL hostname must be an AWS private DNS name ending in .internal"
+    )
+    OLLAMA_MODEL_MISSING = "OLLAMA_MODEL is missing or empty"
 
 
 SECRET_ERRORS = {
@@ -102,6 +124,47 @@ def validate_environment(values: dict[str, str]) -> list[ValidationError]:
         errors.append(ValidationError.DATABASE_URL_PASSWORD)
     if parsed.hostname != "postgres":
         errors.append(ValidationError.DATABASE_URL_HOST)
+
+    if values.get("LLM_PROVIDER", "").strip().lower() != "ollama":
+        errors.append(ValidationError.LLM_PROVIDER)
+
+    ollama_url = values.get("OLLAMA_BASE_URL", "").strip()
+    if not ollama_url:
+        errors.append(ValidationError.OLLAMA_BASE_URL_MISSING)
+    else:
+        parsed_ollama = urlsplit(ollama_url)
+        try:
+            port = parsed_ollama.port
+        except ValueError:
+            port = None
+        if (
+            parsed_ollama.scheme != "http"
+            or not parsed_ollama.hostname
+            or port != 11434
+            or parsed_ollama.username is not None
+            or parsed_ollama.password is not None
+            or parsed_ollama.path not in {"", "/"}
+            or parsed_ollama.query
+            or parsed_ollama.fragment
+        ):
+            errors.append(ValidationError.OLLAMA_BASE_URL_FORMAT)
+        elif parsed_ollama.hostname.lower() in {
+            "localhost",
+            "host.docker.internal",
+        }:
+            errors.append(ValidationError.OLLAMA_BASE_URL_LOCAL)
+        else:
+            try:
+                address = ipaddress.ip_address(parsed_ollama.hostname)
+            except ValueError:
+                if not parsed_ollama.hostname.lower().endswith(".internal"):
+                    errors.append(ValidationError.OLLAMA_BASE_URL_PUBLIC_DNS)
+            else:
+                if not any(address in network for network in PRIVATE_VPC_NETWORKS):
+                    errors.append(ValidationError.OLLAMA_BASE_URL_PUBLIC_IP)
+
+    if not values.get("OLLAMA_MODEL", "").strip():
+        errors.append(ValidationError.OLLAMA_MODEL_MISSING)
     return errors
 
 

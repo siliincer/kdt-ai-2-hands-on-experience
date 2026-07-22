@@ -18,6 +18,10 @@ services:
     restart: unless-stopped
 
   agent:
+    environment:
+      LLM_PROVIDER: ollama
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?OLLAMA_BASE_URL is required for EC2}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-exaone3.5:7.8b}
     restart: unless-stopped
 
   nginx:

@@ -115,6 +115,9 @@ jobs:
             echo "COMPOSE_DATABASE_URL=postgresql://app:${db_password}@postgres:5432/financial_agent"
             echo "JWT_SECRET_KEY=$(openssl rand -hex 32)"
             echo "AGENT_WEBHOOK_SECRET=$(openssl rand -hex 32)"
+            echo "LLM_PROVIDER=ollama"
+            echo "OLLAMA_BASE_URL=http://10.0.1.20:11434"
+            echo "OLLAMA_MODEL=exaone3.5:7.8b"
           } > .env.ec2-ci
       - name: Validate EC2 environment
         run: python3 scripts/validate_ec2_env.py --env-file .env.ec2-ci

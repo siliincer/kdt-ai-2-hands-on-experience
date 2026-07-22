@@ -1,7 +1,8 @@
 # AWS EC2 demo deploy
 
 이 문서는 시연용 EC2 배포 상태와 재기동 절차를 정리한다. Production 운영 구성이
-아니며, 팀 데모를 위해 단일 EC2에서 Docker Compose로 전체 스택을 실행한다.
+아니다. 애플리케이션 스택은 기존 EC2에서 실행하고, 배포 시 사용하는 Ollama는 같은
+VPC의 별도 모델 EC2에서 실행하는 구조를 기준으로 한다.
 
 ## 현재 구조
 
@@ -12,6 +13,7 @@
 - App path: `/opt/kdt-team3/app`
 - Compose override: `docker-compose.ec2.yml`
 - Nginx config: `nginx/ec2.conf`
+- Model EC2: 아직 생성 전(인스턴스 유형, ID, 사설 주소는 모델 부하 시험 후 기록)
 
 ## Routing
 
@@ -44,6 +46,9 @@ POSTGRES_PASSWORD=
 COMPOSE_DATABASE_URL=postgresql://app:<POSTGRES_PASSWORD>@postgres:5432/financial_agent
 JWT_SECRET_KEY=
 AGENT_WEBHOOK_SECRET=
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://<MODEL_EC2_PRIVATE_IP_OR_DNS>:11434
+OLLAMA_MODEL=exaone3.5:7.8b
 ```
 
 현재 Backend는 `DATABASE_URL`을 사용하므로 DB 비밀번호가 URL에도 들어간다.
@@ -68,14 +73,38 @@ sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.
 않는다. 외부 시연에서 실제 인증 흐름을 사용하기 전에 CloudFront 기본
 도메인과 HTTPS를 적용한다.
 
-## Ollama policy
+## Ollama deployment boundary
 
-Ollama는 로컬 개발 머신에서만 실행한다. EC2에는 Ollama 서버나 모델을 올리지 않는다.
+배포용 Ollama는 애플리케이션 EC2와 분리한다. 우선 Agent 팀에서 임시로 선택한
+`exaone3.5:7.8b`를 사용하며, 모델명은 환경변수로 관리해 평가 결과에 따라 교체한다.
 
-다만 배포 가능한 코드와 환경변수에는 Ollama provider를 포함한다. 즉,
-`LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` 설정은 레포에 남기되,
-EC2 데모 환경에서는 기본적으로 `LLM_PROVIDER=openai` 또는 LLM 실패 시 규칙 기반
-fallback 경로로 동작하게 둔다.
+- 모델 EC2는 애플리케이션 EC2와 같은 VPC에 둔다.
+- Ollama `11434/tcp` 인바운드는 애플리케이션 EC2 Security Group만 source로 허용한다.
+- 인터넷 또는 Nginx를 통해 Ollama API를 공개하지 않는다.
+- 애플리케이션은 모델 EC2의 사설 IP 또는 사설 DNS로만 접근한다.
+- 현재 애플리케이션 EC2인 `t4g.small`에 모델을 함께 올리지 않는다.
+- 모델 EC2 유형은 모델 실행 메모리와 응답 시간을 부하 시험한 후 확정한다.
+
+EC2 배포 환경:
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://10.0.1.20:11434
+OLLAMA_MODEL=exaone3.5:7.8b
+```
+
+`OLLAMA_BASE_URL`에는 loopback, `host.docker.internal`, 공개 IP/DNS 또는 자격증명
+포함 URL을 사용할 수 없다. 모델 EC2 초기 설치와 모델 다운로드에 필요한 관리 경로는
+생성 전에 결정하며, Ollama API용 공개 인바운드는 추가하지 않는다.
+
+모델 EC2의 Ollama 수신 설정 예시:
+
+```env
+OLLAMA_HOST=0.0.0.0:11434
+```
+
+이 설정은 Security Group 제한과 함께 사용해야 한다. 로컬 개발 정책은 AWS 배포와
+별개다.
 
 로컬 Docker 컨테이너에서 호스트 Ollama를 사용할 때:
 
@@ -113,6 +142,12 @@ sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.
 curl http://127.0.0.1:8001/health
 ```
 
+애플리케이션 EC2에서 모델 EC2 연결 확인:
+
+```bash
+curl --fail --max-time 5 "$OLLAMA_BASE_URL/api/tags"
+```
+
 외부 검증:
 
 ```bash
@@ -130,11 +165,22 @@ aws ec2 stop-instances \
   --profile kdt-team3-infra
 ```
 
+모델 EC2를 생성한 뒤에는 실제 ID를 `MODEL_EC2_INSTANCE_ID`에 설정하고 별도로
+중지한다.
+
+```bash
+aws ec2 stop-instances \
+  --instance-ids "$MODEL_EC2_INSTANCE_ID" \
+  --region ap-northeast-2 \
+  --profile kdt-team3-infra
+```
+
 ## Cost notes
 
 EC2를 stop하면 인스턴스 실행 비용은 멈춘다. 남을 수 있는 비용은 다음과 같다.
 
 - EBS root volume: `vol-07152b79beb161283`
+- 모델 EC2 EBS volume(생성 후 ID 기록)
 - Elastic IP / public IPv4: `15.164.26.234`
 - RDS `kdt-team3-postgres` stopped 상태의 스토리지/백업/Secret
 
