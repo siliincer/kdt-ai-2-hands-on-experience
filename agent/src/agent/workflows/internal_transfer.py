@@ -44,6 +44,10 @@ from agent.workflows.workflow_support import tool_call as _tool_call
 WORKFLOW_ID = "wf_internal_transfer"
 _tool_error_update = build_tool_error_update("이체를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
+# 관리시트 route_key=limit_exceeded(1회 송금 한도) 스펙 — Prepare 호출 전에 먼저 걸러
+# 백엔드까지 안 보내고 바로 차단한다.
+_TRANSFER_LIMIT = 50_000_000
+
 # 승인·수정·인증 재시도 화면의 정정 대상 3종 — route_internal_transfer_correction,
 # request_internal_transfer_approval, request_internal_transfer_correction이 공유한다.
 _RESET_STEP_BY_TARGET = {
@@ -326,10 +330,27 @@ def build_internal_transfer_graph(
 
     async def check_internal_transfer_amount(state: AgentState) -> dict[str, Any]:
         amount = _data(state).get("amount")
-        valid = isinstance(amount, int) and not isinstance(amount, bool) and amount > 0
+        if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
+            return {
+                "current_step_id": "check_internal_transfer_amount",
+                "route_key": "invalid",
+            }
+        if amount > _TRANSFER_LIMIT:
+            return {
+                "current_step_id": "check_internal_transfer_amount",
+                "route_key": "limit_exceeded",
+                "data": {
+                    "blocked_view": {
+                        "title": "이체할 수 없습니다.",
+                        "description": (
+                            f"1회 이체 한도({_TRANSFER_LIMIT:,}원)를 초과했습니다. 요청 금액: {amount:,}원"
+                        ),
+                    }
+                },
+            }
         return {
             "current_step_id": "check_internal_transfer_amount",
-            "route_key": "valid" if valid else "invalid",
+            "route_key": "valid",
         }
 
     async def request_internal_transfer_amount(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -917,13 +938,14 @@ def build_internal_transfer_graph(
         {
             "valid": "start_internal_transfer_prepare",
             "invalid": "request_internal_transfer_amount",
+            "limit_exceeded": "emit_internal_transfer_blocked",
         },
     )
     graph.add_conditional_edges(
         "request_internal_transfer_amount",
         _route_key,
         {
-            "submitted": "start_internal_transfer_prepare",
+            "submitted": "check_internal_transfer_amount",
             "cancelled": END,
             "error": "emit_internal_transfer_error",
         },

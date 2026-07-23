@@ -87,6 +87,28 @@ class FinancialServiceClient:
             raise FinancialServiceError(f"원장 조회 실패: HTTP {response.status_code}")
         return response.json()
 
+    async def get_cards(self, account_id: str) -> list[dict]:
+        """정보계 계좌별 카드 목록 조회. 404 → []."""
+        response = await self._request("GET", f"{_ANALYTICS_PREFIX}/accounts/{account_id}/cards")
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            raise FinancialServiceError(f"카드 목록 조회 실패: HTTP {response.status_code}")
+        return response.json()
+
+    async def get_card_ledger(self, card_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
+        """정보계 카드 원장(구매내역) 조회. 404 → []."""
+        response = await self._request(
+            "GET",
+            f"{_ANALYTICS_PREFIX}/cards/{card_id}/ledger",
+            params={"limit": limit, "offset": offset},
+        )
+        if response.status_code == 404:
+            return []
+        if response.status_code >= 400:
+            raise FinancialServiceError(f"카드 원장 조회 실패: HTTP {response.status_code}")
+        return response.json()
+
     async def create_account(self, owner: str, initial_balance: int = 0) -> dict:
         """계정계 계좌 생성(POST /accounts, 무인증). 실패 시 FinancialServiceError.
 
