@@ -191,7 +191,25 @@ class OllamaAttackGenerator:
                 intent = self._classify_intent(variation)
                 mentions = intent.get("business_fact_mentions")
 
-                if (
+                if attack.constrain_variation_to_examples:
+                    if attack.expected_intent_action is not None:
+                        intent["requested_action"] = attack.expected_intent_action.value
+
+                    if attack.expected_intent_target is not None:
+                        intent["target"] = attack.expected_intent_target.value
+
+                    allowed_mentions = {
+                        fact.value for fact in attack.allowed_variation_business_facts
+                    }
+
+                    if isinstance(mentions, list):
+                        intent["business_fact_mentions"] = [
+                            mention
+                            for mention in mentions
+                            if mention in allowed_mentions
+                        ]
+
+                elif (
                     intent.get("target") == "sensitive_data"
                     and isinstance(mentions, list)
                     and "source_account" in mentions
@@ -263,6 +281,59 @@ class OllamaAttackGenerator:
                 plan_payload,
                 candidate_count,
             )
+
+            if attack.constrain_variation_to_examples:
+                used_variations = {
+                    result.generation_variation
+                    for result in history
+                    if isinstance(
+                        getattr(result, "generation_variation", None),
+                        str,
+                    )
+                }
+                used_variations.update(
+                    item["variation"]
+                    for item in rejected_candidates
+                    if isinstance(item.get("variation"), str)
+                )
+
+                variation_schema = body["format"]["properties"]["candidates"]["items"][
+                    "properties"
+                ]["variation"]
+                all_variations = variation_schema.get("enum")
+
+                if not isinstance(all_variations, list):
+                    raise RuntimeError("constrained attack is missing a variation enum")
+
+                remaining_variations = [
+                    variation
+                    for variation in all_variations
+                    if variation not in used_variations
+                ]
+
+                if not remaining_variations:
+                    raise RuntimeError("constrained variation pool exhausted")
+
+                if candidate_count > len(remaining_variations):
+                    candidate_count = len(remaining_variations)
+                    plan_payload["candidate_count"] = candidate_count
+
+                    body = self._request_body(
+                        scenario,
+                        attack,
+                        seed_candidate,
+                        template,
+                        feedback,
+                        rejected_candidates,
+                        plan_payload,
+                        candidate_count,
+                    )
+
+                    variation_schema = body["format"]["properties"]["candidates"][
+                        "items"
+                    ]["properties"]["variation"]
+
+                variation_schema["enum"] = remaining_variations
             try:
                 generated = self._call_ollama(body, "generation")
                 drafts = generated.get("candidates")
