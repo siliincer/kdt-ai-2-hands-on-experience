@@ -232,7 +232,7 @@ async def main() -> None:
         await session.commit()
 
     print("[seed_qa_personas] 완료. 로그인 정보(비밀번호 전부 동일):")
-    print(f"  password: {_PASSWORD}")
+    print("  password: [REDACTED]")
     for email in dict.fromkeys(str(p["email"]) for p in _PERSONAS):
         print(f"  - {email}")
 
