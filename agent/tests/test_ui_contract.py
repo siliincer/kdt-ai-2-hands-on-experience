@@ -146,33 +146,15 @@ def test_all_interrupt_uis_conform_to_schema(graph):
     }
 
 
-def test_openapi_exposes_ui_contract(client):
-    """/openapi.json에 ui 5종 스키마가 노출된다 — 프론트/백엔드가
-    서버만 띄우면(/docs) 계약을 코드 기반으로 확인할 수 있어야 한다."""
+def test_openapi_omits_legacy_chat_ui_contract(client):
+    """UI는 Webhook 계약으로 전달하며 구형 ChatResponse는 노출하지 않는다."""
     spec = client.get("/openapi.json").json()
     schemas = spec["components"]["schemas"]
-    for name in (
-        "AccountCardListUi",
-        "SearchSelectUi",
-        "NumberInputUi",
-        "ConfirmModalUi",
-        "AuthRequestUi",
-    ):
-        assert name in schemas, f"{name} 스키마가 OpenAPI에 없음"
-    ui_refs = str(schemas["ChatResponse"]["properties"]["ui"])
-    assert "ConfirmModalUi" in ui_refs
+    assert "ChatResponse" not in schemas
+    assert "/chat" not in spec["paths"]
 
 
-def test_chat_api_exposes_ui(client):
-    """HTTP /chat 응답에 ui가 그대로 노출되고, 완료 응답에는 없다."""
-    first = client.post("/chat", json={"message": "김철수한테 5만원 보내줘"}).json()
-    assert first["status"] == "waiting_input"
-    assert first["ui"]["type"] == "confirm_modal"
-    assert first["ui"]["display"]["amount"] == 50_000
-
-    second = client.post("/chat", json={"message": "송금하기", "thread_id": first["thread_id"]}).json()
-    assert second["ui"]["type"] == "auth_request"
-
-    third = client.post("/chat", json={"message": "인증완료", "thread_id": second["thread_id"]}).json()
-    assert third["status"] == "completed"
-    assert third["ui"] is None
+def test_legacy_chat_api_cannot_expose_ui(client):
+    """구형 /chat UI 응답 경로가 다시 열리는 회귀를 막는다."""
+    response = client.post("/chat", json={"message": "김철수한테 5만원 보내줘"})
+    assert response.status_code == 404
