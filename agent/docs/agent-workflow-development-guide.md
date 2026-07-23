@@ -8,7 +8,7 @@
 
 ## 1. 시작 원칙
 
-신규 Workflow 개발은 기존 `bank_tools.py`, Mock 원장과 `/chat` 구조를 확장하는 작업이 아니다. 관리시트 v3와 Agent·Backend 계약을 구현하는 작업이다.
+신규 Workflow 개발은 관리시트 V3와 Agent·Backend 계약을 구현하는 작업이다.
 
 모든 사람과 AI 에이전트는 작업 시작 전에 다음을 지킨다.
 
@@ -97,35 +97,30 @@ pyproject.toml
 
 Workflow 구현에 공통 변경이 먼저 필요하면 기능 브랜치에서 우회 구현하지 않는다. 변경 요구를 통합 담당자에게 전달하고 공통 기반 PR을 먼저 병합한다.
 
-### 4.3 신규 개발에서 수정하지 않는 경로
+### 4.3 제거된 구형 경로
 
 ```text
 src/agent/bank_client.py
 src/agent/data/mock_bank.py
 src/agent/tools/bank_tools.py
 src/agent/tools/registry.py
+src/agent/graph.py
+src/agent/subgraph_builder.py
 ```
 
-이 파일은 기존 Demo 호환 영역이다.
+이 파일과 Agent 직접 `POST /chat` 경로는 V3 Runtime 전환 후 삭제되었다.
+신규 Workflow에서 같은 이름이나 역할의 호환 계층을 다시 만들지 않는다.
 
-`src/agent/config/*.yaml`과 `contracts/workflow-contracts.json`도 직접 편집하지 않는다. 계약 생성 절차를 통해 갱신한다.
+`src/agent/config/guardrail_rules.yaml`과 `contracts/workflow-contracts.json`도 직접
+편집하지 않는다. 계약 생성 절차를 통해 갱신한다.
 
 ## 5. 브랜치와 PR
 
-기능 브랜치는 최신 `integration/agent-workflows`에서 시작한다.
+기능 브랜치는 최신 `main`에서 시작한다.
 
-```text
-integration/agent-workflows
-├── feat/agent-wf-account-list
-├── feat/agent-wf-transaction-history
-├── feat/agent-wf-period-summary
-├── feat/agent-wf-settings
-└── feat/agent-wf-transfers
-```
-
-- 기능 브랜치의 PR 대상은 `integration/agent-workflows`다.
+- 기능 브랜치의 PR 대상은 `main`이다.
 - 기능 브랜치끼리 직접 병합하지 않는다.
-- 공통 변경은 통합 브랜치에 먼저 반영한 뒤 기능 브랜치가 다시 받는다.
+- 공통 변경은 작은 선행 PR로 먼저 반영한 뒤 기능 브랜치가 다시 받는다.
 - 계약 문서 변경과 Workflow 구현을 같은 PR에 섞지 않는다.
 - 관련 없는 파일, 개인 IDE 설정과 Notebook 실행 출력은 커밋하지 않는다.
 - 커밋, Push와 PR 생성은 담당 개발자가 변경 범위를 확인한 후 수행한다.

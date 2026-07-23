@@ -1,12 +1,14 @@
 # Agent Workflow 병렬 개발 실행 계획
 
-> 상태: 공동개발 운영 기준
+> 상태: V3 전환 당시 병렬 개발 계획 기록
 >
 > 대상: Agent, Backend, Frontend 개발자
 >
 > 목적: 확정된 Agent 연동 계약과 관리시트를 기준으로 여러 개발자가 Workflow를 병렬 구현하면서 중복 개발, 공용 파일 충돌과 Backend 연동 병목을 줄인다.
 >
-> 구체적인 파일 소유권, 구현 순서, 테스트 명령과 AI 에이전트 작업 규칙은 `agent-workflow-development-guide.md`를 따른다.
+> 현재 파일 소유권, 구현 순서와 테스트 명령은
+> `agent-workflow-development-guide.md`를 따른다. 아래의 구형 YAML 언급은
+> 전환 당시 충돌 원인을 설명하는 기록이다.
 
 ## 1. 목표
 
