@@ -21,6 +21,7 @@ QA 재현 목적 전용 스크립트다. 비밀번호는 데모용 평문 상수
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select
@@ -29,6 +30,9 @@ from backend.core.load_environment_var import settings
 from backend.core.security import get_password_hash
 from backend.db.postgres import AsyncSessionLocal
 from backend.models.account import Account
+from backend.models.chat_session import ChatSession
+from backend.models.confirmation import Confirmation, ConfirmationOperation, ConfirmationStatus
+from backend.models.execution_context import ExecutionContext, ExecutionContextStatus
 from backend.models.user import User
 from backend.repository.user_repository import get_user_by_email
 
@@ -98,7 +102,7 @@ async def _fetch_ledger_account(client: httpx.AsyncClient, external_account_id: 
     return response.json()
 
 
-async def _upsert_account(session, *, user_id, ledger: dict, alias: str, is_default: bool) -> None:
+async def _upsert_account(session, *, user_id, ledger: dict, alias: str, is_default: bool) -> Account:
     stmt = select(Account).where(Account.external_account_id == ledger["account_id"])
     result = await session.execute(stmt)
     account = result.scalar_one_or_none()
@@ -116,19 +120,83 @@ async def _upsert_account(session, *, user_id, ledger: dict, alias: str, is_defa
             is_default=is_default,
         )
         session.add(account)
-        return
+        await session.flush()
+        return account
     account.user_id = user_id
     account.account_number = ledger["account_number"]
     account.bank_name = ledger["bank_name"]
     account.balance = ledger["balance"]
     account.alias = alias
     account.is_default = is_default
+    await session.flush()
+    return account
+
+
+async def _ensure_recipient_history(
+    session,
+    *,
+    sender: User,
+    from_account: Account,
+    recipient_account: Account,
+    recipient_name: str,
+    amount: int,
+) -> None:
+    """수취인 자동확정(#5, resolve_recipient) 테스트용 완료된 타인송금 이력을 만든다.
+
+    Backend는 "실행 완료된 타인송금 Confirmation"의 fixed_data(recipient_account_id·
+    recipient_name)를 이력 원천으로 쓴다(영속 recipients 테이블 없음, D5). 이게 없으면
+    "OO에게 송금해줘" 발화가 항상 수취인 선택 화면부터 다시 시작한다.
+    """
+    stmt = select(Confirmation).where(
+        Confirmation.user_id == sender.id,
+        Confirmation.status == ConfirmationStatus.EXECUTED,
+        Confirmation.operation == ConfirmationOperation.EXTERNAL_TRANSFER,
+    )
+    result = await session.execute(stmt)
+    for existing in result.scalars().all():
+        if existing.fixed_data.get("recipient_name") == recipient_name:
+            return  # 이미 있음(재실행 안전)
+
+    now = datetime.now(timezone.utc)
+    chat_session = ChatSession(user_id=sender.id)
+    session.add(chat_session)
+    await session.flush()
+
+    execution_context = ExecutionContext(
+        user_id=sender.id,
+        chat_session_id=chat_session.id,
+        scopes=["account:read", "transfer:request", "settings:write"],
+        status=ExecutionContextStatus.COMPLETED,
+        expires_at=now + timedelta(hours=1),
+    )
+    session.add(execution_context)
+    await session.flush()
+
+    confirmation = Confirmation(
+        execution_context_id=execution_context.id,
+        user_id=sender.id,
+        operation=ConfirmationOperation.EXTERNAL_TRANSFER,
+        status=ConfirmationStatus.EXECUTED,
+        fixed_data={
+            "from_account_id": str(from_account.id),
+            "recipient_account_id": str(recipient_account.id),
+            "recipient_name": recipient_name,
+            "amount": amount,
+            "fee": 0,
+            "currency": "KRW",
+        },
+        expires_at=now - timedelta(days=3) + timedelta(hours=1),
+        approved_at=now - timedelta(days=3),
+        executed_at=now - timedelta(days=3),
+    )
+    session.add(confirmation)
 
 
 async def main() -> None:
     base_url = settings.MOCK_FINANCIAL_SERVICE_URL
     async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as client, AsyncSessionLocal() as session:
         users_by_email: dict[str, User] = {}
+        default_accounts_by_email: dict[str, Account] = {}
         for persona in _PERSONAS:
             email = str(persona["email"])
             if email not in users_by_email:
@@ -136,12 +204,28 @@ async def main() -> None:
             user = users_by_email[email]
 
             ledger = await _fetch_ledger_account(client, str(persona["external_account_id"]))
-            await _upsert_account(
+            account = await _upsert_account(
                 session,
                 user_id=user.id,
                 ledger=ledger,
                 alias=str(persona["alias"]),
                 is_default=bool(persona["is_default"]),
+            )
+            if persona["is_default"]:
+                default_accounts_by_email[email] = account
+
+        # 김지훈 -> 박서연 수취인 자동확정용 완료 이력("박서연에게 송금해줘"가 바로
+        # 승인 단계로 가도록). 두 계좌가 이번에 준비됐을 때만 만든다.
+        kimjihun_account = default_accounts_by_email.get("qa1@email.com")
+        parkseoyeon_account = default_accounts_by_email.get("qa2@email.com")
+        if kimjihun_account is not None and parkseoyeon_account is not None:
+            await _ensure_recipient_history(
+                session,
+                sender=users_by_email["qa1@email.com"],
+                from_account=kimjihun_account,
+                recipient_account=parkseoyeon_account,
+                recipient_name="박서연",
+                amount=30000,
             )
 
         await session.commit()
