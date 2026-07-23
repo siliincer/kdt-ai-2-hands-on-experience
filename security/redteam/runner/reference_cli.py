@@ -20,7 +20,7 @@ from security.redteam.config import (
 )
 from security.redteam.runner.agent_reference import AgentReferenceExecutor
 from security.redteam.runner.attacker import OllamaAttackGenerator
-from security.redteam.runner.cli import (
+from security.redteam.runner.cli_common import (
     DEFAULT_REDACT_FIELDS,
     _canonical_sha256,
     _git_state,
