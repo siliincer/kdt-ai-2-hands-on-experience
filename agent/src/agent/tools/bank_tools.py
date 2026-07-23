@@ -354,6 +354,9 @@ def generate_account_list_response(state: dict) -> dict:
 
 _AMOUNT_MAN = re.compile(r"(\d[\d,]*)\s*만\s*원?")
 _AMOUNT_WON = re.compile(r"(\d[\d,]*)\s*원")
+# 문장에서 금액 토큰 추출: 숫자+한글단위(1개 이상, "5천만원") 또는 숫자+원("50000원").
+# 단위/원이 없는 맨 숫자는 과추출을 피하려 잡지 않는다.
+_AMOUNT_TOKEN = re.compile(r"\d[\d,]*(?:[억만천백십]\d*)+원?|\d[\d,]*\s*원")
 _RECIPIENT_PATTERN = re.compile(r"(\S+?)(?:에게|한테|께)")
 _FROM_ACCOUNT_PATTERN = re.compile(r"(\S+?)\s*(?:통장|계좌)\s*에서")
 _ACCOUNT_KEYWORDS = ["생활비", "입출금", "저축", "적금", "주거래"]
@@ -368,11 +371,44 @@ def _is_cancel(reply: str) -> bool:
     return "취소" in text or text in _CANCEL_EXACT
 
 
+# 한글 금액 단위(큰 단위부터). 천/백/십은 만-블록 안에서 누적된다.
+_KOR_UNIT_CHARS = "억만천백십"
+_KOR_SECTION = {"억": 10**8, "만": 10**4}
+_KOR_SMALL = {"천": 10**3, "백": 10**2, "십": 10}
+_AMOUNT_KOR_CORE = re.compile(rf"^[0-9{_KOR_UNIT_CHARS}]+$")
+
+
+def _parse_korean_amount(core: str) -> int | None:
+    """숫자+한글단위(억/만/천/백/십) 복합 표기를 정수로 해석한다.
+
+    예: "5천만"=50,000,000, "1억2천만"=120,000,000, "3만5천"=35,000, "5만"=50,000.
+    허용 문자 외(공백·기타)가 있으면 None(호출부에서 미리 정규화).
+    """
+    if not _AMOUNT_KOR_CORE.match(core):
+        return None
+    total = 0  # 만/억 단위로 확정된 누계
+    block = 0  # 현재 만-블록(천/백/십 누적)
+    num = 0  # 대기 중인 숫자 런
+    for ch in core:
+        if ch.isdigit():
+            num = num * 10 + int(ch)
+        elif ch in _KOR_SECTION:  # 만/억: 블록을 확정
+            val = block + num or 1  # "만"/"억" 단독은 1로 취급
+            total += val * _KOR_SECTION[ch]
+            block = 0
+            num = 0
+        else:  # 천/백/십: 만-블록 안에서 누적
+            block += (num or 1) * _KOR_SMALL[ch]
+            num = 0
+    total += block + num
+    return total if total > 0 else None
+
+
 def _parse_amount(value) -> int | None:
     """금액 입력을 정수(원)로 정규화한다. 해석 불가면 None.
 
-    지원: 50000, 50000.0, "5만원", "5만", "50,000원", "50000"
-    미지원(한계): "1만 5천원" 같은 혼합 단위 표기.
+    지원: 50000, 50000.0, "5만원", "5만", "50,000원", "50000",
+    복합 한글단위 "5천만원"=50,000,000, "1억"=100,000,000, "3만5천"=35,000.
     """
     if isinstance(value, bool):
         return None
@@ -381,15 +417,23 @@ def _parse_amount(value) -> int | None:
     if not isinstance(value, str):
         return None
     text = value.strip()
+    # 정규화: 콤마·공백 제거 후 후행 "원" 제거 → 순수 숫자/한글단위 코어.
+    core = text.replace(",", "").replace(" ", "")
+    if core.endswith("원"):
+        core = core[:-1]
+    if core.isdigit():
+        n = int(core)
+        return n if n > 0 else None
+    kor = _parse_korean_amount(core)
+    if kor is not None:
+        return kor
+    # 레거시 폴백: 문장 등에서 "N만"/"N원" 검색(기존 동작 보존).
     m = _AMOUNT_MAN.search(text)
     if m:
         return int(m.group(1).replace(",", "")) * 10000
     m = _AMOUNT_WON.search(text)
     if m:
         return int(m.group(1).replace(",", ""))
-    bare = text.replace(",", "")
-    if bare.isdigit():
-        return int(bare)
     return None
 
 
@@ -590,13 +634,9 @@ def _extract_transfer_slots_by_rule(user_input: str) -> dict:
     recipient = m.group(1) if m else None
 
     amount = None
-    m = _AMOUNT_MAN.search(user_input)
+    m = _AMOUNT_TOKEN.search(user_input)
     if m:
-        amount = int(m.group(1).replace(",", "")) * 10000
-    else:
-        m = _AMOUNT_WON.search(user_input)
-        if m:
-            amount = int(m.group(1).replace(",", ""))
+        amount = _parse_amount(m.group(0))
 
     from_hint = None
     m = _FROM_ACCOUNT_PATTERN.search(user_input)
