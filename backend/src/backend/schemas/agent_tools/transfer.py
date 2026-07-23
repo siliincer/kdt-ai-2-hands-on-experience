@@ -67,9 +67,7 @@ class ExternalTransferPrepareRequest(BaseModel):
     def _exactly_one_recipient(self) -> "ExternalTransferPrepareRequest":
         provided = [self.to_recipient_id, self.to_recipient_candidate_id]
         if sum(value is not None for value in provided) != 1:
-            raise ValueError(
-                "to_recipient_id 와 to_recipient_candidate_id 중 하나만 보내야 합니다."
-            )
+            raise ValueError("to_recipient_id 와 to_recipient_candidate_id 중 하나만 보내야 합니다.")
         return self
 
 

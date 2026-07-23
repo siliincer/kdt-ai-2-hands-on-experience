@@ -42,18 +42,14 @@ async def create_recipient_candidate(
     return candidate
 
 
-async def get_recipient_candidate_by_id(
-    session: AsyncSession, candidate_id: UUID
-) -> RecipientCandidate | None:
+async def get_recipient_candidate_by_id(session: AsyncSession, candidate_id: UUID) -> RecipientCandidate | None:
     """id 로 후보를 조회한다(없으면 None). 소유권 검증은 서비스가 담당한다."""
     stmt = select(RecipientCandidate).where(RecipientCandidate.id == candidate_id)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
 
-async def mark_candidate_consumed(
-    session: AsyncSession, candidate: RecipientCandidate
-) -> bool:
+async def mark_candidate_consumed(session: AsyncSession, candidate: RecipientCandidate) -> bool:
     """후보를 원자적으로 소비 처리한다(C6 동시성).
 
     verified→consumed 조건부 UPDATE 로 한 번만 성공한다. 동시 Prepare 에서 이미 다른

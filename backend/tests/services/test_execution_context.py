@@ -43,9 +43,7 @@ def _patch_lookup(monkeypatch, context):
     async def _lookup(session, context_id):
         return context
 
-    monkeypatch.setattr(
-        execution_context_service, "get_execution_context_by_id", _lookup
-    )
+    monkeypatch.setattr(execution_context_service, "get_execution_context_by_id", _lookup)
 
 
 @pytest.mark.asyncio

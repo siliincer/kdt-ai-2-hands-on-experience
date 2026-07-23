@@ -98,9 +98,7 @@ async def test_consume_active_succeeds(monkeypatch):
     _patch_get(monkeypatch, pending)
     _patch_consume(monkeypatch, ok=True)
 
-    result = await pending_input_service.consume_pending_input(
-        _NO_SESSION, chat_session_id, "input_1"
-    )
+    result = await pending_input_service.consume_pending_input(_NO_SESSION, chat_session_id, "input_1")
     assert result is pending
     assert result.status == PENDING_INPUT_STATUS_CONSUMED
 
@@ -109,9 +107,7 @@ async def test_consume_active_succeeds(monkeypatch):
 async def test_consume_missing_is_404(monkeypatch):
     _patch_get(monkeypatch, None)
     with pytest.raises(HTTPException) as exc:
-        await pending_input_service.consume_pending_input(
-            _NO_SESSION, uuid4(), "input_x"
-        )
+        await pending_input_service.consume_pending_input(_NO_SESSION, uuid4(), "input_x")
     assert exc.value.status_code == 404
 
 
@@ -121,9 +117,7 @@ async def test_consume_other_session_is_404(monkeypatch):
     pending = _pending(uuid4(), "input_1")  # 다른 chat_session
     _patch_get(monkeypatch, pending)
     with pytest.raises(HTTPException) as exc:
-        await pending_input_service.consume_pending_input(
-            _NO_SESSION, uuid4(), "input_1"
-        )
+        await pending_input_service.consume_pending_input(_NO_SESSION, uuid4(), "input_1")
     assert exc.value.status_code == 404
 
 
@@ -132,9 +126,7 @@ async def test_consume_expired_is_410(monkeypatch):
     chat_session_id = uuid4()
     _patch_get(monkeypatch, _pending(chat_session_id, "input_1", expires_in=-1))
     with pytest.raises(HTTPException) as exc:
-        await pending_input_service.consume_pending_input(
-            _NO_SESSION, chat_session_id, "input_1"
-        )
+        await pending_input_service.consume_pending_input(_NO_SESSION, chat_session_id, "input_1")
     assert exc.value.status_code == 410
 
 
@@ -146,9 +138,7 @@ async def test_consume_inactive_is_409(monkeypatch):
         _pending(chat_session_id, "input_1", status=PENDING_INPUT_STATUS_CONSUMED),
     )
     with pytest.raises(HTTPException) as exc:
-        await pending_input_service.consume_pending_input(
-            _NO_SESSION, chat_session_id, "input_1"
-        )
+        await pending_input_service.consume_pending_input(_NO_SESSION, chat_session_id, "input_1")
     assert exc.value.status_code == 409
 
 
@@ -159,7 +149,5 @@ async def test_consume_race_lost_is_409(monkeypatch):
     _patch_get(monkeypatch, _pending(chat_session_id, "input_1"))
     _patch_consume(monkeypatch, ok=False)
     with pytest.raises(HTTPException) as exc:
-        await pending_input_service.consume_pending_input(
-            _NO_SESSION, chat_session_id, "input_1"
-        )
+        await pending_input_service.consume_pending_input(_NO_SESSION, chat_session_id, "input_1")
     assert exc.value.status_code == 409

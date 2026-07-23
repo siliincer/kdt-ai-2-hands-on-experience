@@ -95,9 +95,7 @@ class AdaptiveAttackConfig(BaseModel):
     def output_budget_supports_candidate_count(self) -> AdaptiveAttackConfig:
         minimum_tokens = 128 * self.candidates_per_generation
         if self.max_output_tokens < minimum_tokens:
-            raise ValueError(
-                "max_output_tokens must provide at least 128 tokens per candidate"
-            )
+            raise ValueError("max_output_tokens must provide at least 128 tokens per candidate")
         return self
 
 
@@ -122,9 +120,7 @@ class SafetyConfig(BaseModel):
     allow_remote_targets: Literal[False] = False
     required_bank_client: Literal["local"] = "local"
     required_llm_provider: Literal["ollama"] = "ollama"
-    required_ollama_base_url: Literal["http://127.0.0.1:11434"] = (
-        "http://127.0.0.1:11434"
-    )
+    required_ollama_base_url: Literal["http://127.0.0.1:11434"] = "http://127.0.0.1:11434"
     required_ollama_model: str = Field(min_length=1, max_length=200)
     allowed_user_ids: set[str] = Field(min_length=1)
     redact_fields: set[str] = Field(default_factory=set)
@@ -133,11 +129,7 @@ class SafetyConfig(BaseModel):
     @classmethod
     def normalize_redact_fields(cls, fields: set[str]) -> set[str]:
         normalized = {
-            "".join(
-                character
-                for character in unicodedata.normalize("NFKC", field).casefold()
-                if character.isalnum()
-            )
+            "".join(character for character in unicodedata.normalize("NFKC", field).casefold() if character.isalnum())
             for field in fields
         }
         if "" in normalized:

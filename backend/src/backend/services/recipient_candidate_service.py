@@ -44,13 +44,9 @@ async def verify_recipient_candidate(
 
     account = await get_account_by_number(session, req.account_number.strip())
     if account is None or not account.active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_MESSAGE
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_MESSAGE)
     if req.bank_name and account.bank_name and req.bank_name != account.bank_name:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_MESSAGE
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_MESSAGE)
     # 본인 계좌는 타인송금 수취처가 아니다(본인이체 Workflow 대상).
     if account.user_id == user_id:
         raise HTTPException(
@@ -59,9 +55,7 @@ async def verify_recipient_candidate(
         )
 
     resolved_name = (account.user.name if account.user else None) or "예금주"
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=RECIPIENT_CANDIDATE_TTL_SECONDS
-    )
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=RECIPIENT_CANDIDATE_TTL_SECONDS)
     candidate = await create_recipient_candidate(
         session,
         user_id=user_id,

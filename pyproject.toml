@@ -11,6 +11,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+override-dependencies = [
+    "pyasn1>=0.6.4"
+]
 
 [tool.uv.workspace]
 members = [
@@ -42,8 +45,8 @@ dev = [
 # https://deptry.com/rules-violations/#standard-library-dependencies-dep005
 
 [tool.ruff]
-src = [".", "backend", "agent"]
-line-length = 88
+src = [".", "backend", "agent", "mock-financial-service", "e2e"]
+line-length = 120
 target-version = "py311"
 # 노트북은 티칭용이라 lint/format 대상에서 제외 (ruff는 기본으로 ipynb 포함)
 # Alembic auto-generates these — don't hand-format/lint machine-generated
@@ -53,9 +56,11 @@ extend-exclude = ["*.ipynb", "mock-financial-service/alembic_migrations/versions
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]  # <--- 줄 길이 초과 에러(E501)만 검사에서 제외합니다.
+# TODO(agent): agent쪽 에러가 많아서 임시방편으로 넣었는데 조치 후 삭제바랍니다.
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend", "agent"]
+known-first-party = ["backend", "agent", "mock-financial-service", "e2e"]
 
 [tool.ruff.format]
 

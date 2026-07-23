@@ -1,6 +1,6 @@
-"""http 모드 UI enrich(소비/예산/카드) 단위 테스트.
+"""UI enrich(소비/예산/카드) 단위 테스트 (계정계 http 일원화).
 
-원장 dict -> 뷰 모델 변환 로직(순수 함수)을 DB/네트워크 없이 검증한다.
+원장 dict -> 뷰 모델 변환 로직(순수 함수)과 계정계 조회 경로를 stub 으로 검증한다.
 """
 
 from uuid import uuid4
@@ -72,45 +72,23 @@ def test_mask_card_number_leaves_short_input():
 
 
 def test_ledger_to_recent_signs_amount_and_maps_type():
-    credit = _ledger_to_recent(
-        {"entry_type": "CREDIT", "amount": 3000, "created_at": "2026-06-25T09:00:00Z"}
-    )
+    credit = _ledger_to_recent({"entry_type": "CREDIT", "amount": 3000, "created_at": "2026-06-25T09:00:00Z"})
     assert credit.amount == 3000
     assert credit.type == "in"
 
-    debit = _ledger_to_recent(
-        {"entry_type": "DEBIT", "amount": 7500, "created_at": "2026-06-28T14:23:00Z"}
-    )
+    debit = _ledger_to_recent({"entry_type": "DEBIT", "amount": 7500, "created_at": "2026-06-28T14:23:00Z"})
     assert debit.amount == -7500  # 출금은 음수 부호
     assert debit.type == "out"
 
 
 @pytest.mark.asyncio
 async def test_cards_http_returns_empty(monkeypatch):
-    monkeypatch.setattr(ui_service.settings, "FINANCIAL_CLIENT", "http")
     data = await ui_service.get_cards_view(uuid4(), None)
     assert data.cards == []
 
 
 @pytest.mark.asyncio
-async def test_cards_mock_returns_masked_fixture():
-    data = await ui_service.get_cards_view(uuid4())
-    assert len(data.cards) >= 1
-    # mock 모드에서도 카드번호는 마스킹되어 내려간다(B6 PII 규칙).
-    assert all("****" in c.num for c in data.cards)
-
-
-@pytest.mark.asyncio
-async def test_account_detail_mock_returns_fixture():
-    data = await ui_service.get_account_detail_view(uuid4(), "acc_001")
-    assert data.account.balance > 0
-    assert len(data.recent) >= 1
-
-
-@pytest.mark.asyncio
 async def test_account_detail_http_unknown_account_404(monkeypatch):
-    monkeypatch.setattr(ui_service.settings, "FINANCIAL_CLIENT", "http")
-
     async def _no_rows(session, user_id):
         return []
 
@@ -124,8 +102,6 @@ async def test_account_detail_http_unknown_account_404(monkeypatch):
 @pytest.mark.asyncio
 async def test_account_detail_http_builds_view(monkeypatch):
     from types import SimpleNamespace
-
-    monkeypatch.setattr(ui_service.settings, "FINANCIAL_CLIENT", "http")
 
     async def _rows(session, user_id):
         return [
@@ -162,8 +138,6 @@ async def test_account_detail_http_builds_view(monkeypatch):
 @pytest.mark.asyncio
 async def test_balance_view_uses_mapped_bank_and_tail(monkeypatch):
     from types import SimpleNamespace
-
-    monkeypatch.setattr(ui_service.settings, "FINANCIAL_CLIENT", "http")
 
     async def rows(session, user_id):
         return [

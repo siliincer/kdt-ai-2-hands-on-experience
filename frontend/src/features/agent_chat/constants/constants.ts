@@ -4,6 +4,10 @@ export const CHAT_URL = '/backendApi/api/v1/chat';
 export const APPROVE_URL = '/backendApi/api/v1/agent/approve';
 export const AGENT_INPUT_URL = '/backendApi/api/v1/agent/input';
 export const AGENT_AUTHENTICATE_URL = '/backendApi/api/v1/agent/authenticate';
+// 신규 수취 계좌 검증(FE 전용) — 원문 계좌번호는 이 API 까지만 도달하고
+// 응답으로 recipient_candidate_id 참조를 받는다(계약 부록 29.2).
+export const RECIPIENT_CANDIDATE_VERIFY_URL =
+  '/backendApi/api/v1/recipient-candidates:verify';
 
 // UI Data API (BFF) — component 시그널 이후 카드 데이터 조회(ADR-002)
 export const UI_BALANCE_URL = '/backendApi/api/v1/ui/balance';

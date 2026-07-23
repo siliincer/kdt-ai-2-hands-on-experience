@@ -10,9 +10,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 _ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+)\s*(은행|통장|계좌)")
-_EXPLICIT_DATES = re.compile(
-    r"(?P<start>\d{4}-\d{2}-\d{2}).*?(?P<end>\d{4}-\d{2}-\d{2})"
-)
+_EXPLICIT_DATES = re.compile(r"(?P<start>\d{4}-\d{2}-\d{2}).*?(?P<end>\d{4}-\d{2}-\d{2})")
 _PERIOD_MARKERS = (
     "이번 달",
     "이번달",
@@ -72,9 +70,7 @@ def reference_date(
 
     timezone_name = data.get("timezone")
     try:
-        user_timezone = ZoneInfo(
-            timezone_name if isinstance(timezone_name, str) else "Asia/Seoul"
-        )
+        user_timezone = ZoneInfo(timezone_name if isinstance(timezone_name, str) else "Asia/Seoul")
     except ZoneInfoNotFoundError:
         user_timezone = ZoneInfo("Asia/Seoul")
     return requested_at.astimezone(user_timezone).date()
@@ -121,9 +117,7 @@ def extract_period_range(
 
 
 def period_was_mentioned(message: str) -> bool:
-    return _EXPLICIT_DATES.search(message) is not None or any(
-        marker in message for marker in _PERIOD_MARKERS
-    )
+    return _EXPLICIT_DATES.search(message) is not None or any(marker in message for marker in _PERIOD_MARKERS)
 
 
 def default_recent_month(requested_date: date) -> tuple[str, str]:
@@ -155,9 +149,7 @@ def extract_transaction_type(message: str) -> str | None:
 
 
 def extract_summary_type(message: str) -> str | None:
-    if any(
-        marker in message for marker in ("지출", "썼", "쓴", "사용", "결제", "출금")
-    ):
+    if any(marker in message for marker in ("지출", "썼", "쓴", "사용", "결제", "출금")):
         return "spending"
     if any(marker in message for marker in ("수입", "입금", "들어온", "벌었", "받은")):
         return "income"

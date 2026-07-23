@@ -40,19 +40,13 @@ async def run_idempotent(
     복원 시에도 최초 상태코드를 그대로 돌려준다.
     """
     key = idempotency_service.require_key(raw_key)
-    request_hash = idempotency_service.compute_request_hash(
-        payload.model_dump(mode="json")
-    )
-    replay = await idempotency_service.begin(
-        session, context, operation, key, request_hash
-    )
+    request_hash = idempotency_service.compute_request_hash(payload.model_dump(mode="json"))
+    replay = await idempotency_service.begin(session, context, operation, key, request_hash)
     if replay is not None:
         return replay.to_response()
 
     data = await handler()
     response = agent_success_response(message=message, data=data)
     body = response.model_dump(mode="json", exclude_none=True)
-    await idempotency_service.complete(
-        session, context, operation, key, success_status, body
-    )
+    await idempotency_service.complete(session, context, operation, key, success_status, body)
     return response

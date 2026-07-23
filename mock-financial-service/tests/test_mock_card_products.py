@@ -70,9 +70,7 @@ def test_benefits_valid_json_list():
 
 def test_annual_fee_non_negative():
     for i, row in enumerate(MOCK_CARD_PRODUCTS):
-        assert row["annual_fee"] >= 0, (
-            f"Row {i} annual_fee is negative: {row['annual_fee']}"
-        )
+        assert row["annual_fee"] >= 0, f"Row {i} annual_fee is negative: {row['annual_fee']}"
 
 
 def test_unique_card_product_ids():
@@ -138,6 +136,4 @@ def test_card_products_table_has_no_fk_to_cards(mem_engine):
     inspector = inspect(mem_engine)
     fks = inspector.get_foreign_keys("card_products")
     for fk in fks:
-        assert fk.get("referred_table") != "cards", (
-            "card_products has unexpected FK to cards table"
-        )
+        assert fk.get("referred_table") != "cards", "card_products has unexpected FK to cards table"

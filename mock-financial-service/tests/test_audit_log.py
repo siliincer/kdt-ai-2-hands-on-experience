@@ -15,9 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 
 def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
-    r = client.post(
-        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
-    )
+    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -45,14 +43,9 @@ def _transfer(client, sender, receiver, amount: int, key: str):
     )
 
 
-def _audit_rows(
-    db_engine, *, action: str | None = None, status: str | None = None
-) -> list:
+def _audit_rows(db_engine, *, action: str | None = None, status: str | None = None) -> list:
     """Fetch audit_log rows, optionally filtered by action and/or status."""
-    query = (
-        "SELECT audit_log_id, action, status, transaction_id, actor "
-        "FROM audit_logs WHERE 1=1"
-    )
+    query = "SELECT audit_log_id, action, status, transaction_id, actor FROM audit_logs WHERE 1=1"
     params: dict = {}
     if action:
         query += " AND action = :action"
@@ -84,10 +77,7 @@ class TestAuditLogAccountCreate:
 
         with db_engine.connect() as conn:
             row = conn.execute(
-                text(
-                    "SELECT actor FROM audit_logs "
-                    "WHERE action = 'ACCOUNT_CREATE' AND actor = :actor"
-                ),
+                text("SELECT actor FROM audit_logs WHERE action = 'ACCOUNT_CREATE' AND actor = :actor"),
                 {"actor": owner},
             ).fetchone()
         assert row is not None, f"No audit log found with actor={owner}"
@@ -120,9 +110,7 @@ class TestAuditLogTransferSuccess:
 
         # Verify the audit is linked to the transaction
         linked = [row for row in rows if row[3] == txn_id]
-        assert len(linked) == 1, (
-            f"Expected 1 audit linked to txn {txn_id}, got {len(linked)}"
-        )
+        assert len(linked) == 1, f"Expected 1 audit linked to txn {txn_id}, got {len(linked)}"
 
     def test_success_audit_actor_is_sender(self, client, db_engine):
         """성공 감사로그 actor == sender_account_number."""
@@ -136,16 +124,13 @@ class TestAuditLogTransferSuccess:
         with db_engine.connect() as conn:
             row = conn.execute(
                 text(
-                    "SELECT actor, transaction_id FROM audit_logs "
-                    "WHERE action = 'TRANSFER' AND transaction_id = :tid"
+                    "SELECT actor, transaction_id FROM audit_logs WHERE action = 'TRANSFER' AND transaction_id = :tid"
                 ),
                 {"tid": txn_id},
             ).fetchone()
 
         assert row is not None, "Success audit log not found"
-        assert row[0] == sender["account_number"], (
-            f"actor mismatch: {row[0]} != {sender['account_number']}"
-        )
+        assert row[0] == sender["account_number"], f"actor mismatch: {row[0]} != {sender['account_number']}"
 
     def test_success_audit_has_transaction_id(self, client, db_engine):
         """성공 감사로그는 transaction_id가 NULL이 아님."""
@@ -158,9 +143,7 @@ class TestAuditLogTransferSuccess:
 
         with db_engine.connect() as conn:
             row = conn.execute(
-                text(
-                    "SELECT transaction_id FROM audit_logs WHERE transaction_id = :tid"
-                ),
+                text("SELECT transaction_id FROM audit_logs WHERE transaction_id = :tid"),
                 {"tid": txn_id},
             ).fetchone()
 
@@ -189,9 +172,7 @@ class TestAuditLogTransferFailure:
         assert r.status_code == 422
 
         rows = _audit_rows(db_engine, action="TRANSFER_FAILED", status="failure")
-        assert len(rows) >= 1, (
-            "Failure AuditLog missing for insufficient balance transfer"
-        )
+        assert len(rows) >= 1, "Failure AuditLog missing for insufficient balance transfer"
 
     def test_insufficient_balance_audit_contains_error_code(self, client, db_engine):
         """잔액초과 실패 감사로그 reason에 INSUFFICIENT_BALANCE 포함."""
@@ -217,9 +198,7 @@ class TestAuditLogTransferFailure:
             ).fetchone()
 
         assert row is not None, "Failure audit log not found"
-        assert "INSUFFICIENT_BALANCE" in row[0], (
-            f"Expected INSUFFICIENT_BALANCE in reason, got: {row[0]}"
-        )
+        assert "INSUFFICIENT_BALANCE" in row[0], f"Expected INSUFFICIENT_BALANCE in reason, got: {row[0]}"
 
     def test_account_not_found_writes_failure_audit(self, client, db_engine):
         """없는계좌 송금 시도 → status=failure AuditLog 생성."""
@@ -240,9 +219,7 @@ class TestAuditLogTransferFailure:
             ).fetchone()
 
         assert row is not None, "No failure audit for account-not-found transfer"
-        assert "ACCOUNT_NOT_FOUND" in row[0], (
-            f"Expected ACCOUNT_NOT_FOUND in reason, got: {row[0]}"
-        )
+        assert "ACCOUNT_NOT_FOUND" in row[0], f"Expected ACCOUNT_NOT_FOUND in reason, got: {row[0]}"
 
     def test_self_transfer_writes_failure_audit(self, client, db_engine):
         """자기송금 시도 → status=failure AuditLog 생성."""
@@ -262,9 +239,7 @@ class TestAuditLogTransferFailure:
             ).fetchone()
 
         assert row is not None, "No failure audit for self-transfer"
-        assert "SELF_TRANSFER" in row[0], (
-            f"Expected SELF_TRANSFER in reason, got: {row[0]}"
-        )
+        assert "SELF_TRANSFER" in row[0], f"Expected SELF_TRANSFER in reason, got: {row[0]}"
 
     def test_idempotency_conflict_writes_failure_audit(self, client, db_engine):
         """멱등성 키 충돌 → status=failure AuditLog 생성."""
@@ -303,9 +278,7 @@ class TestAuditLogTransferFailure:
             ).fetchone()
 
         assert row is not None, "No failure audit for idempotency conflict"
-        assert "IDEMPOTENCY_CONFLICT" in row[0], (
-            f"Expected IDEMPOTENCY_CONFLICT in reason, got: {row[0]}"
-        )
+        assert "IDEMPOTENCY_CONFLICT" in row[0], f"Expected IDEMPOTENCY_CONFLICT in reason, got: {row[0]}"
 
     def test_failure_audit_transaction_id_is_null(self, client, db_engine):
         """실패 감사로그 transaction_id는 NULL (트랜잭션 미생성)."""
@@ -332,9 +305,7 @@ class TestAuditLogTransferFailure:
             ).fetchone()
 
         assert row is not None
-        assert row[0] is None, (
-            f"Expected NULL transaction_id for failed transfer, got {row[0]}"
-        )
+        assert row[0] is None, f"Expected NULL transaction_id for failed transfer, got {row[0]}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -362,17 +333,11 @@ class TestAuditLogCompleteness:
 
         with db_engine.connect() as conn:
             success_count = conn.execute(
-                text(
-                    "SELECT COUNT(*) FROM audit_logs "
-                    "WHERE action = 'TRANSFER' AND actor = :actor"
-                ),
+                text("SELECT COUNT(*) FROM audit_logs WHERE action = 'TRANSFER' AND actor = :actor"),
                 {"actor": sender["account_number"]},
             ).scalar()
             failure_count = conn.execute(
-                text(
-                    "SELECT COUNT(*) FROM audit_logs "
-                    "WHERE action = 'TRANSFER_FAILED' AND actor = :actor"
-                ),
+                text("SELECT COUNT(*) FROM audit_logs WHERE action = 'TRANSFER_FAILED' AND actor = :actor"),
                 {"actor": sender["account_number"]},
             ).scalar()
 
@@ -410,10 +375,7 @@ class TestAuditLogTriggerImmutability:
         with pytest.raises(IntegrityError):
             with db_engine.connect() as conn:
                 conn.execute(
-                    text(
-                        "UPDATE audit_logs SET actor = 'hacked' "
-                        "WHERE audit_log_id = :id"
-                    ),
+                    text("UPDATE audit_logs SET actor = 'hacked' WHERE audit_log_id = :id"),
                     {"id": row_id},
                 )
                 conn.commit()
@@ -440,10 +402,7 @@ class TestAuditLogTriggerImmutability:
         try:
             with db_engine.connect() as conn:
                 conn.execute(
-                    text(
-                        "UPDATE audit_logs SET actor = 'hacked' "
-                        "WHERE audit_log_id = :id"
-                    ),
+                    text("UPDATE audit_logs SET actor = 'hacked' WHERE audit_log_id = :id"),
                     {"id": row_id},
                 )
                 conn.commit()

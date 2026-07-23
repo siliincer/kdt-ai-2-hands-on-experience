@@ -94,13 +94,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index(
-        "ix_execution_contexts_agent_thread_id", table_name="execution_contexts"
-    )
-    op.drop_index(
-        "ix_execution_contexts_chat_session_id", table_name="execution_contexts"
-    )
+    op.drop_index("ix_execution_contexts_agent_thread_id", table_name="execution_contexts")
+    op.drop_index("ix_execution_contexts_chat_session_id", table_name="execution_contexts")
     op.drop_table("execution_contexts")
-    postgresql.ENUM(name="execution_context_status").drop(
-        op.get_bind(), checkfirst=True
-    )
+    postgresql.ENUM(name="execution_context_status").drop(op.get_bind(), checkfirst=True)

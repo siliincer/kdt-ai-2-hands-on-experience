@@ -38,9 +38,7 @@ def workflow_matching_node(state: dict) -> dict:
     if workflow_id is None:
         return {
             "status": "no_match",
-            "final_response": (
-                "요청을 이해하지 못했어요. 잔액 조회처럼 다시 말씀해 주세요."
-            ),
+            "final_response": ("요청을 이해하지 못했어요. 잔액 조회처럼 다시 말씀해 주세요."),
         }
     return {"workflow_id": workflow_id, "status": "matched"}
 
@@ -49,8 +47,7 @@ def show_global_blocked_node(state: dict) -> dict:
     """전역 가드레일 차단 시 안내 응답을 설정한다."""
     return {
         "status": "blocked",
-        "final_response": state.get("final_response")
-        or "이 요청은 안전 정책상 실행할 수 없습니다.",
+        "final_response": state.get("final_response") or "이 요청은 안전 정책상 실행할 수 없습니다.",
     }
 
 
@@ -66,9 +63,7 @@ def show_workflow_failed_node(__state: dict) -> dict:
     """워크플로우 실행 실패 시 안내 응답을 설정한다."""
     return {
         "status": "workflow_failed",
-        "final_response": (
-            "요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
-        ),
+        "final_response": ("요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."),
     }
 
 

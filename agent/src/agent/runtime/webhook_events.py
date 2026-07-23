@@ -235,39 +235,24 @@ class InteractionWebhookBuilder:
     ) -> None:
         workflow = self._contract_store.get_workflow(workflow_id)
         step = next(
-            (
-                candidate
-                for candidate in workflow["steps"]
-                if candidate["step_id"] == step_id
-            ),
+            (candidate for candidate in workflow["steps"] if candidate["step_id"] == step_id),
             None,
         )
         if step is None:
-            raise WebhookEventContractError(
-                f"[{workflow_id}] 등록되지 않은 Webhook Step입니다: {step_id}"
-            )
+            raise WebhookEventContractError(f"[{workflow_id}] 등록되지 않은 Webhook Step입니다: {step_id}")
         if step["interaction_mode"] != "webhook_then_resume":
-            raise WebhookEventContractError(
-                f"[{workflow_id}/{step_id}] HITL 대기 Step이 아닙니다."
-            )
+            raise WebhookEventContractError(f"[{workflow_id}/{step_id}] HITL 대기 Step이 아닙니다.")
         if step.get("contract_id") != ui_contract_id:
-            raise WebhookEventContractError(
-                f"[{workflow_id}/{step_id}] UI 계약이 일치하지 않습니다: "
-                f"{ui_contract_id}"
-            )
+            raise WebhookEventContractError(f"[{workflow_id}/{step_id}] UI 계약이 일치하지 않습니다: {ui_contract_id}")
 
         contract = self._contract_store.get_contract(ui_contract_id)
         if contract["contract_type"] != "ui_hitl":
-            raise WebhookEventContractError(
-                f"UI·HITL 계약이 아닙니다: {ui_contract_id}"
-            )
+            raise WebhookEventContractError(f"UI·HITL 계약이 아닙니다: {ui_contract_id}")
 
         external_action = str(step.get("external_action") or "")
         expected_ui_type = external_action.rpartition("·")[2].strip()
         if not expected_ui_type or expected_ui_type != ui_type:
-            raise WebhookEventContractError(
-                f"[{workflow_id}/{step_id}] UI 타입이 일치하지 않습니다: {ui_type}"
-            )
+            raise WebhookEventContractError(f"[{workflow_id}/{step_id}] UI 타입이 일치하지 않습니다: {ui_type}")
 
     def _validate_non_interactive_step(
         self,
@@ -280,42 +265,21 @@ class InteractionWebhookBuilder:
     ) -> None:
         workflow = self._contract_store.get_workflow(workflow_id)
         step = next(
-            (
-                candidate
-                for candidate in workflow["steps"]
-                if candidate["step_id"] == step_id
-            ),
+            (candidate for candidate in workflow["steps"] if candidate["step_id"] == step_id),
             None,
         )
         if step is None:
-            raise WebhookEventContractError(
-                f"[{workflow_id}] 등록되지 않은 Webhook Step입니다: {step_id}"
-            )
+            raise WebhookEventContractError(f"[{workflow_id}] 등록되지 않은 Webhook Step입니다: {step_id}")
         if step["interaction_mode"] != "webhook":
-            raise WebhookEventContractError(
-                f"[{workflow_id}/{step_id}] 비대기 Webhook Step이 아닙니다."
-            )
+            raise WebhookEventContractError(f"[{workflow_id}/{step_id}] 비대기 Webhook Step이 아닙니다.")
         if step.get("contract_id") != ui_contract_id:
-            raise WebhookEventContractError(
-                f"[{workflow_id}/{step_id}] UI 계약이 일치하지 않습니다: "
-                f"{ui_contract_id}"
-            )
+            raise WebhookEventContractError(f"[{workflow_id}/{step_id}] UI 계약이 일치하지 않습니다: {ui_contract_id}")
 
         contract = self._contract_store.get_contract(ui_contract_id)
         if contract["contract_type"] != "ui_hitl":
-            raise WebhookEventContractError(
-                f"UI·HITL 계약이 아닙니다: {ui_contract_id}"
-            )
+            raise WebhookEventContractError(f"UI·HITL 계약이 아닙니다: {ui_contract_id}")
 
         external_action = str(step.get("external_action") or "")
-        expected_event_type, separator, expected_ui_type = external_action.partition(
-            "·"
-        )
-        if (
-            not separator
-            or expected_event_type.strip() != event_type
-            or expected_ui_type.strip() != ui_type
-        ):
-            raise WebhookEventContractError(
-                f"[{workflow_id}/{step_id}] Webhook 이벤트 계약이 일치하지 않습니다."
-            )
+        expected_event_type, separator, expected_ui_type = external_action.partition("·")
+        if not separator or expected_event_type.strip() != event_type or expected_ui_type.strip() != ui_type:
+            raise WebhookEventContractError(f"[{workflow_id}/{step_id}] Webhook 이벤트 계약이 일치하지 않습니다.")

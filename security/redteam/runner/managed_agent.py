@@ -79,9 +79,7 @@ def _read_ollama_json(
                 max_bytes,
             )
     except (OSError, TimeoutError, URLError, json.JSONDecodeError, ValueError) as exc:
-        raise ManagedAgentError(
-            "adaptive local QA requires the configured loopback Ollama server"
-        ) from exc
+        raise ManagedAgentError("adaptive local QA requires the configured loopback Ollama server") from exc
     if not isinstance(payload, dict):
         raise ManagedAgentError("Ollama returned an invalid JSON response")
     return payload
@@ -116,8 +114,7 @@ def require_ollama_models(
     missing_models = required_models - set(installed)
     if missing_models:
         raise ManagedAgentError(
-            "adaptive local QA requires each configured Ollama model: "
-            + ", ".join(sorted(missing_models))
+            "adaptive local QA requires each configured Ollama model: " + ", ".join(sorted(missing_models))
         )
 
     valid_digests: dict[str, str] = {}
@@ -130,8 +127,7 @@ def require_ollama_models(
             valid_digests[model] = digest
     if invalid_digests:
         raise ManagedAgentError(
-            "configured Ollama models are missing valid digests: "
-            + ", ".join(sorted(invalid_digests))
+            "configured Ollama models are missing valid digests: " + ", ".join(sorted(invalid_digests))
         )
 
     for model in sorted(required_models):
@@ -197,18 +193,13 @@ def _wait_until_ready(
 ) -> None:
     request_budget.check_deadline()
     remaining_seconds = request_budget.remaining_seconds
-    bounded_timeout = (
-        min(timeout_seconds, remaining_seconds)
-        if remaining_seconds is not None
-        else timeout_seconds
-    )
+    bounded_timeout = min(timeout_seconds, remaining_seconds) if remaining_seconds is not None else timeout_seconds
     deadline = time.monotonic() + bounded_timeout
     while time.monotonic() < deadline:
         request_budget.check_deadline()
         if process.poll() is not None:
             raise ManagedAgentError(
-                f"managed Agent exited during startup: {process.returncode}\n"
-                f"{_log_tail(process_log, redact_fields)}"
+                f"managed Agent exited during startup: {process.returncode}\n{_log_tail(process_log, redact_fields)}"
             )
         startup_remaining = max(0.0, deadline - time.monotonic())
         run_remaining = request_budget.remaining_seconds
@@ -232,9 +223,7 @@ def _wait_until_ready(
             break
         time.sleep(sleep_seconds)
     request_budget.check_deadline()
-    raise ManagedAgentError(
-        f"managed Agent startup timed out\n{_log_tail(process_log, redact_fields)}"
-    )
+    raise ManagedAgentError(f"managed Agent startup timed out\n{_log_tail(process_log, redact_fields)}")
 
 
 def _stop_process(process: subprocess.Popen) -> None:
@@ -267,14 +256,10 @@ def managed_agent(
         run_remaining if run_remaining is not None else 0.1,
     )
     if _port_is_open(host, port, port_probe_timeout):
-        raise ManagedAgentError(
-            f"refusing to reuse an existing process on {host}:{port}"
-        )
+        raise ManagedAgentError(f"refusing to reuse an existing process on {host}:{port}")
     model_digests = _require_ollama_model(config, request_budget)
 
-    environment = {
-        key: value for key, value in os.environ.items() if key in _INHERITED_ENV_KEYS
-    }
+    environment = {key: value for key, value in os.environ.items() if key in _INHERITED_ENV_KEYS}
     environment["NO_PROXY"] = "localhost,127.0.0.1,::1"
     environment["no_proxy"] = "localhost,127.0.0.1,::1"
     environment["BANK_CLIENT"] = config.safety.required_bank_client

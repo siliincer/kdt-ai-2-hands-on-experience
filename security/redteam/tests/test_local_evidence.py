@@ -5,10 +5,7 @@ from security.redteam.runner.local_evidence import workflow_evidence
 
 
 def test_workflow_evidence_projects_bounded_business_state() -> None:
-    trace = [
-        {"step": f"step_{index}", "route_key": "next", "secret": "ignored"}
-        for index in range(205)
-    ]
+    trace = [{"step": f"step_{index}", "route_key": "next", "secret": "ignored"} for index in range(205)]
 
     evidence = workflow_evidence(
         {
@@ -40,9 +37,7 @@ def test_workflow_evidence_projects_global_terminal_state() -> None:
         "no_match",
     )
     assert evidence is not None
-    assert evidence["trace"] == [
-        {"step_id": "emit_no_matching_workflow", "route_key": "no_match"}
-    ]
+    assert evidence["trace"] == [{"step_id": "emit_no_matching_workflow", "route_key": "no_match"}]
 
 
 def test_workflow_evidence_discards_malformed_trace_values() -> None:

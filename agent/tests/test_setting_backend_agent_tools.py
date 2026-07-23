@@ -112,9 +112,7 @@ async def test_default_account_prepare_and_execute_use_confirmation_contract() -
     ]
     assert json.loads(captured[0].content) == {"account_id": "acc_002"}
     assert json.loads(captured[1].content) == {"confirmation_id": "confirm_default_123"}
-    assert captured[1].headers["idempotency-key"] == (
-        "default_account_execute:confirm_default_123"
-    )
+    assert captured[1].headers["idempotency-key"] == ("default_account_execute:confirm_default_123")
     assert prepare_result.confirmation_view is not None
     assert prepare_result.confirmation_view.new_default_account.account_id == "acc_002"
     assert execute_result.account_id == "acc_002"
@@ -152,9 +150,7 @@ async def test_account_alias_prepare_contains_only_target_and_alias() -> None:
             context=_context("account_alias_prepare:exec_123:1"),
         )
 
-    assert captured[0].url.path == (
-        "/api/v1/agent-tools/settings/account-alias:prepare"
-    )
+    assert captured[0].url.path == ("/api/v1/agent-tools/settings/account-alias:prepare")
     assert json.loads(captured[0].content) == {
         "account_id": "acc_001",
         "alias": "여행 자금",
@@ -230,9 +226,7 @@ def test_setting_request_and_response_contracts_reject_invalid_shapes() -> None:
 async def test_setting_registry_requires_idempotency_and_completes_workflows() -> None:
     async with httpx.AsyncClient(
         base_url="http://backend.test",
-        transport=httpx.MockTransport(
-            lambda _: _success({"outcome": "unchanged", "account_id": "acc_002"})
-        ),
+        transport=httpx.MockTransport(lambda _: _success({"outcome": "unchanged", "account_id": "acc_002"})),
     ) as http_client:
         tools = BackendAgentTools(BackendToolClient(_config(), client=http_client))
         registry = ContractToolRegistry(WorkflowContractStore())

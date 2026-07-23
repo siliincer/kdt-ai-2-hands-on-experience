@@ -52,9 +52,7 @@ def compute_request_hash(payload: Any) -> str:
 
     키 정렬 + 공백 제거로 같은 의미의 Body 가 같은 해시를 갖게 한다.
     """
-    canonical = json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str
-    )
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -73,9 +71,7 @@ async def begin(
     request_hash: str,
 ) -> IdempotentReplay | None:
     """키를 선점하거나, 이미 완료된 동일 요청이면 최초 응답을 돌려준다."""
-    existing = await get_idempotency_record(
-        session, context.execution_context_id, operation, idempotency_key
-    )
+    existing = await get_idempotency_record(session, context.execution_context_id, operation, idempotency_key)
     if existing is not None:
         if existing.request_hash != request_hash:
             raise AgentToolError.idempotency_key_conflict()
@@ -114,9 +110,7 @@ async def complete(
     body: dict[str, Any],
 ) -> None:
     """처리 결과를 저장한다. 선점 레코드가 없으면 조용히 넘어간다."""
-    record = await get_idempotency_record(
-        session, context.execution_context_id, operation, idempotency_key
-    )
+    record = await get_idempotency_record(session, context.execution_context_id, operation, idempotency_key)
     if record is None:
         return
     await complete_idempotency(session, record, status_code, body)

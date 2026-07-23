@@ -39,12 +39,7 @@ def _markdown_safe(value: object) -> str:
 
 
 def _markdown_code(value: object) -> str:
-    return (
-        escape(str(value), quote=True)
-        .replace("`", "&#96;")
-        .replace("\r", "\\r")
-        .replace("\n", "\\n")
-    )
+    return escape(str(value), quote=True).replace("`", "&#96;").replace("\r", "\\r").replace("\n", "\\n")
 
 
 def _optional_rate(value: float | int | None) -> str:
@@ -67,10 +62,7 @@ def _markdown_report(data: dict) -> str:
         f"- Scenario coverage: `{_markdown_code(data['scenario_coverage'])}`",
         f"- Severity: `{_markdown_code(data['severity'])}`",
         f"- Execution mode: `{_markdown_code(data['execution_mode'])}`",
-        (
-            "- Execution reason: "
-            f"{_markdown_safe(data.get('execution_reason') or 'n/a')}"
-        ),
+        (f"- Execution reason: {_markdown_safe(data.get('execution_reason') or 'n/a')}"),
         f"- Verdict: `{_markdown_code(data['verdict'])}`",
         "",
     ]
@@ -80,45 +72,16 @@ def _markdown_report(data: dict) -> str:
             [
                 "## Reproducibility",
                 "",
-                (
-                    "- Generator model: "
-                    f"`{_markdown_code(reproducibility['generator_model'])}`"
-                ),
-                (
-                    "- Generator digest: "
-                    f"`{_markdown_code(reproducibility['generator_model_digest'])}`"
-                ),
-                (
-                    "- Target model: "
-                    f"`{_markdown_code(reproducibility['target_model'])}`"
-                ),
-                (
-                    "- Target digest: "
-                    f"`{_markdown_code(reproducibility['target_model_digest'])}`"
-                ),
-                (
-                    "- Judgment model: "
-                    f"`{_markdown_code(reproducibility['judgment_model'])}`"
-                ),
-                (
-                    "- Judgment digest: "
-                    f"`{_markdown_code(reproducibility['judgment_model_digest'])}`"
-                ),
+                (f"- Generator model: `{_markdown_code(reproducibility['generator_model'])}`"),
+                (f"- Generator digest: `{_markdown_code(reproducibility['generator_model_digest'])}`"),
+                (f"- Target model: `{_markdown_code(reproducibility['target_model'])}`"),
+                (f"- Target digest: `{_markdown_code(reproducibility['target_model_digest'])}`"),
+                (f"- Judgment model: `{_markdown_code(reproducibility['judgment_model'])}`"),
+                (f"- Judgment digest: `{_markdown_code(reproducibility['judgment_model_digest'])}`"),
                 f"- Seed: `{reproducibility['seed']}`",
-                (
-                    "- Config SHA-256: "
-                    f"`{_markdown_code(reproducibility['config_sha256'])}`"
-                ),
-                (
-                    "- Scenario SHA-256: "
-                    f"`{_markdown_code(reproducibility['scenario_sha256'])}`"
-                ),
-                (
-                    "- Git commit: "
-                    "`"
-                    f"{_markdown_code(reproducibility.get('git_commit') or 'unknown')}"
-                    "`"
-                ),
+                (f"- Config SHA-256: `{_markdown_code(reproducibility['config_sha256'])}`"),
+                (f"- Scenario SHA-256: `{_markdown_code(reproducibility['scenario_sha256'])}`"),
+                (f"- Git commit: `{_markdown_code(reproducibility.get('git_commit') or 'unknown')}`"),
                 (f"- Git dirty: `{_markdown_code(reproducibility.get('git_dirty'))}`"),
                 "",
             ]
@@ -129,10 +92,7 @@ def _markdown_report(data: dict) -> str:
             f"- LLM attempts: `{telemetry['attempts']}`",
             f"- LLM successes: `{telemetry['successes']}`",
             f"- LLM failures: `{telemetry['failures']}`",
-            (
-                "- LLM policy marker injections: "
-                f"`{telemetry['policy_marker_injections']}`"
-            ),
+            (f"- LLM policy marker injections: `{telemetry['policy_marker_injections']}`"),
         ]
     attacker_telemetry = data.get("attacker_telemetry")
     if attacker_telemetry:
@@ -143,36 +103,18 @@ def _markdown_report(data: dict) -> str:
         done_reasons = attacker_telemetry.get("response_done_reasons", {})
         lines[10:10] = [
             f"- Attacker model: `{_markdown_code(attacker_telemetry['model'])}`",
-            (
-                "- Candidate classifier model: "
-                f"`{_markdown_code(attacker_telemetry['classifier_model'])}`"
-            ),
+            (f"- Candidate classifier model: `{_markdown_code(attacker_telemetry['classifier_model'])}`"),
             f"- Attacker requests: `{attacker_telemetry['requests']}`",
             f"- Attacker generations: `{attacker_telemetry['attempts']}`",
             f"- Attacker successes: `{attacker_telemetry['successes']}`",
             f"- Attacker failures: `{attacker_telemetry['failures']}`",
-            (
-                "- Attacker out-of-scope rejections: "
-                f"`{attacker_telemetry['rejected_out_of_scope']}`"
-            ),
-            (
-                "- Attacker duplicate rejections: "
-                f"`{attacker_telemetry['rejected_duplicates']}`"
-            ),
-            (
-                "- Attacker rejection reasons: "
-                f"`{_markdown_code(attacker_telemetry.get('rejection_reasons', {}))}`"
-            ),
+            (f"- Attacker out-of-scope rejections: `{attacker_telemetry['rejected_out_of_scope']}`"),
+            (f"- Attacker duplicate rejections: `{attacker_telemetry['rejected_duplicates']}`"),
+            (f"- Attacker rejection reasons: `{_markdown_code(attacker_telemetry.get('rejection_reasons', {}))}`"),
             (f"- Rejected business facts: `{_markdown_code(rejected_facts)}`"),
-            (
-                "- Rejected intents: "
-                f"`{_markdown_code(attacker_telemetry.get('rejected_intents', {}))}`"
-            ),
+            (f"- Rejected intents: `{_markdown_code(attacker_telemetry.get('rejected_intents', {}))}`"),
             (f"- Ollama done reasons: `{_markdown_code(done_reasons)}`"),
-            (
-                "- Maximum Ollama response characters: "
-                f"`{attacker_telemetry.get('max_response_chars', 0)}`"
-            ),
+            (f"- Maximum Ollama response characters: `{attacker_telemetry.get('max_response_chars', 0)}`"),
         ]
     judgment_telemetry = data.get("judgment_telemetry")
     if judgment_telemetry:
@@ -198,9 +140,7 @@ def _markdown_report(data: dict) -> str:
     if data.get("workflow_verdicts"):
         lines.extend(["## Workflow Verdicts", ""])
         for workflow_id, verdict in sorted(data["workflow_verdicts"].items()):
-            lines.append(
-                f"- `{_markdown_code(workflow_id)}`: `{_markdown_code(verdict)}`"
-            )
+            lines.append(f"- `{_markdown_code(workflow_id)}`: `{_markdown_code(verdict)}`")
         lines.append("")
     lines.extend(["## Results", ""])
     for result in data["results"]:
@@ -209,21 +149,13 @@ def _markdown_report(data: dict) -> str:
         generation_style = _markdown_safe(result.get("generation_style") or "n/a")
         result_evidence = _markdown_safe(", ".join(result["evidence"]) or "none")
         execution_error = _markdown_safe(result.get("execution_error") or "none")
-        generation_seed_text = (
-            "n/a" if generation_seed is None else str(generation_seed)
-        )
-        generation_action = _markdown_safe(
-            result.get("generation_requested_action") or "n/a"
-        )
+        generation_seed_text = "n/a" if generation_seed is None else str(generation_seed)
+        generation_action = _markdown_safe(result.get("generation_requested_action") or "n/a")
         generation_target = _markdown_safe(result.get("generation_target") or "n/a")
         generation_polarity = _markdown_safe(result.get("generation_polarity") or "n/a")
         generation_reported = result.get("generation_reported_speech")
-        generation_reported_text = (
-            "n/a" if generation_reported is None else str(generation_reported)
-        )
-        generation_facts = ", ".join(
-            sorted(result.get("generation_business_fact_mentions") or [])
-        )
+        generation_reported_text = "n/a" if generation_reported is None else str(generation_reported)
+        generation_facts = ", ".join(sorted(result.get("generation_business_fact_mentions") or []))
         lines.extend(
             [
                 (
@@ -231,10 +163,7 @@ def _markdown_report(data: dict) -> str:
                     f"{result['iteration']}: {_markdown_safe(result['verdict'])}"
                 ),
                 "",
-                (
-                    "- Target workflow: "
-                    f"`{_markdown_code(result['target_workflow_id'])}`"
-                ),
+                (f"- Target workflow: `{_markdown_code(result['target_workflow_id'])}`"),
                 f"- LLM generated: `{result['generated_by_llm']}`",
                 f"- Generation strategy: {generation_strategy}",
                 f"- Generation style: {generation_style}",
@@ -243,10 +172,7 @@ def _markdown_report(data: dict) -> str:
                 f"- Generation target: {generation_target}",
                 f"- Generation polarity: {generation_polarity}",
                 f"- Generation reported speech: {generation_reported_text}",
-                (
-                    "- Generation business facts: "
-                    f"{_markdown_safe(generation_facts or 'none')}"
-                ),
+                (f"- Generation business facts: {_markdown_safe(generation_facts or 'none')}"),
                 f"- Boundary score: `{result['boundary_score']:.3f}`",
                 f"- Reason: {_markdown_safe(result['reason'])}",
                 f"- Execution error: {execution_error}",
@@ -262,23 +188,14 @@ def _markdown_report(data: dict) -> str:
             response_reply = _markdown_safe(response.get("reply", "n/a"))
             response_prompt_for = _markdown_safe(response.get("prompt_for") or "none")
             response_thread_id = _markdown_safe(response.get("thread_id", "n/a"))
-            response_ui_type = _markdown_safe(
-                (response.get("ui") or {}).get("type", "none")
-            )
+            response_ui_type = _markdown_safe((response.get("ui") or {}).get("type", "none"))
             execution_evidence = response.get("execution_evidence") or {}
             workflow_lines = []
             if execution_evidence:
-                tool_paths = ", ".join(
-                    execution_evidence.get("tool_request_paths") or []
-                )
-                contract_tools = ", ".join(
-                    execution_evidence.get("contract_tool_ids") or []
-                )
+                tool_paths = ", ".join(execution_evidence.get("tool_request_paths") or [])
+                contract_tools = ", ".join(execution_evidence.get("contract_tool_ids") or [])
                 tool_requests = ", ".join(
-                    (
-                        f"{request.get('method')} {request.get('path')}"
-                        f"[{','.join(request.get('query_keys') or [])}]"
-                    )
+                    (f"{request.get('method')} {request.get('path')}[{','.join(request.get('query_keys') or [])}]")
                     for request in execution_evidence.get("tool_requests") or []
                 )
                 webhook_steps = ", ".join(
@@ -290,42 +207,27 @@ def _markdown_report(data: dict) -> str:
                     )
                     for event in execution_evidence.get("webhooks") or []
                 )
-                pending_keys = ", ".join(
-                    sorted(execution_evidence.get("pending_identifiers") or {})
-                )
+                pending_keys = ", ".join(sorted(execution_evidence.get("pending_identifiers") or {}))
                 trace = ", ".join(
-                    ":".join(
-                        filter(None, (entry.get("step_id"), entry.get("route_key")))
-                    )
+                    ":".join(filter(None, (entry.get("step_id"), entry.get("route_key"))))
                     for entry in execution_evidence.get("trace") or []
                 )
                 request_ids = ", ".join(execution_evidence.get("request_ids") or [])
-                context_ids = ", ".join(
-                    execution_evidence.get("execution_context_ids") or []
-                )
+                context_ids = ", ".join(execution_evidence.get("execution_context_ids") or [])
                 workflow_lines = [
-                    (
-                        "- Observed workflow: `"
-                        f"{_markdown_code(execution_evidence['observed_workflow_id'])}`"
-                    ),
+                    (f"- Observed workflow: `{_markdown_code(execution_evidence['observed_workflow_id'])}`"),
                     (
                         "- Runtime/state status: `"
                         f"{_markdown_code(execution_evidence['runtime_status'])}` / `"
                         f"{_markdown_code(execution_evidence['state_status'])}`"
                     ),
                     (f"- Request IDs: {_markdown_safe(request_ids or 'none')}"),
-                    (
-                        "- Execution context IDs: "
-                        f"{_markdown_safe(context_ids or 'none')}"
-                    ),
+                    (f"- Execution context IDs: {_markdown_safe(context_ids or 'none')}"),
                     f"- Tool request paths: {_markdown_safe(tool_paths or 'none')}",
                     f"- Tool requests: {_markdown_safe(tool_requests or 'none')}",
                     f"- Contract Tool IDs: {_markdown_safe(contract_tools or 'none')}",
                     f"- Webhook steps: {_markdown_safe(webhook_steps or 'none')}",
-                    (
-                        "- Pending identifier fields: "
-                        f"{_markdown_safe(pending_keys or 'none')}"
-                    ),
+                    (f"- Pending identifier fields: {_markdown_safe(pending_keys or 'none')}"),
                     f"- Workflow trace: {_markdown_safe(trace or 'none')}",
                 ]
             lines.extend(
@@ -342,18 +244,9 @@ def _markdown_report(data: dict) -> str:
                     f"- Thread ID: {response_thread_id}",
                     f"- UI type: {response_ui_type}",
                     *workflow_lines,
-                    (
-                        "- Model judgment: "
-                        f"{_markdown_safe(model_judgment.get('outcome', 'n/a'))}"
-                    ),
-                    (
-                        "- Judgment confidence: "
-                        f"{_markdown_safe(model_judgment.get('confidence', 'n/a'))}"
-                    ),
-                    (
-                        "- Judgment agrees with rules: "
-                        f"{_markdown_safe(turn.get('judgment_agrees_with_rules'))}"
-                    ),
+                    (f"- Model judgment: {_markdown_safe(model_judgment.get('outcome', 'n/a'))}"),
+                    (f"- Judgment confidence: {_markdown_safe(model_judgment.get('confidence', 'n/a'))}"),
+                    (f"- Judgment agrees with rules: {_markdown_safe(turn.get('judgment_agrees_with_rules'))}"),
                     "",
                 ]
             )
@@ -394,8 +287,7 @@ def _markdown_comparison_report(data: dict) -> str:
         "",
         "## Model Role Summary",
         "",
-        "Overall run verdicts are shown in the Runs table. Role summaries use only "
-        "the evidence produced by that role.",
+        "Overall run verdicts are shown in the Runs table. Role summaries use only the evidence produced by that role.",
         "",
         "| Role | Model | Runs | Avg seconds | Primary metric | Rate | Diagnostics |",
         "| --- | --- | ---: | ---: | --- | ---: | --- |",
@@ -450,10 +342,7 @@ def _markdown_comparison_report(data: dict) -> str:
                 "| Consistency | Review | Gen acceptance | Contract PASS "
                 "| Rule agreement | Avg seconds |"
             ),
-            (
-                "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: "
-                "| ---: | ---: | ---: |"
-            ),
+            ("| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"),
         ]
     )
     for summary in data["combination_summaries"]:
@@ -483,10 +372,7 @@ def _markdown_comparison_report(data: dict) -> str:
                 "| Gen success | Target LLM errors | Judge disagreements "
                 "| Review | Report |"
             ),
-            (
-                "| --- | --- | --- | --- | ---: | --- | ---: | ---: | ---: "
-                "| ---: | --- | --- |"
-            ),
+            ("| --- | --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | --- | --- |"),
         ]
     )
     for run in data["runs"]:
@@ -665,10 +551,7 @@ def _markdown_reference_campaign(data: dict) -> str:
         "",
         f"- Campaign ID: `{_markdown_code(data['campaign_id'])}`",
         (f"- Agent source commit: `{_markdown_code(metadata['agent_source_commit'])}`"),
-        (
-            "- Runner commit: "
-            f"`{_markdown_code(metadata.get('runner_git_commit') or 'unknown')}`"
-        ),
+        (f"- Runner commit: `{_markdown_code(metadata.get('runner_git_commit') or 'unknown')}`"),
         f"- Runner dirty: `{_markdown_code(metadata.get('runner_git_dirty'))}`",
         f"- Case set kind: `{_markdown_code(metadata['case_set_kind'])}`",
         f"- Config SHA-256: `{_markdown_code(metadata['config_sha256'])}`",
@@ -695,10 +578,7 @@ def _markdown_reference_campaign(data: dict) -> str:
             f"`{judgment_telemetry['successes']}` / "
             f"`{judgment_telemetry['failures']}`"
         ),
-        (
-            "- Maximum adaptive iterations per generated case: "
-            f"`{metadata['max_iterations_per_generated_case']}`"
-        ),
+        (f"- Maximum adaptive iterations per generated case: `{metadata['max_iterations_per_generated_case']}`"),
         f"- Started: `{_markdown_code(data['started_at'])}`",
         f"- Completed: `{_markdown_code(data['completed_at'])}`",
         f"- Requested cases: `{data['requested_cases']}`",
@@ -725,8 +605,7 @@ def _markdown_reference_campaign(data: dict) -> str:
             "",
             "| Case | Workflow | Status | Result | Rule | Model | Iterations | Steps "
             "| Rejections | Error stage | Error reason | Review |",
-            "| --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- "
-            "| --- | --- |",
+            "| --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- | --- | --- |",
         ]
     )
     for entry in data["entries"]:
@@ -738,11 +617,7 @@ def _markdown_reference_campaign(data: dict) -> str:
         iteration_count = len(adaptive_attempts) if generated else "n/a"
         steps = entry.get("steps") or []
         operations = ", ".join(step["operation"] for step in steps)
-        rejections = ", ".join(
-            step["rejection_code"]
-            for step in steps
-            if step.get("rejection_code") is not None
-        )
+        rejections = ", ".join(step["rejection_code"] for step in steps if step.get("rejection_code") is not None)
         lines.append(
             f"| `{_markdown_code(entry['case_id'])}` "
             f"| `{_markdown_code(entry['workflow_id'])}` "
@@ -757,9 +632,7 @@ def _markdown_reference_campaign(data: dict) -> str:
             f"| {_markdown_safe(entry.get('error_reason') or 'n/a')} "
             f"| `{entry['review_required']}` |"
         )
-    adaptive_entries = [
-        entry for entry in data["entries"] if entry.get("adaptive_attempts")
-    ]
+    adaptive_entries = [entry for entry in data["entries"] if entry.get("adaptive_attempts")]
     if adaptive_entries:
         lines.extend(
             [
@@ -771,17 +644,14 @@ def _markdown_reference_campaign(data: dict) -> str:
                     "receives the prior response and evaluation as bounded feedback."
                 ),
                 "",
-                "| Case | Iteration | Candidate | Style | Strategy | Rule | Score "
-                "| Model | Review | Error |",
+                "| Case | Iteration | Candidate | Style | Strategy | Rule | Score | Model | Review | Error |",
                 "| --- | ---: | --- | --- | --- | --- | ---: | --- | --- | --- |",
             ]
         )
         for entry in adaptive_entries:
             for attempt in entry["adaptive_attempts"]:
                 candidate = attempt.get("candidate") or {}
-                rule_evaluation = (
-                    attempt.get("rule_evaluation") or attempt["evaluation"]
-                )
+                rule_evaluation = attempt.get("rule_evaluation") or attempt["evaluation"]
                 judgment = attempt.get("model_judgment") or {}
                 lines.append(
                     f"| `{_markdown_code(entry['case_id'])}` "

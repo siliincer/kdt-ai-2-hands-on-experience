@@ -1,7 +1,7 @@
 """Shared mock dataset — Accounts, Cards, CardProduct catalog, and 4 months of
 persona-driven transaction history.
 
-5 Accounts, 8 Cards (1-2 per Account, each FK-linked to a real Account).
+7 Accounts, 10 Cards (1-2 per Account, each FK-linked to a real Account).
 20 CardProduct rows (4 per each of 5 categories), standalone — no FK to Card.
 7 biller Accounts + 1 external-source Account (payroll/peer-transfer origin).
 ~100 Transactions / ~200 LedgerEntries / ~400 CardLedgerEntries spanning
@@ -27,7 +27,7 @@ from .models import (
 )
 
 # ── Accounts ──────────────────────────────────────────────────────────────────
-# 5 rows, fixed UUIDs
+# 7 rows, fixed UUIDs (5 persona mains + 김지훈 부계좌 2)
 
 MOCK_ACCOUNTS: list[dict] = [
     {
@@ -35,6 +35,24 @@ MOCK_ACCOUNTS: list[dict] = [
         "owner": "김지훈",
         "alias": "김지훈 생활비통장",
         "account_number": "110-001-000001",
+        "currency": "KRW",
+    },
+    # 김지훈 부계좌 2종 — 다계좌 선택(account_card_list) UX 및 seed_qa_personas 페르소나와
+    # 정합을 맞추기 위한 계좌. 거래 이력은 없어 잔액 0으로 시작한다(선택 UX 확인용).
+    {
+        "account_id": "acct-0001-0000-0000-000000000011",
+        "owner": "김지훈",
+        "alias": "김지훈 신한 부계좌",
+        "account_number": "110-001-000011",
+        "bank_name": "신한은행",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-0001-0000-0000-000000000012",
+        "owner": "김지훈",
+        "alias": "김지훈 하나 부계좌",
+        "account_number": "110-001-000012",
+        "bank_name": "하나은행",
         "currency": "KRW",
     },
     {
@@ -68,7 +86,7 @@ MOCK_ACCOUNTS: list[dict] = [
 ]
 
 # ── Cards ─────────────────────────────────────────────────────────────────────
-# 8 rows total, 1-2 per Account, each FK → MOCK_ACCOUNTS[*].account_id
+# 10 rows total, 1-2 per Account, each FK → MOCK_ACCOUNTS[*].account_id
 
 MOCK_CARDS: list[dict] = [
     # ACC-001: 2 cards
@@ -82,6 +100,19 @@ MOCK_CARDS: list[dict] = [
         "card_id": "card-0002-0000-0000-000000000002",
         "account_id": "acct-0001-0000-0000-000000000001",
         "limit": 500_000,
+        "currency": "KRW",
+    },
+    # ACC-001 부계좌: 각 1 card (계좌당 1-2장 불변식 충족)
+    {
+        "card_id": "card-0009-0000-0000-000000000009",
+        "account_id": "acct-0001-0000-0000-000000000011",
+        "limit": 300_000,
+        "currency": "KRW",
+    },
+    {
+        "card_id": "card-0010-0000-0000-000000000010",
+        "account_id": "acct-0001-0000-0000-000000000012",
+        "limit": 300_000,
         "currency": "KRW",
     },
     # ACC-002: 1 card
@@ -134,10 +165,7 @@ def make_account_rows() -> list[Account]:
     _build_transaction_dataset()) so every row satisfies the canonical
     Account.balance invariant on creation, not just default=0.
     """
-    return [
-        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
-        for d in MOCK_ACCOUNTS
-    ]
+    return [Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0)) for d in MOCK_ACCOUNTS]
 
 
 def make_card_rows() -> list[Card]:
@@ -510,9 +538,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
 ]
 
 # Convenience lookup: biller name → account_id
-BILLER_ACCOUNT_ID: dict[str, str] = {
-    row["owner"]: row["account_id"] for row in MOCK_BILLER_ACCOUNTS
-}
+BILLER_ACCOUNT_ID: dict[str, str] = {row["owner"]: row["account_id"] for row in MOCK_BILLER_ACCOUNTS}
 
 
 def make_biller_account_rows() -> list[Account]:
@@ -525,10 +551,7 @@ def make_biller_account_rows() -> list[Account]:
     학원비, 관리비).  They are distinct from user-owned MOCK_ACCOUNTS so that
     existing card-service tests that assert exactly 5 user accounts are unaffected.
     """
-    return [
-        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
-        for d in MOCK_BILLER_ACCOUNTS
-    ]
+    return [Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0)) for d in MOCK_BILLER_ACCOUNTS]
 
 
 # ── Schema validation ──────────────────────────────────────────────────────────
@@ -563,8 +586,7 @@ def _validate_row(row: dict, schema: dict, label: str) -> list[str]:
             errors.append(f"{label}[{row}]: missing field '{field}'")
         elif not isinstance(row[field], expected_type):
             errors.append(
-                f"{label}: field '{field}' expected {expected_type.__name__}, "
-                f"got {type(row[field]).__name__}"
+                f"{label}: field '{field}' expected {expected_type.__name__}, got {type(row[field]).__name__}"
             )
     return errors
 
@@ -626,9 +648,7 @@ def validate_dataset() -> list[str]:
     for i, row in enumerate(MOCK_CARD_PRODUCTS):
         cat = row.get("category", "")
         if cat not in allowed_cats:
-            errors.append(
-                f"CardProduct[{i}]: category '{cat}' not in allowed set {allowed_cats}"
-            )
+            errors.append(f"CardProduct[{i}]: category '{cat}' not in allowed set {allowed_cats}")
 
     # benefits must be valid JSON list with >= 1 item
     for i, row in enumerate(MOCK_CARD_PRODUCTS):
@@ -651,8 +671,8 @@ def validate_dataset() -> list[str]:
         errors.append("MOCK_CARD_PRODUCTS: duplicate card_product_id values found")
 
     # ── Count constraints ─────────────────────────────────────────────────────
-    if len(MOCK_ACCOUNTS) != 5:
-        errors.append(f"Expected 5 Accounts, got {len(MOCK_ACCOUNTS)}")
+    if len(MOCK_ACCOUNTS) != 7:
+        errors.append(f"Expected 7 Accounts, got {len(MOCK_ACCOUNTS)}")
 
     if not (5 <= len(MOCK_CARDS) <= 10):
         errors.append(f"Expected 5-10 Cards, got {len(MOCK_CARDS)}")
@@ -673,9 +693,7 @@ def validate_dataset() -> list[str]:
     cat_counts = _Counter(r["category"] for r in MOCK_CARD_PRODUCTS)
     for cat in CARD_PRODUCT_CATEGORIES:
         if cat_counts.get(cat, 0) != 4:
-            errors.append(
-                f"Category '{cat}' has {cat_counts.get(cat, 0)} products; expected 4"
-            )
+            errors.append(f"Category '{cat}' has {cat_counts.get(cat, 0)} products; expected 4")
 
     return errors
 
@@ -778,9 +796,7 @@ class _Counter:
         return self._n
 
 
-def _build_transaction_dataset() -> tuple[
-    list[dict], list[dict], list[dict], dict[str, int]
-]:
+def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict], dict[str, int]]:
     """Deterministically build 4 months of persona-driven transaction history.
 
     Returns (transactions, ledger_entries, card_ledger_entries, final_balances)
@@ -797,37 +813,42 @@ def _build_transaction_dataset() -> tuple[
     ledger_entries, so mock rows have to satisfy the same invariant).
     """
     seq = _Counter()
-    balance: dict[str, int] = dict(_STARTING_BALANCE)
+    # 개시 입금을 아래에서 명시적 거래로 walk에 넣으므로 0에서 시작한다(원장과의
+    # 이중계산 방지 — _STARTING_BALANCE로 미리 채우지 않는다).
+    balance: dict[str, int] = {}
     # events: (date, kind, account_id, receiver_or_card, amount, status, merchant)
     # merchant is None for "transfer" kind; a merchant/store label for "card".
     events: list[tuple[date, str, str, str, int, str, str | None]] = []
 
-    def add_transfer(
-        d: date, sender: str, receiver: str, amount: int, status: str = "success"
-    ) -> None:
+    def add_transfer(d: date, sender: str, receiver: str, amount: int, status: str = "success") -> None:
         events.append((d, "transfer", sender, receiver, amount, status, None))
 
-    def add_card(
-        d: date, account_id: str, amount: int, merchant: str, card_index: int = 0
-    ) -> None:
+    def add_card(d: date, account_id: str, amount: int, merchant: str, card_index: int = 0) -> None:
         cards = _ACCOUNT_CARDS.get(account_id)
         if not cards:
             return
         card_id = cards[card_index % len(cards)]
         events.append((d, "card", account_id, card_id, amount, "success", merchant))
 
+    # _STARTING_BALANCE는 balance dict에만 주입되고 원장 항목이 없으면 Account.balance
+    # 불변식(SUM(CREDIT)-SUM(DEBIT) == balance)이 깨진다 — 타임라인 맨 앞에 개시 입금
+    # 거래로 명시적으로 기록해 둔다(외부입금원 acct-b099 발신, SALARY/FRIEND와 동일 취급).
+    for _acct, _opening_amount in _STARTING_BALANCE.items():
+        add_transfer(date(2026, 3, 10), "OPENING", _acct, _opening_amount)
+
+    # 루프 소진 후의 1회성 특별소비(여행/경조사)가 마지막 반복의 rnd 를 재사용하므로,
+    # _MONTH_WINDOWS 가 비어도 미바인딩이 되지 않도록 미리 초기화한다(정상 데이터에선
+    # 첫 반복이 곧바로 덮어써서 생성 결과는 동일).
+    rnd = random.Random("mock-data-special")
+
     # ── 김지훈 (acct-0001) — 안정형 직장인, salary day 25 ─────────────────────
     for y, m, first, last in _MONTH_WINDOWS:
         rnd = random.Random(f"{_ACCT1}-{y}{m:02d}")
         if first <= 25 <= last:
             add_transfer(date(y, m, 25), "SALARY", _ACCT1, 2_450_000)
-            add_transfer(
-                date(y, m, _clip_day(26, last)), _ACCT1, _SAVINGS_BILLER, 370_000
-            )
+            add_transfer(date(y, m, _clip_day(26, last)), _ACCT1, _SAVINGS_BILLER, 370_000)
             add_transfer(date(y, m, _clip_day(27, last)), _ACCT1, _MGMT_BILLER, 540_000)
-            add_transfer(
-                date(y, m, _clip_day(27, last)), _ACCT1, _TELECOM_BILLER, 120_000
-            )
+            add_transfer(date(y, m, _clip_day(27, last)), _ACCT1, _TELECOM_BILLER, 120_000)
             add_transfer(date(y, m, _clip_day(28, last)), _ACCT1, _GYM_BILLER, 100_000)
         # 카드결제: 외식 10건 / 마트-편의점 4건 / 쇼핑 2건
         for _ in range(10):
@@ -858,9 +879,7 @@ def _build_transaction_dataset() -> tuple[
                 card_index=0,
             )
     # 4개월 중 1회 여행 특별 소비 + 1회 경조사비 송금
-    add_card(
-        date(2026, 5, 16), _ACCT1, 260_000, rnd.choice(_MERCHANTS_TRAVEL), card_index=1
-    )
+    add_card(date(2026, 5, 16), _ACCT1, 260_000, rnd.choice(_MERCHANTS_TRAVEL), card_index=1)
     add_transfer(date(2026, 6, 20), _ACCT1, _ACCT2, 100_000)  # 경조사비
 
     # ── 박서연 (acct-0002) — 재테크 워킹맘, salary day 21 ─────────────────────
@@ -870,15 +889,9 @@ def _build_transaction_dataset() -> tuple[
             add_transfer(date(y, m, 21), "SALARY", _ACCT2, 4_200_000)
             add_transfer(date(y, m, _clip_day(21, last)), _ACCT2, _LOAN_BILLER, 630_000)
             add_transfer(date(y, m, _clip_day(22, last)), _ACCT2, _MGMT_BILLER, 170_000)
-            add_transfer(
-                date(y, m, _clip_day(22, last)), _ACCT2, _ACADEMY_BILLER, 420_000
-            )
-            add_transfer(
-                date(y, m, _clip_day(23, last)), _ACCT2, _INVEST_BILLER, 840_000
-            )
-            add_transfer(
-                date(y, m, _clip_day(23, last)), _ACCT2, _SAVINGS_BILLER, 340_000
-            )
+            add_transfer(date(y, m, _clip_day(22, last)), _ACCT2, _ACADEMY_BILLER, 420_000)
+            add_transfer(date(y, m, _clip_day(23, last)), _ACCT2, _INVEST_BILLER, 840_000)
+            add_transfer(date(y, m, _clip_day(23, last)), _ACCT2, _SAVINGS_BILLER, 340_000)
         # 카드결제: 마트 대량구매 5건(주1회) / 외식(야근 배달 등) 6건 / 쇼핑 2건
         for _ in range(5):
             d = rnd.randint(first, last)
@@ -915,9 +928,7 @@ def _build_transaction_dataset() -> tuple[
     for y, m, first, last in _MONTH_WINDOWS:
         rnd = random.Random(f"{_ACCT3}-{y}{m:02d}")
         income_day = rnd.randint(max(first, 5), min(last, 20))
-        add_transfer(
-            date(y, m, income_day), "SALARY", _ACCT3, rnd.randint(1_500_000, 2_800_000)
-        )
+        add_transfer(date(y, m, income_day), "SALARY", _ACCT3, rnd.randint(1_500_000, 2_800_000))
         # 배달음식 18건 / 편의점 8건 / 온라인쇼핑·취미 3건 / 교통 4건
         for _ in range(18):
             d = rnd.randint(first, last)
@@ -979,9 +990,7 @@ def _build_transaction_dataset() -> tuple[
             continue  # already covered by the fail/retry pair above
         add_transfer(date(y, m, _clip_day(3, last)), _ACCT3, _MGMT_BILLER, 520_000)
         if (y, m) != (2026, 4):  # April covered by the fail/retry pair above
-            add_transfer(
-                date(y, m, _clip_day(14, last)), _ACCT3, _TELECOM_BILLER, 130_000
-            )
+            add_transfer(date(y, m, _clip_day(14, last)), _ACCT3, _TELECOM_BILLER, 130_000)
 
     # ── acct-0004 / acct-0005 — 페르소나 미지정, 김지훈 축소판 기본값 ─────────
     for acct, salary_day in ((_ACCT4, 25), (_ACCT5, 10)):
@@ -1060,9 +1069,7 @@ def _build_transaction_dataset() -> tuple[
             continue
 
         # "transfer" (account transfer / general payment / income / risk signal)
-        sender_key = (
-            "acct-b099-0000-0000-000000000099" if a in ("SALARY", "FRIEND") else a
-        )
+        sender_key = "acct-b099-0000-0000-000000000099" if a in ("SALARY", "FRIEND", "OPENING") else a
         # External payroll/friend sources are not modeled as a real Account —
         # use a shared external-source placeholder so the FK target still
         # resolves to an existing Account without polluting the 5 user / 7
@@ -1138,10 +1145,7 @@ def make_external_source_account_rows() -> list[Account]:
     its balance is expected to be deeply negative — it represents value
     entering the modeled system from outside, not a real funded account.
     """
-    return [
-        Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0))
-        for d in MOCK_EXTERNAL_SOURCE_ACCOUNTS
-    ]
+    return [Account(**d, balance=MOCK_FINAL_BALANCES.get(d["account_id"], 0)) for d in MOCK_EXTERNAL_SOURCE_ACCOUNTS]
 
 
 (

@@ -36,8 +36,7 @@ def test_all_card_account_ids_reference_real_accounts():
     valid_ids = {a["account_id"] for a in MOCK_ACCOUNTS}
     for card in MOCK_CARDS:
         assert card["account_id"] in valid_ids, (
-            f"Card {card['card_id']} has account_id '{card['account_id']}' "
-            f"which is not in MOCK_ACCOUNTS"
+            f"Card {card['card_id']} has account_id '{card['account_id']}' which is not in MOCK_ACCOUNTS"
         )
 
 
@@ -48,9 +47,8 @@ def test_validate_dataset_returns_no_errors():
     from financial_service.mock_data import validate_dataset
 
     errors = validate_dataset()
-    assert errors == [], (
-        f"validate_dataset() reported {len(errors)} error(s):\n"
-        + "\n".join(f"  - {e}" for e in errors)
+    assert errors == [], f"validate_dataset() reported {len(errors)} error(s):\n" + "\n".join(
+        f"  - {e}" for e in errors
     )
 
 
@@ -61,12 +59,8 @@ def test_card_products_have_no_account_id_or_card_id_field():
     from financial_service.mock_data import MOCK_CARD_PRODUCTS
 
     for row in MOCK_CARD_PRODUCTS:
-        assert "card_id" not in row, (
-            f"CardProduct {row['card_product_id']} should not have card_id field"
-        )
-        assert "account_id" not in row, (
-            f"CardProduct {row['card_product_id']} should not have account_id field"
-        )
+        assert "card_id" not in row, f"CardProduct {row['card_product_id']} should not have card_id field"
+        assert "account_id" not in row, f"CardProduct {row['card_product_id']} should not have account_id field"
 
 
 # ── 5. Count constraints ──────────────────────────────────────────────────────
@@ -75,7 +69,7 @@ def test_card_products_have_no_account_id_or_card_id_field():
 def test_account_count_is_five():
     from financial_service.mock_data import MOCK_ACCOUNTS
 
-    assert len(MOCK_ACCOUNTS) == 5, f"Expected 5 Accounts, got {len(MOCK_ACCOUNTS)}"
+    assert len(MOCK_ACCOUNTS) == 7, f"Expected 7 Accounts, got {len(MOCK_ACCOUNTS)}"
 
 
 def test_card_count_in_range():
@@ -88,9 +82,7 @@ def test_card_count_in_range():
 def test_card_product_count_is_twenty():
     from financial_service.mock_data import MOCK_CARD_PRODUCTS
 
-    assert len(MOCK_CARD_PRODUCTS) == 20, (
-        f"Expected 20 CardProducts, got {len(MOCK_CARD_PRODUCTS)}"
-    )
+    assert len(MOCK_CARD_PRODUCTS) == 20, f"Expected 20 CardProducts, got {len(MOCK_CARD_PRODUCTS)}"
 
 
 # ── 6. ORM factory functions return correct types ─────────────────────────────
@@ -101,7 +93,7 @@ def test_make_account_rows_returns_account_orm():
     from financial_service.models import Account
 
     rows = make_account_rows()
-    assert len(rows) == 5
+    assert len(rows) == 7
     assert all(isinstance(r, Account) for r in rows)
 
 

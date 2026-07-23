@@ -105,10 +105,7 @@ def test_view_balance_canonical_after_transfer(view_client):
 
     with engine.connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT account_id, balance, sum_credit, sum_debit "
-                "FROM v_infobank_account_balances"
-            )
+            text("SELECT account_id, balance, sum_credit, sum_debit FROM v_infobank_account_balances")
         ).fetchall()
 
     bmap = {row.account_id: row for row in rows}
@@ -134,21 +131,13 @@ def test_view_balance_matches_rest_api(view_client):
     _transfer(client, carol, dave, 1500, "view-test-transfer-2")
 
     # REST API balances
-    carol_api = client.get(f"/api/v1/accounts/{carol['account_id']}/balance").json()[
-        "balance"
-    ]
-    dave_api = client.get(f"/api/v1/accounts/{dave['account_id']}/balance").json()[
-        "balance"
-    ]
+    carol_api = client.get(f"/api/v1/accounts/{carol['account_id']}/balance").json()["balance"]
+    dave_api = client.get(f"/api/v1/accounts/{dave['account_id']}/balance").json()["balance"]
 
     # View balances
     with engine.connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT account_id, balance "
-                "FROM v_infobank_account_balances "
-                "WHERE account_id IN (:c, :d)"
-            ),
+            text("SELECT account_id, balance FROM v_infobank_account_balances WHERE account_id IN (:c, :d)"),
             {"c": carol["account_id"], "d": dave["account_id"]},
         ).fetchall()
 
@@ -190,9 +179,7 @@ def test_view_includes_all_accounts(view_client):
     with engine.connect() as conn:
         view_ids = {
             row.account_id
-            for row in conn.execute(
-                text("SELECT account_id FROM v_infobank_account_balances")
-            ).fetchall()
+            for row in conn.execute(text("SELECT account_id FROM v_infobank_account_balances")).fetchall()
         }
 
     for acct in accts:
@@ -240,20 +227,13 @@ def test_view_ledger_entries_after_transfer(view_client):
     with engine.connect() as conn:
         sender_rows = conn.execute(
             text(
-                "SELECT entry_type, amount "
-                "FROM v_infobank_ledger_entries "
-                "WHERE account_id = :aid "
-                "ORDER BY created_at"
+                "SELECT entry_type, amount FROM v_infobank_ledger_entries WHERE account_id = :aid ORDER BY created_at"
             ),
             {"aid": sender["account_id"]},
         ).fetchall()
 
         receiver_rows = conn.execute(
-            text(
-                "SELECT entry_type, amount "
-                "FROM v_infobank_ledger_entries "
-                "WHERE account_id = :aid"
-            ),
+            text("SELECT entry_type, amount FROM v_infobank_ledger_entries WHERE account_id = :aid"),
             {"aid": receiver["account_id"]},
         ).fetchall()
 
@@ -277,9 +257,7 @@ def test_view_ledger_no_entries_for_zero_balance_account(view_client):
 
     with engine.connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT entry_id FROM v_infobank_ledger_entries WHERE account_id = :aid"
-            ),
+            text("SELECT entry_id FROM v_infobank_ledger_entries WHERE account_id = :aid"),
             {"aid": acct["account_id"]},
         ).fetchall()
 

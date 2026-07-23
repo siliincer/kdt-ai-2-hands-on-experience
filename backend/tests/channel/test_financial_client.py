@@ -27,9 +27,7 @@ async def test_get_balance_returns_payload_and_sends_key():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["X-Analytics-Key"] == "analytics-demo-key"
         assert request.url.path == "/api/v1/analytics/accounts/acc-1/balance"
-        return httpx.Response(
-            200, json={"account_id": "acc-1", "balance": 5000, "currency": "KRW"}
-        )
+        return httpx.Response(200, json={"account_id": "acc-1", "balance": 5000, "currency": "KRW"})
 
     client = _client(handler)
     data = await client.get_balance("acc-1")

@@ -115,9 +115,7 @@ def _make_tool_node(step: dict) -> Callable:
             else:
                 updates.setdefault("route_key", "error")
 
-        updates.update(
-            _append_trace({**state, **updates}, step_id, updates.get("route_key"))
-        )
+        updates.update(_append_trace({**state, **updates}, step_id, updates.get("route_key")))
         return updates
 
     return node_fn
@@ -160,9 +158,7 @@ def _make_response_node(step: dict) -> Callable:
                     _store_output(updates, out_key, final)
             updates.setdefault("route_key", "completed")
 
-        updates.update(
-            _append_trace({**state, **updates}, step_id, updates.get("route_key"))
-        )
+        updates.update(_append_trace({**state, **updates}, step_id, updates.get("route_key")))
         return updates
 
     return node_fn
@@ -235,9 +231,7 @@ def _make_input_node(step: dict, step_routes: dict[str, str]) -> Callable:
             if out_key:
                 _store_output(updates, out_key, user_reply)
 
-        updates.update(
-            _append_trace({**state, **updates}, step_id, updates["route_key"])
-        )
+        updates.update(_append_trace({**state, **updates}, step_id, updates["route_key"]))
         return updates
 
     return node_fn
@@ -264,9 +258,7 @@ def _make_log_node(step: dict) -> Callable:
         else:
             updates["route_key"] = "log_failed"
 
-        updates.update(
-            _append_trace({**state, **updates}, step_id, updates.get("route_key"))
-        )
+        updates.update(_append_trace({**state, **updates}, step_id, updates.get("route_key")))
         return updates
 
     return node_fn

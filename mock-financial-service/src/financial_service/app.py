@@ -32,9 +32,7 @@ def create_app() -> FastAPI:
 
     # Pydantic validation errors → fixed {error_code, message} schema
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(
-        request: Request, exc: RequestValidationError
-    ):
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
         return JSONResponse(
             status_code=422,
             content={"error_code": "VALIDATION_ERROR", "message": str(exc)},

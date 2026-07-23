@@ -12,9 +12,7 @@ from sqlalchemy import text
 
 
 def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
-    r = client.post(
-        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
-    )
+    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -41,10 +39,7 @@ def _transfer(client, sender: dict, receiver: dict, amount: int, key: str):
 def _ledger_entries(db_engine, account_id: str) -> list:
     with db_engine.connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT entry_id, entry_type, amount FROM ledger_entries "
-                "WHERE account_id = :aid ORDER BY rowid"
-            ),
+            text("SELECT entry_id, entry_type, amount FROM ledger_entries WHERE account_id = :aid ORDER BY rowid"),
             {"aid": account_id},
         ).fetchall()
     return rows
@@ -67,12 +62,8 @@ class TestBalancePreservation:
         r = _transfer(client, sender, receiver, 100_000, "bp-001")
         assert r.status_code == 200
 
-        post_total = _balance(client, sender["account_id"]) + _balance(
-            client, receiver["account_id"]
-        )
-        assert post_total == pre_total, (
-            f"Balance leaked: pre={pre_total}, post={post_total}"
-        )
+        post_total = _balance(client, sender["account_id"]) + _balance(client, receiver["account_id"])
+        assert post_total == pre_total, f"Balance leaked: pre={pre_total}, post={post_total}"
 
     def test_total_preserved_multiple_transfers(self, client):
         """Multiple sequential transfers: sum invariant holds after each."""
@@ -87,9 +78,7 @@ class TestBalancePreservation:
         _transfer(client, c, a, 10_000, "bp-multi-003")
 
         post_total = (
-            _balance(client, a["account_id"])
-            + _balance(client, b["account_id"])
-            + _balance(client, c["account_id"])
+            _balance(client, a["account_id"]) + _balance(client, b["account_id"]) + _balance(client, c["account_id"])
         )
         assert post_total == pre_total
 
@@ -155,10 +144,7 @@ class TestDoubleEntryAtomicity:
 
         with db_engine.connect() as conn:
             row = conn.execute(
-                text(
-                    "SELECT account_id FROM ledger_entries "
-                    "WHERE transaction_id = :tid AND entry_type = 'DEBIT'"
-                ),
+                text("SELECT account_id FROM ledger_entries WHERE transaction_id = :tid AND entry_type = 'DEBIT'"),
                 {"tid": txn_id},
             ).fetchone()
 
@@ -180,10 +166,7 @@ class TestDoubleEntryAtomicity:
 
         with db_engine.connect() as conn:
             row = conn.execute(
-                text(
-                    "SELECT account_id FROM ledger_entries "
-                    "WHERE transaction_id = :tid AND entry_type = 'CREDIT'"
-                ),
+                text("SELECT account_id FROM ledger_entries WHERE transaction_id = :tid AND entry_type = 'CREDIT'"),
                 {"tid": txn_id},
             ).fetchone()
 
@@ -201,10 +184,7 @@ class TestDoubleEntryAtomicity:
 
         with db_engine.connect() as conn:
             rows = conn.execute(
-                text(
-                    "SELECT entry_type, amount FROM ledger_entries "
-                    "WHERE transaction_id = :tid"
-                ),
+                text("SELECT entry_type, amount FROM ledger_entries WHERE transaction_id = :tid"),
                 {"tid": txn_id},
             ).fetchall()
 
@@ -223,13 +203,8 @@ class TestDoubleEntryAtomicity:
         with db_engine.connect() as conn:
             # Count ledger entries: sender should have only the initial CREDIT (seed)
             count = conn.execute(
-                text(
-                    "SELECT COUNT(*) FROM ledger_entries "
-                    "WHERE account_id = :aid AND entry_type = 'DEBIT'"
-                ),
+                text("SELECT COUNT(*) FROM ledger_entries WHERE account_id = :aid AND entry_type = 'DEBIT'"),
                 {"aid": sender["account_id"]},
             ).scalar()
 
-        assert count == 0, (
-            f"No DEBIT entries expected after failed transfer, got {count}"
-        )
+        assert count == 0, f"No DEBIT entries expected after failed transfer, got {count}"

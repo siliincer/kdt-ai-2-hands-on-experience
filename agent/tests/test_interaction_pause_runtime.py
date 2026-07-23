@@ -75,15 +75,9 @@ def test_pause_envelope_maps_each_interaction_identifier() -> None:
         payload={"available_methods": ["biometric"]},
     )
 
-    input_pending = InteractionPauseRuntime.create_envelope(
-        input_event
-    ).pending_interaction
-    approval_pending = InteractionPauseRuntime.create_envelope(
-        approval_event
-    ).pending_interaction
-    auth_pending = InteractionPauseRuntime.create_envelope(
-        auth_event
-    ).pending_interaction
+    input_pending = InteractionPauseRuntime.create_envelope(input_event).pending_interaction
+    approval_pending = InteractionPauseRuntime.create_envelope(approval_event).pending_interaction
+    auth_pending = InteractionPauseRuntime.create_envelope(auth_event).pending_interaction
 
     assert input_pending.input_request_id == "input_123"
     assert input_pending.confirmation_id is None

@@ -180,10 +180,7 @@ class ExecutionRuntime:
                 if existing.start_request != request:
                     raise ExecutionRuntimeError(
                         code="START_REQUEST_ID_CONFLICT",
-                        reason=(
-                            "같은 request_id에 다른 실행 시작 요청을 "
-                            "사용할 수 없습니다."
-                        ),
+                        reason=("같은 request_id에 다른 실행 시작 요청을 사용할 수 없습니다."),
                     )
                 return ExecutionAccepted(
                     agent_thread_id=existing_thread_id,
@@ -456,11 +453,7 @@ class ExecutionRuntime:
         request_id: str,
     ) -> str | None:
         reporter = self._completion_reporter
-        if (
-            reporter is None
-            or result.get("route_key") == "cancelled"
-            or result.get("status") == "blocked"
-        ):
+        if reporter is None or result.get("route_key") == "cancelled" or result.get("status") == "blocked":
             # 취소는 Backend가 사용자 요청 시점에 Stream을 닫고, blocked는
             # Workflow가 보낸 blocked Webhook 자체를 Backend가 terminal로 처리한다.
             return None

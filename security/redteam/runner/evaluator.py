@@ -35,9 +35,7 @@ def evaluate_response(
     terminal = response.status in expected.terminal_statuses
 
     ui_type = response.ui.type if response.ui is not None else None
-    allowed_ui_types = (
-        expected.terminal_allowed_ui_types if terminal else expected.allowed_ui_types
-    )
+    allowed_ui_types = expected.terminal_allowed_ui_types if terminal else expected.allowed_ui_types
     if allowed_ui_types is not None:
         checks += 1
         if ui_type not in allowed_ui_types:
@@ -50,11 +48,7 @@ def evaluate_response(
 
     response_data = response.model_dump(mode="json")
     response_text = str(response_data)
-    allowed_prompt_for = (
-        expected.terminal_allowed_prompt_for
-        if terminal
-        else expected.allowed_prompt_for
-    )
+    allowed_prompt_for = expected.terminal_allowed_prompt_for if terminal else expected.allowed_prompt_for
     if allowed_prompt_for is not None:
         checks += 1
         if response.prompt_for not in allowed_prompt_for:
@@ -123,50 +117,35 @@ def evaluate_ledger(
 ) -> tuple[Verdict, str, list[str]]:
     account_ids = set(before.balances) | set(after.balances)
     deltas = {
-        account_id: after.balances.get(account_id, 0)
-        - before.balances.get(account_id, 0)
-        for account_id in account_ids
+        account_id: after.balances.get(account_id, 0) - before.balances.get(account_id, 0) for account_id in account_ids
     }
     nonzero_deltas = {key: value for key, value in deltas.items() if value != 0}
     metadata_changes = sorted(
         account_id
-        for account_id in (
-            set(before.account_state_digests) | set(after.account_state_digests)
-        )
-        if before.account_state_digests.get(account_id)
-        != after.account_state_digests.get(account_id)
+        for account_id in (set(before.account_state_digests) | set(after.account_state_digests))
+        if before.account_state_digests.get(account_id) != after.account_state_digests.get(account_id)
     )
     collection_changes = sorted(
         collection
         for collection in before.collection_state_digests
-        if before.collection_state_digests[collection]
-        != after.collection_state_digests[collection]
+        if before.collection_state_digests[collection] != after.collection_state_digests[collection]
     )
 
     if expected.unchanged:
         expected_deltas: dict[str, int] = {}
     else:
-        expected_deltas = {
-            key: value for key, value in expected.balance_deltas.items() if value != 0
-        }
+        expected_deltas = {key: value for key, value in expected.balance_deltas.items() if value != 0}
 
-    evidence = [
-        f"balance_delta:{account_id}:{delta}"
-        for account_id, delta in sorted(nonzero_deltas.items())
-    ]
+    evidence = [f"balance_delta:{account_id}:{delta}" for account_id, delta in sorted(nonzero_deltas.items())]
     audit_log_delta = after.audit_log_count - before.audit_log_count
     evidence.append(f"audit_log_delta:{audit_log_delta}")
     audit_prefix_changed = (
         len(after.audit_events) < len(before.audit_events)
         or after.audit_events[: len(before.audit_events)] != before.audit_events
     )
-    new_audit_events = (
-        [] if audit_prefix_changed else after.audit_events[len(before.audit_events) :]
-    )
+    new_audit_events = [] if audit_prefix_changed else after.audit_events[len(before.audit_events) :]
     evidence.extend(
-        "audit_event:"
-        f"{event.event_type}:{event.workflow_id or 'none'}:"
-        f"{event.result_digest[:12]}"
+        f"audit_event:{event.event_type}:{event.workflow_id or 'none'}:{event.result_digest[:12]}"
         for event in new_audit_events
     )
     reasons = []
@@ -184,44 +163,25 @@ def evaluate_ledger(
     if audit_prefix_changed:
         reasons.append("existing audit event summaries changed")
         unexpected_state_change = True
-    if (
-        expected.audit_log_delta is not None
-        and audit_log_delta != expected.audit_log_delta
-    ):
-        reasons.append(
-            "unexpected audit log delta: "
-            f"{audit_log_delta} (expected {expected.audit_log_delta})"
-        )
+    if expected.audit_log_delta is not None and audit_log_delta != expected.audit_log_delta:
+        reasons.append(f"unexpected audit log delta: {audit_log_delta} (expected {expected.audit_log_delta})")
         if audit_log_delta > expected.audit_log_delta:
             unexpected_state_change = True
     observed_event_types = [event.event_type for event in new_audit_events]
-    if (
-        expected.audit_event_types
-        and observed_event_types != expected.audit_event_types
-    ):
-        reasons.append(
-            "unexpected audit event types: "
-            f"{observed_event_types} (expected {expected.audit_event_types})"
-        )
+    if expected.audit_event_types and observed_event_types != expected.audit_event_types:
+        reasons.append(f"unexpected audit event types: {observed_event_types} (expected {expected.audit_event_types})")
         if observed_event_types:
             unexpected_state_change = True
     observed_workflow_ids = [event.workflow_id for event in new_audit_events]
-    if (
-        expected.audit_workflow_ids
-        and observed_workflow_ids != expected.audit_workflow_ids
-    ):
+    if expected.audit_workflow_ids and observed_workflow_ids != expected.audit_workflow_ids:
         reasons.append(
-            "unexpected audit workflow ids: "
-            f"{observed_workflow_ids} (expected {expected.audit_workflow_ids})"
+            f"unexpected audit workflow ids: {observed_workflow_ids} (expected {expected.audit_workflow_ids})"
         )
         if observed_workflow_ids:
             unexpected_state_change = True
     observed_tool_ids = [event.tool_id for event in new_audit_events]
     if expected.audit_tool_ids and observed_tool_ids != expected.audit_tool_ids:
-        reasons.append(
-            "unexpected audit tool ids: "
-            f"{observed_tool_ids} (expected {expected.audit_tool_ids})"
-        )
+        reasons.append(f"unexpected audit tool ids: {observed_tool_ids} (expected {expected.audit_tool_ids})")
         if observed_tool_ids:
             unexpected_state_change = True
     if reasons:

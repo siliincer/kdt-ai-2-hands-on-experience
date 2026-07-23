@@ -33,11 +33,7 @@ async def issue_context(
     agent_thread_id: str | None = None,
 ) -> ExecutionContext:
     """새 실행 Context 를 발급한다. 만료시각은 now + TTL 로 고정한다."""
-    ttl = (
-        ttl_seconds
-        if ttl_seconds is not None
-        else settings.EXECUTION_CONTEXT_TTL_SECONDS
-    )
+    ttl = ttl_seconds if ttl_seconds is not None else settings.EXECUTION_CONTEXT_TTL_SECONDS
     tz = execution_timezone or settings.DEFAULT_EXECUTION_TIMEZONE
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
     return await create_execution_context(
@@ -62,9 +58,7 @@ def _to_resolved(context: ExecutionContext) -> ResolvedExecutionContext:
     )
 
 
-async def resolve_context(
-    session: AsyncSession, raw_context_id: str | None
-) -> ResolvedExecutionContext:
+async def resolve_context(session: AsyncSession, raw_context_id: str | None) -> ResolvedExecutionContext:
     """X-Execution-Context-Id 를 검증하고 사용자·스코프를 반환한다.
 
     - 형식오류/미존재: `INVALID_EXECUTION_CONTEXT` (401)

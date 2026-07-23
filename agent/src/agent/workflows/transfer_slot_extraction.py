@@ -24,9 +24,7 @@ from agent.workflows.slot_extraction_support import (
 
 TransferSlotExtractor: TypeAlias = Callable[[str], Awaitable[Mapping[str, Any]]]
 
-_ACCOUNT_HINT = re.compile(
-    r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))"
-)
+_ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))")
 _RECIPIENT_HINT = re.compile(r"([가-힣]{2,4})\s*(?:에게|한테)")
 _AMOUNT = re.compile(r"(\d[\d,]*)\s*만\s*원|(\d[\d,]*)\s*원")
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
@@ -153,13 +151,9 @@ async def extract_internal_transfer_slots_llm_first(
 
     return {
         "from_account_hint": (
-            _grounded_phrase(extracted.from_account_hint, message)
-            or fallback.get("from_account_hint")
+            _grounded_phrase(extracted.from_account_hint, message) or fallback.get("from_account_hint")
         ),
-        "to_account_hint": (
-            _grounded_phrase(extracted.to_account_hint, message)
-            or fallback.get("to_account_hint")
-        ),
+        "to_account_hint": (_grounded_phrase(extracted.to_account_hint, message) or fallback.get("to_account_hint")),
         "amount": extracted.amount or fallback.get("amount"),
     }
 
@@ -182,12 +176,10 @@ async def extract_external_transfer_slots_llm_first(
 
     return {
         "recipient_name_hint": (
-            _grounded_phrase(extracted.recipient_name_hint, message)
-            or fallback.get("recipient_name_hint")
+            _grounded_phrase(extracted.recipient_name_hint, message) or fallback.get("recipient_name_hint")
         ),
         "from_account_hint": (
-            _grounded_phrase(extracted.from_account_hint, message)
-            or fallback.get("from_account_hint")
+            _grounded_phrase(extracted.from_account_hint, message) or fallback.get("from_account_hint")
         ),
         "amount": extracted.amount or fallback.get("amount"),
     }

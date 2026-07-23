@@ -28,8 +28,10 @@ if not config.get_main_option("sqlalchemy.url"):
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
+# disable_existing_loggers=False: run_migrations() 는 앱 startup 에서도 호출되는데,
+# 기본값(True)이면 이미 설정된 uvicorn.access 로거까지 꺼뜨려 접근 로그가 사라진다.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # financial_service.models's classes register themselves on Base.metadata
 # on import (above) — this is what `alembic revision --autogenerate` diffs

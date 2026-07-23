@@ -68,7 +68,10 @@ function buildRows(a: ConfirmModalArgs): DisplayRow[] {
     if (a.account) {
       rows.push({
         label: '새 기본 계좌',
-        value: joinParts(a.account.bank_name, a.account.masked_account_number),
+        value: joinParts(
+          a.account.account_alias ?? a.account.bank_name,
+          a.account.masked_account_number,
+        ),
       });
     }
     return rows;

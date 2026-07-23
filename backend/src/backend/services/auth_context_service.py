@@ -72,9 +72,7 @@ async def load_verified(
     `AUTH_REQUIRED`(409) 로 던진다.
     """
     # 존재 여부를 노출하지 않고 인증 재요청으로 유도한다.
-    auth_context = await get_auth_context_by_id(
-        session, parse_uuid(auth_context_id, AgentToolError.auth_required)
-    )
+    auth_context = await get_auth_context_by_id(session, parse_uuid(auth_context_id, AgentToolError.auth_required))
     if auth_context is None:
         raise AgentToolError.auth_required()
     if auth_context.user_id != context.user_id:
@@ -93,9 +91,7 @@ async def load_verified(
     return auth_context
 
 
-async def mark_verified(
-    session: AsyncSession, auth_context: AuthContext
-) -> AuthContext:
+async def mark_verified(session: AsyncSession, auth_context: AuthContext) -> AuthContext:
     """Frontend 인증 결과가 검증되면 호출한다(Backend 가 검증한 뒤에만)."""
     return await set_auth_context_status(
         session,
@@ -107,6 +103,4 @@ async def mark_verified(
 
 async def invalidate(session: AsyncSession, auth_context: AuthContext) -> AuthContext:
     """실행 조건이 바뀌어 기존 인증을 재사용할 수 없게 처리한다(계약 16.4)."""
-    return await set_auth_context_status(
-        session, auth_context, AuthContextStatus.EXPIRED
-    )
+    return await set_auth_context_status(session, auth_context, AuthContextStatus.EXPIRED)

@@ -133,9 +133,7 @@ class AgentWebhookRequest(BaseModel):
         elif self.event_type == "authentication_required":
             AuthenticationRequiredWebhookMetadata.model_validate(self.metadata)
             if self.confirmation_id is not None:
-                raise ValueError(
-                    "authentication_required에는 confirmation_id를 사용할 수 없습니다."
-                )
+                raise ValueError("authentication_required에는 confirmation_id를 사용할 수 없습니다.")
         elif self.confirmation_id is not None:
             raise ValueError("confirmation_id는 need_approval에만 사용할 수 있습니다.")
         return self

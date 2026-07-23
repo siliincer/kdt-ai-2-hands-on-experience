@@ -27,9 +27,7 @@ from ...utils.constants import SCOPE_ACCOUNT_READ
 transaction_router = APIRouter(tags=["Agent Tools - Transaction"])
 
 
-@transaction_router.post(
-    "/transactions:query", response_model=CommonResponse[TransactionQueryData]
-)
+@transaction_router.post("/transactions:query", response_model=CommonResponse[TransactionQueryData])
 async def query_transactions_endpoint(
     payload: TransactionQueryRequest,
     context: ResolvedExecutionContext = Depends(require_scope(SCOPE_ACCOUNT_READ)),
@@ -40,9 +38,7 @@ async def query_transactions_endpoint(
     return agent_success_response(message="거래내역을 조회했습니다.", data=data)
 
 
-@transaction_router.post(
-    "/transactions:summary", response_model=CommonResponse[TransactionSummaryData]
-)
+@transaction_router.post("/transactions:summary", response_model=CommonResponse[TransactionSummaryData])
 async def summarize_transactions_endpoint(
     payload: TransactionSummaryRequest,
     context: ResolvedExecutionContext = Depends(require_scope(SCOPE_ACCOUNT_READ)),

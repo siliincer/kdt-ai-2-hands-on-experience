@@ -8,7 +8,6 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .models import (
-    BANK_NAME,
     Account,
     AuditLog,
     Card,
@@ -87,9 +86,7 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
     seed_transaction_id: str | None = None
     if payload.initial_balance > 0:
         # Seed credit (initial deposit has no counterpart — system account)
-        seed_transaction_id = _create_seed_transaction(
-            db, acct.account_id, payload.initial_balance
-        )
+        seed_transaction_id = _create_seed_transaction(db, acct.account_id, payload.initial_balance)
         entry = LedgerEntry(
             transaction_id=seed_transaction_id,
             account_id=acct.account_id,
@@ -108,9 +105,7 @@ def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
         reason=f"New account created for {payload.owner}",
         status="success",
         transaction_id=seed_transaction_id,
-        payload_snapshot=json.dumps(
-            {"owner": payload.owner, "initial_balance": payload.initial_balance}
-        ),
+        payload_snapshot=json.dumps({"owner": payload.owner, "initial_balance": payload.initial_balance}),
     )
     db.commit()
     db.refresh(acct)
@@ -134,15 +129,11 @@ def _create_seed_transaction(db: Session, account_id: str, amount: int) -> str:
 
 
 def get_account(db: Session, account_id: str) -> Account | None:
-    return db.execute(
-        select(Account).where(Account.account_id == account_id)
-    ).scalar_one_or_none()
+    return db.execute(select(Account).where(Account.account_id == account_id)).scalar_one_or_none()
 
 
 def get_account_by_number(db: Session, account_number: str) -> Account | None:
-    return db.execute(
-        select(Account).where(Account.account_number == account_number)
-    ).scalar_one_or_none()
+    return db.execute(select(Account).where(Account.account_number == account_number)).scalar_one_or_none()
 
 
 def get_balance(db: Session, account_id: str) -> int:
@@ -151,9 +142,7 @@ def get_balance(db: Session, account_id: str) -> int:
     return acct.balance if acct is not None else 0
 
 
-def get_ledger_entries(
-    db: Session, account_id: str, limit: int = 50, offset: int = 0
-) -> list[LedgerEntry]:
+def get_ledger_entries(db: Session, account_id: str, limit: int = 50, offset: int = 0) -> list[LedgerEntry]:
     result = (
         db.execute(
             select(LedgerEntry)
@@ -168,9 +157,7 @@ def get_ledger_entries(
     return list(result)
 
 
-def get_audit_logs(
-    db: Session, account_id: str, limit: int = 50, offset: int = 0
-) -> list[AuditLog]:
+def get_audit_logs(db: Session, account_id: str, limit: int = 50, offset: int = 0) -> list[AuditLog]:
     """Audit logs linked to an account via the transaction it participated in.
 
     Covers ACCOUNT_CREATE (seed transaction self-links to the new account) and
@@ -181,10 +168,7 @@ def get_audit_logs(
         db.execute(
             select(AuditLog)
             .join(Transaction, AuditLog.transaction_id == Transaction.transaction_id)
-            .where(
-                (Transaction.sender_account_id == account_id)
-                | (Transaction.receiver_account_id == account_id)
-            )
+            .where((Transaction.sender_account_id == account_id) | (Transaction.receiver_account_id == account_id))
             .order_by(AuditLog.timestamp.desc())
             .limit(limit)
             .offset(offset)
@@ -258,9 +242,7 @@ def transfer(
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
-            raise ConflictError(
-                "IDEMPOTENCY_CONFLICT", "Idempotency key reused with different payload"
-            )
+            raise ConflictError("IDEMPOTENCY_CONFLICT", "Idempotency key reused with different payload")
         return existing  # safe replay
 
     try:
@@ -268,24 +250,25 @@ def transfer(
         if payload.sender_account_number == payload.receiver_account_number:
             raise ValidationError("SELF_TRANSFER", "Sender and receiver must differ")
 
-        # 이 mock 서비스는 단일 은행만 표현 — receiver_bank_name이 그 은행이 아니면 거절
-        if payload.receiver_bank_name != BANK_NAME:
-            raise ValidationError(
-                "BANK_NOT_SUPPORTED",
-                f"Unsupported bank: {payload.receiver_bank_name} (only {BANK_NAME})",
-            )
-
         sender = get_account_by_number(db, payload.sender_account_number)
         if sender is None:
-            raise NotFoundError(
-                "ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_number} not found"
-            )
+            raise NotFoundError("ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_number} not found")
 
         receiver = get_account_by_number(db, payload.receiver_account_number)
         if receiver is None:
             raise NotFoundError(
                 "ACCOUNT_NOT_FOUND",
                 f"Receiver {payload.receiver_account_number} not found",
+            )
+
+        # 이 mock 서비스는 원장이 하나뿐인 단일 은행 시스템이지만, 타행 송금 UX는
+        # 다은행을 이 한 은행처럼 처리한다 — 하드코딩된 은행명 상수 하나만 허용하는 게
+        # 아니라, 받는 계좌에 실제 등록된 은행명과 일치하는지만 검사한다.
+        if payload.receiver_bank_name != receiver.bank_name:
+            raise ValidationError(
+                "RECEIVER_BANK_MISMATCH",
+                f"Receiver account {payload.receiver_account_number} is registered under "
+                f"'{receiver.bank_name}', not '{payload.receiver_bank_name}'",
             )
 
         sender_id = sender.account_id
@@ -296,9 +279,7 @@ def transfer(
 
         sender_balance = sender.balance
         if sender_balance < payload.amount:
-            raise ValidationError(
-                "INSUFFICIENT_BALANCE", f"Balance {sender_balance} < {payload.amount}"
-            )
+            raise ValidationError("INSUFFICIENT_BALANCE", f"Balance {sender_balance} < {payload.amount}")
 
         receiver_balance = receiver.balance
 
@@ -344,9 +325,7 @@ def transfer(
             db,
             actor=payload.sender_account_number,
             action="TRANSFER",
-            reason=(
-                f"Transfer {payload.amount} KRW to {payload.receiver_account_number}"
-            ),
+            reason=(f"Transfer {payload.amount} KRW to {payload.receiver_account_number}"),
             status="success",
             transaction_id=txn.transaction_id,
             payload_snapshot=json.dumps(
@@ -385,12 +364,10 @@ def transfer(
         f"(sender={post_sender_balance}, receiver={post_receiver_balance})"
     )
     assert post_sender_balance == sender.balance, (
-        f"Stored balance drift: sender.balance={sender.balance}, "
-        f"recomputed={post_sender_balance}"
+        f"Stored balance drift: sender.balance={sender.balance}, recomputed={post_sender_balance}"
     )
     assert post_receiver_balance == receiver.balance, (
-        f"Stored balance drift: receiver.balance={receiver.balance}, "
-        f"recomputed={post_receiver_balance}"
+        f"Stored balance drift: receiver.balance={receiver.balance}, recomputed={post_receiver_balance}"
     )
 
     return txn
@@ -443,9 +420,7 @@ def reconcile_balance(db: Session, account_id: str) -> dict:
 # ── Daily Closing (EOD batch) ──────────────────────────────────────────────────
 
 
-def run_daily_closing(
-    db: Session, business_date: date | None = None
-) -> tuple[date, list[DailyClosingSnapshot]]:
+def run_daily_closing(db: Session, business_date: date | None = None) -> tuple[date, list[DailyClosingSnapshot]]:
     """EOD 마감 배치 — 모든 계좌를 대상으로 영업일당 1행 insert.
 
     실제 cron/스케줄러 없음 — scripts/run_daily_close.py 를 OS cron(자정)에
@@ -505,9 +480,7 @@ def run_daily_closing(
         db,
         actor="SYSTEM_BATCH",
         action="DAILY_CLOSE",
-        reason=(
-            f"Daily closing batch for {business_date}: {len(created)} accounts closed"
-        ),
+        reason=(f"Daily closing batch for {business_date}: {len(created)} accounts closed"),
         status="success",
         payload_snapshot=json.dumps(
             {
@@ -522,9 +495,7 @@ def run_daily_closing(
     return business_date, created
 
 
-def list_daily_closings(
-    db: Session, account_id: str, limit: int = 50, offset: int = 0
-) -> list[DailyClosingSnapshot]:
+def list_daily_closings(db: Session, account_id: str, limit: int = 50, offset: int = 0) -> list[DailyClosingSnapshot]:
     result = (
         db.execute(
             select(DailyClosingSnapshot)
@@ -548,9 +519,7 @@ def create_card(db: Session, payload: CardCreate) -> Card:
     """Create a card under an existing account."""
     acct = get_account(db, payload.account_id)
     if acct is None:
-        raise NotFoundError(
-            "ACCOUNT_NOT_FOUND", f"Account {payload.account_id} not found"
-        )
+        raise NotFoundError("ACCOUNT_NOT_FOUND", f"Account {payload.account_id} not found")
 
     card = Card(
         account_id=payload.account_id,
@@ -564,9 +533,7 @@ def create_card(db: Session, payload: CardCreate) -> Card:
         db,
         actor=payload.account_id,
         action="CARD_CREATE",
-        reason=(
-            f"Card created for account {payload.account_id} with limit {payload.limit}"
-        ),
+        reason=(f"Card created for account {payload.account_id} with limit {payload.limit}"),
         status="success",
         payload_snapshot=json.dumps(
             {
@@ -585,6 +552,10 @@ def get_card(db: Session, card_id: str) -> Card | None:
     return db.execute(select(Card).where(Card.card_id == card_id)).scalar_one_or_none()
 
 
+def get_cards_by_account(db: Session, account_id: str) -> list[Card]:
+    return list(db.execute(select(Card).where(Card.account_id == account_id)).scalars().all())
+
+
 def _get_card_watermark(db: Session, card_id: str) -> int:
     """Highest card-ledger rowid covered by the latest settlement (0 if none)."""
     result = db.execute(
@@ -599,10 +570,7 @@ def _get_card_watermark(db: Session, card_id: str) -> int:
 def _get_unsettled_usage(db: Session, card_id: str, watermark: int) -> int:
     """SUM of card-ledger entries with rowid strictly > watermark."""
     result = db.execute(
-        text(
-            "SELECT COALESCE(SUM(amount), 0) FROM card_ledger_entries "
-            "WHERE card_id = :cid AND rowid > :wm"
-        ),
+        text("SELECT COALESCE(SUM(amount), 0) FROM card_ledger_entries WHERE card_id = :cid AND rowid > :wm"),
         {"cid": card_id, "wm": watermark},
     ).scalar()
     return int(result) if result is not None else 0
@@ -621,9 +589,7 @@ def charge_card(
 
     # Idempotency: if same key exists, replay
     existing = db.execute(
-        select(CardLedgerEntry).where(
-            CardLedgerEntry.idempotency_key == idempotency_key
-        )
+        select(CardLedgerEntry).where(CardLedgerEntry.idempotency_key == idempotency_key)
     ).scalar_one_or_none()
     if existing is not None:
         return existing
@@ -634,8 +600,7 @@ def charge_card(
     if unsettled + payload.amount > card.limit:
         raise ValidationError(
             "CARD_LIMIT_EXCEEDED",
-            f"Unsettled usage {unsettled} + charge {payload.amount} "
-            f"exceeds limit {card.limit}",
+            f"Unsettled usage {unsettled} + charge {payload.amount} exceeds limit {card.limit}",
         )
 
     entry = CardLedgerEntry(
@@ -685,17 +650,13 @@ def settle_card(db: Session, card_id: str) -> Transaction:
         {"cid": card_id},
     ).scalar()
     if new_watermark_result is None or new_watermark_result <= watermark:
-        raise ValidationError(
-            "NOTHING_TO_SETTLE", "No unsettled card charges to settle"
-        )
+        raise ValidationError("NOTHING_TO_SETTLE", "No unsettled card charges to settle")
 
     new_watermark = int(new_watermark_result)
     settled_amount = _get_unsettled_usage(db, card_id, watermark)
 
     if settled_amount == 0:
-        raise ValidationError(
-            "NOTHING_TO_SETTLE", "No unsettled card charges to settle"
-        )
+        raise ValidationError("NOTHING_TO_SETTLE", "No unsettled card charges to settle")
 
     # Check account has sufficient balance
     account = get_account(db, card.account_id)
@@ -709,9 +670,7 @@ def settle_card(db: Session, card_id: str) -> Transaction:
         )
 
     idempotency_key = f"__settle__{card_id}__{new_watermark}"
-    phash = _payload_hash(
-        {"card_id": card_id, "watermark": new_watermark, "amount": settled_amount}
-    )
+    phash = _payload_hash({"card_id": card_id, "watermark": new_watermark, "amount": settled_amount})
 
     txn = Transaction(
         idempotency_key=idempotency_key,
@@ -746,8 +705,7 @@ def settle_card(db: Session, card_id: str) -> Transaction:
         actor=card.account_id,
         action="CARD_SETTLEMENT",
         reason=(
-            f"Card {card_id} settled {settled_amount} {card.currency}; "
-            f"watermark advanced to rowid {new_watermark}"
+            f"Card {card_id} settled {settled_amount} {card.currency}; watermark advanced to rowid {new_watermark}"
         ),
         status="success",
         transaction_id=txn.transaction_id,
@@ -765,9 +723,7 @@ def settle_card(db: Session, card_id: str) -> Transaction:
     return txn
 
 
-def get_card_ledger_entries(
-    db: Session, card_id: str, limit: int = 50, offset: int = 0
-) -> list[CardLedgerEntry]:
+def get_card_ledger_entries(db: Session, card_id: str, limit: int = 50, offset: int = 0) -> list[CardLedgerEntry]:
     result = (
         db.execute(
             select(CardLedgerEntry)

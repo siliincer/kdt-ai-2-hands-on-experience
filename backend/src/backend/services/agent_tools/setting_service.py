@@ -74,13 +74,9 @@ def _invalid_account_id() -> AgentToolError:
     return AgentToolError.invalid_request("account_id 형식이 올바르지 않습니다.")
 
 
-async def _load_owned_account(
-    session: AsyncSession, context: ResolvedExecutionContext, account_id: str
-) -> Account:
+async def _load_owned_account(session: AsyncSession, context: ResolvedExecutionContext, account_id: str) -> Account:
     """대상 계좌 소유권 검증. 소유가 아니면 존재 여부를 노출하지 않고 거부한다."""
-    account = await get_owned_account(
-        session, context.user_id, parse_uuid(account_id, _invalid_account_id)
-    )
+    account = await get_owned_account(session, context.user_id, parse_uuid(account_id, _invalid_account_id))
     if account is None:
         raise AgentToolError.account_access_denied()
     return account
@@ -132,9 +128,7 @@ async def prepare_default_account(
 
     # 이미 기본계좌면 오류가 아니라 unchanged (Confirmation 미생성, 계약 19.4).
     if account.is_default:
-        return DefaultAccountPrepareData(
-            outcome=SettingOutcome.UNCHANGED, account_id=str(account.id)
-        )
+        return DefaultAccountPrepareData(outcome=SettingOutcome.UNCHANGED, account_id=str(account.id))
 
     current_default = await get_default_account(session, context.user_id)
     confirmation = await confirmation_service.create_pending(
@@ -156,9 +150,7 @@ async def prepare_default_account(
         outcome=SettingOutcome.READY_FOR_CONFIRMATION,
         confirmation_id=str(confirmation.id),
         confirmation_view=DefaultAccountConfirmationView(
-            current_default_account=(
-                _account_ref(current_default) if current_default else None
-            ),
+            current_default_account=(_account_ref(current_default) if current_default else None),
             new_default_account=_account_ref(account),
             expires_at=confirmation.expires_at,
         ),

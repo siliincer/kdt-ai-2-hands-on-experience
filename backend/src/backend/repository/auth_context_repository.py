@@ -35,18 +35,14 @@ async def create_auth_context(
     return auth_context
 
 
-async def get_auth_context_by_id(
-    session: AsyncSession, auth_context_id: UUID
-) -> AuthContext | None:
+async def get_auth_context_by_id(session: AsyncSession, auth_context_id: UUID) -> AuthContext | None:
     """id 로 Auth Context 를 조회한다(없으면 None)."""
     stmt = select(AuthContext).where(AuthContext.id == auth_context_id)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
 
-async def get_active_auth_context(
-    session: AsyncSession, confirmation_id: UUID, now: datetime
-) -> AuthContext | None:
+async def get_active_auth_context(session: AsyncSession, confirmation_id: UUID, now: datetime) -> AuthContext | None:
     """같은 Confirmation 의 아직 살아있는 인증 시도(PENDING·미만료)를 찾는다.
 
     계약 15.4 의 "같은 Confirmation 의 활성 Auth Context 존재 여부" 검증에 사용한다.

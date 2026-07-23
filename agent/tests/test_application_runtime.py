@@ -186,12 +186,8 @@ def test_fastapi_start_fails_when_tool_contract_registration_is_missing(
             pass
 
     assert captured.value.missing_by_workflow
-    critical_record = next(
-        record for record in caplog.records if record.levelno == logging.CRITICAL
-    )
-    assert getattr(critical_record, "missing_contracts_by_workflow") == (
-        captured.value.missing_by_workflow
-    )
+    critical_record = next(record for record in caplog.records if record.levelno == logging.CRITICAL)
+    assert getattr(critical_record, "missing_contracts_by_workflow") == (captured.value.missing_by_workflow)
 
 
 @pytest.mark.asyncio

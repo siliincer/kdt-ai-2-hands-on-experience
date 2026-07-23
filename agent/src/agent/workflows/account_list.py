@@ -32,9 +32,7 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_account_list"
-_tool_error_update = build_tool_error_update(
-    "계좌 목록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
-)
+_tool_error_update = build_tool_error_update("계좌 목록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 
 def extract_account_list_slots_from_text(message: str) -> Mapping[str, Any]:
@@ -50,12 +48,8 @@ class AccountListDependencies:
     tool_registry: ContractToolRegistry
     webhook_client: BackendWebhookClient
     webhook_builder: InteractionWebhookBuilder
-    tool_request_id_factory: Callable[[str, str], str] = field(
-        default=_default_tool_request_id
-    )
-    slot_extractor: AccountSlotExtractor = field(
-        default=extract_account_list_slots_llm_first
-    )
+    tool_request_id_factory: Callable[[str, str], str] = field(default=_default_tool_request_id)
+    slot_extractor: AccountSlotExtractor = field(default=extract_account_list_slots_llm_first)
 
 
 def build_account_list_graph(
@@ -68,9 +62,7 @@ def build_account_list_graph(
     async def extract_account_list_slots(
         state: AgentState,
     ) -> dict[str, Any]:
-        extracted = await dependencies.slot_extractor(
-            str(state.get("user_input") or "")
-        )
+        extracted = await dependencies.slot_extractor(str(state.get("user_input") or ""))
         return {
             "workflow_id": WORKFLOW_ID,
             "current_step_id": "extract_account_list_slots",
@@ -126,8 +118,7 @@ def build_account_list_graph(
         config: RunnableConfig,
     ) -> dict[str, Any]:
         message = str(
-            _data(state).get("safe_error_message")
-            or "계좌 목록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            _data(state).get("safe_error_message") or "계좌 목록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
         )
         event = dependencies.webhook_builder.error(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -175,8 +166,4 @@ def _account_options(raw_accounts: Any) -> list[dict[str, Any]]:
         "is_default",
         "status",
     )
-    return [
-        {field: account.get(field) for field in fields}
-        for account in accounts
-        if isinstance(account, Mapping)
-    ]
+    return [{field: account.get(field) for field in fields} for account in accounts if isinstance(account, Mapping)]

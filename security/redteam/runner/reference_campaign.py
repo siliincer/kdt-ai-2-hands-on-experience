@@ -80,19 +80,13 @@ class ReferenceAdaptiveAttempt(BaseModel):
         has_error = self.evaluation.verdict == Verdict.ERROR
         if has_error != all(value is not None for value in error_fields):
             raise ValueError("adaptive ERROR requires complete error metadata")
-        if any(value is not None for value in error_fields) != all(
-            value is not None for value in error_fields
-        ):
+        if any(value is not None for value in error_fields) != all(value is not None for value in error_fields):
             raise ValueError("adaptive error metadata must be complete")
         if self.model_judgment is not None:
             uncertain = self.model_judgment.outcome.value == "uncertain"
             if uncertain != (self.judgment_agrees_with_rules is None):
                 raise ValueError("adaptive judgment agreement is inconsistent")
-        if (
-            self.model_judgment is not None
-            and self.judgment_agrees_with_rules is not True
-            and not self.review_required
-        ):
+        if self.model_judgment is not None and self.judgment_agrees_with_rules is not True and not self.review_required:
             raise ValueError("adaptive judgment disagreement requires review")
         return self
 
@@ -135,9 +129,7 @@ class ReferenceCampaignEntry(BaseModel):
             and self.evaluation.verdict != Verdict.ERROR
             and (not self.responses or not self.steps)
         ):
-            raise ValueError(
-                "completed reference evaluation requires Agent execution steps"
-            )
+            raise ValueError("completed reference evaluation requires Agent execution steps")
         if self.status == "not_supported" and not self.note:
             raise ValueError("unsupported reference entry requires a note")
         if self.status == "not_supported" and (
@@ -158,31 +150,20 @@ class ReferenceCampaignEntry(BaseModel):
             or self.steps
             or self.model_judgment is not None
         ):
-            raise ValueError(
-                "not-executed reference entry requires only an ERROR result"
-            )
+            raise ValueError("not-executed reference entry requires only an ERROR result")
         if self.evaluation is not None and self.evaluation.case_id != self.case_id:
             raise ValueError("reference evaluation belongs to another case")
-        if (
-            self.rule_evaluation is not None
-            and self.rule_evaluation.case_id != self.case_id
-        ):
+        if self.rule_evaluation is not None and self.rule_evaluation.case_id != self.case_id:
             raise ValueError("reference rule evaluation belongs to another case")
         error_fields = (self.error_stage, self.error_type, self.error_reason)
-        if any(value is not None for value in error_fields) != all(
-            value is not None for value in error_fields
-        ):
+        if any(value is not None for value in error_fields) != all(value is not None for value in error_fields):
             raise ValueError("reference error metadata must be complete")
-        has_error = (
-            self.evaluation is not None and self.evaluation.verdict == Verdict.ERROR
-        )
+        has_error = self.evaluation is not None and self.evaluation.verdict == Verdict.ERROR
         if has_error != all(value is not None for value in error_fields):
             raise ValueError("reference ERROR requires error metadata")
         if self.rule_evaluation is not None and not has_error:
             raise ValueError("preserved rule evaluation requires an ERROR result")
-        step_responses = [
-            step.response for step in self.steps if step.response is not None
-        ]
+        step_responses = [step.response for step in self.steps if step.response is not None]
         if self.responses != step_responses:
             raise ValueError("reference responses must match accepted execution steps")
         generated = self.case_contract.generation is not None
@@ -192,23 +173,14 @@ class ReferenceCampaignEntry(BaseModel):
                 and self.evaluation.verdict != Verdict.ERROR
                 and (self.candidate is None or self.model_judgment is None)
             ):
-                raise ValueError(
-                    "generated reference entry requires generation results"
-                )
+                raise ValueError("generated reference entry requires generation results")
             if (
                 generated
                 and self.evaluation.verdict == Verdict.ERROR
                 and self.error_stage == "independent_judgment"
-                and (
-                    self.candidate is None
-                    or self.rule_evaluation is None
-                    or not self.responses
-                    or not self.steps
-                )
+                and (self.candidate is None or self.rule_evaluation is None or not self.responses or not self.steps)
             ):
-                raise ValueError(
-                    "judgment error must preserve candidate and Agent rule evidence"
-                )
+                raise ValueError("judgment error must preserve candidate and Agent rule evidence")
             if not generated and any(
                 value is not None
                 for value in (
@@ -217,37 +189,26 @@ class ReferenceCampaignEntry(BaseModel):
                     self.judgment_agrees_with_rules,
                 )
             ):
-                raise ValueError(
-                    "non-generated reference entry cannot contain generation results"
-                )
+                raise ValueError("non-generated reference entry cannot contain generation results")
             if self.model_judgment is not None:
                 uncertain = self.model_judgment.outcome.value == "uncertain"
                 if uncertain != (self.judgment_agrees_with_rules is None):
-                    raise ValueError(
-                        "judgment agreement does not match judgment outcome"
-                    )
+                    raise ValueError("judgment agreement does not match judgment outcome")
         if self.model_judgment is not None and self.evaluation is None:
             raise ValueError("model judgment requires a rule evaluation")
         if (
             self.status == "executed"
             and self.evaluation is not None
             and self.evaluation.verdict != Verdict.ERROR
-            and [step.operation for step in self.steps]
-            != _expected_operations(self.case_contract)
+            and [step.operation for step in self.steps] != _expected_operations(self.case_contract)
         ):
             raise ValueError("reference steps do not match execution kind")
-        if (
-            self.model_judgment is not None
-            and self.judgment_agrees_with_rules is not True
-            and not self.review_required
-        ):
+        if self.model_judgment is not None and self.judgment_agrees_with_rules is not True and not self.review_required:
             raise ValueError("judgment disagreement requires review")
         if self.adaptive_attempts:
             if not generated:
                 raise ValueError("only generated entries can have adaptive attempts")
-            if [item.iteration for item in self.adaptive_attempts] != list(
-                range(1, len(self.adaptive_attempts) + 1)
-            ):
+            if [item.iteration for item in self.adaptive_attempts] != list(range(1, len(self.adaptive_attempts) + 1)):
                 raise ValueError("adaptive attempt iterations are out of sequence")
             final = self.adaptive_attempts[-1]
             if (
@@ -262,12 +223,8 @@ class ReferenceCampaignEntry(BaseModel):
                 or self.error_reason != final.error_reason
             ):
                 raise ValueError("entry result must match its final adaptive attempt")
-            if self.review_required != any(
-                item.review_required for item in self.adaptive_attempts
-            ):
-                raise ValueError(
-                    "entry review status must include every adaptive attempt"
-                )
+            if self.review_required != any(item.review_required for item in self.adaptive_attempts):
+                raise ValueError("entry review status must include every adaptive attempt")
         return self
 
 
@@ -411,9 +368,7 @@ class ReferenceCampaignResult(BaseModel):
 
 ReferenceExecutor = Callable[[ReferenceCase], Awaitable[ReferenceCampaignEntry]]
 ReferenceMetadataFactory = Callable[[], ReferenceCampaignMetadata]
-ReferenceTimeoutEntryFactory = Callable[
-    [ReferenceCase, Exception], ReferenceCampaignEntry
-]
+ReferenceTimeoutEntryFactory = Callable[[ReferenceCase, Exception], ReferenceCampaignEntry]
 
 
 class _CampaignDeadlineError(TimeoutError):
@@ -464,17 +419,12 @@ async def run_reference_campaign(
             if deadline_check is not None:
                 deadline_check()
         except RuntimeError:
-            entries.extend(
-                _not_executed_entry(remaining_case)
-                for remaining_case in ordered_cases[index:]
-            )
+            entries.extend(_not_executed_entry(remaining_case) for remaining_case in ordered_cases[index:])
             break
         timeout = remaining_seconds() if remaining_seconds is not None else None
         try:
             entry = (
-                await _execute_with_deadline(executor, case, timeout)
-                if timeout is not None
-                else await executor(case)
+                await _execute_with_deadline(executor, case, timeout) if timeout is not None else await executor(case)
             )
         except _CampaignDeadlineError as exc:
             entries.append(
@@ -482,10 +432,7 @@ async def run_reference_campaign(
                 if timeout_entry_factory is not None
                 else _campaign_timeout_entry(case, exc)
             )
-            entries.extend(
-                _not_executed_entry(remaining_case)
-                for remaining_case in ordered_cases[index + 1 :]
-            )
+            entries.extend(_not_executed_entry(remaining_case) for remaining_case in ordered_cases[index + 1 :])
             break
         except TimeoutError as exc:
             entries.append(_case_timeout_entry(case, exc))

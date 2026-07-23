@@ -103,9 +103,7 @@ def _patch_confirmation_create(monkeypatch, confirmation):
         confirmation.fixed_data = fixed_data
         return confirmation
 
-    monkeypatch.setattr(
-        transfer_service.confirmation_service, "create_pending", _create
-    )
+    monkeypatch.setattr(transfer_service.confirmation_service, "create_pending", _create)
 
 
 def _prepare_req(from_account, to_account, amount=50_000):
@@ -160,9 +158,7 @@ async def test_prepare_same_account_is_correction(monkeypatch):
     _patch_balance(monkeypatch, 1_000_000)
     _patch_daily(monkeypatch, [])
 
-    data = await transfer_service.prepare_internal_transfer(
-        _NO_SESSION, ctx, _prepare_req(acct, acct)
-    )
+    data = await transfer_service.prepare_internal_transfer(_NO_SESSION, ctx, _prepare_req(acct, acct))
 
     assert data.outcome == "correction_required"
     assert data.reason == "same_account"
@@ -179,9 +175,7 @@ async def test_prepare_inactive_from_account(monkeypatch):
     _patch_balance(monkeypatch, 1_000_000)
     _patch_daily(monkeypatch, [])
 
-    data = await transfer_service.prepare_internal_transfer(
-        _NO_SESSION, ctx, _prepare_req(from_acct, to_acct)
-    )
+    data = await transfer_service.prepare_internal_transfer(_NO_SESSION, ctx, _prepare_req(from_acct, to_acct))
 
     assert data.outcome == "correction_required"
     assert data.reason == "account_inactive"
@@ -256,9 +250,7 @@ async def test_prepare_unowned_account_denied(monkeypatch):
     _patch_owned(monkeypatch, {from_acct.id: from_acct})  # to 계좌는 소유 아님
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.prepare_internal_transfer(
-            _NO_SESSION, ctx, _prepare_req(from_acct, _acct())
-        )
+        await transfer_service.prepare_internal_transfer(_NO_SESSION, ctx, _prepare_req(from_acct, _acct()))
     assert exc.value.code == "ACCOUNT_ACCESS_DENIED"
 
 
@@ -267,9 +259,7 @@ async def test_prepare_unowned_account_denied(monkeypatch):
 
 def test_prepare_request_rejects_zero_amount():
     with pytest.raises(ValidationError):
-        InternalTransferPrepareRequest(
-            from_account_id="a", to_account_id="b", amount=0, currency="KRW"
-        )
+        InternalTransferPrepareRequest(from_account_id="a", to_account_id="b", amount=0, currency="KRW")
 
 
 def test_prepare_request_rejects_non_krw():
@@ -327,19 +317,11 @@ def _patch_execute_stack(
         marks["auth_invalidated"] = True
         return auth_context
 
-    monkeypatch.setattr(
-        transfer_service.confirmation_service, "load_for_execute", _load_conf
-    )
-    monkeypatch.setattr(
-        transfer_service.auth_context_service, "load_verified", _load_auth
-    )
+    monkeypatch.setattr(transfer_service.confirmation_service, "load_for_execute", _load_conf)
+    monkeypatch.setattr(transfer_service.auth_context_service, "load_verified", _load_auth)
     monkeypatch.setattr(transfer_service.confirmation_service, "mark_executed", _mark)
-    monkeypatch.setattr(
-        transfer_service.confirmation_service, "invalidate", _invalidate_conf
-    )
-    monkeypatch.setattr(
-        transfer_service.auth_context_service, "invalidate", _invalidate_auth
-    )
+    monkeypatch.setattr(transfer_service.confirmation_service, "invalidate", _invalidate_conf)
+    monkeypatch.setattr(transfer_service.auth_context_service, "invalidate", _invalidate_auth)
     _patch_owned(monkeypatch, accounts_by_id)
     _patch_balance(monkeypatch, balance)
     _patch_daily(monkeypatch, daily or [])
@@ -359,9 +341,7 @@ class _FakeLedger:
 
 
 def _exec_req(conf, auth):
-    return TransferExecuteRequest(
-        confirmation_id=str(conf.id), auth_context_id=str(auth.id)
-    )
+    return TransferExecuteRequest(confirmation_id=str(conf.id), auth_context_id=str(auth.id))
 
 
 @pytest.mark.asyncio
@@ -371,16 +351,11 @@ async def test_execute_completed_moves_ledger(monkeypatch):
     to_acct = _acct(account_number="3333-99-7654321")
     conf = _confirmation(_fixed(from_acct, to_acct))
     auth = _auth(conf.id)
-    marks = _patch_execute_stack(
-        monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
-    )
+    marks = _patch_execute_stack(monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct})
     fake = _FakeLedger()
-    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: fake)
 
-    data = await transfer_service.execute_internal_transfer(
-        _NO_SESSION, ctx, _exec_req(conf, auth)
-    )
+    data = await transfer_service.execute_internal_transfer(_NO_SESSION, ctx, _exec_req(conf, auth))
 
     assert data.outcome == "completed"
     assert data.transaction_id == "txn_123"
@@ -404,10 +379,7 @@ async def test_execute_lost_confirmation_race_skips_audit(monkeypatch):
     to_acct = _acct(account_number="3333-99-7654321")
     conf = _confirmation(_fixed(from_acct, to_acct))
     auth = _auth(conf.id)
-    _patch_execute_stack(
-        monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
-    )
-    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
+    _patch_execute_stack(monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct})
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: _FakeLedger())
 
     # 이 요청은 조건부 전이에서 진다.
@@ -423,9 +395,7 @@ async def test_execute_lost_confirmation_race_skips_audit(monkeypatch):
 
     monkeypatch.setattr(transfer_service.financial_audit_service, "record", _record)
 
-    data = await transfer_service.execute_internal_transfer(
-        _NO_SESSION, ctx, _exec_req(conf, auth)
-    )
+    data = await transfer_service.execute_internal_transfer(_NO_SESSION, ctx, _exec_req(conf, auth))
 
     assert data.outcome == "completed"  # 원장은 이미 이동(계정계 safe replay)
     assert data.transaction_id == "txn_123"
@@ -446,9 +416,7 @@ async def test_execute_expired_auth_requires_reauth(monkeypatch):
         {from_acct.id: from_acct, to_acct.id: to_acct},
     )
 
-    data = await transfer_service.execute_internal_transfer(
-        _NO_SESSION, ctx, _exec_req(conf, _auth(conf.id))
-    )
+    data = await transfer_service.execute_internal_transfer(_NO_SESSION, ctx, _exec_req(conf, _auth(conf.id)))
 
     assert data.outcome == "reauthentication_required"
     assert data.reason == "auth_context_expired"
@@ -472,9 +440,7 @@ async def test_execute_revalidation_failure_invalidates_both(monkeypatch):
         balance=10,  # 승인 이후 잔액이 줄어든 상황
     )
 
-    data = await transfer_service.execute_internal_transfer(
-        _NO_SESSION, ctx, _exec_req(conf, auth)
-    )
+    data = await transfer_service.execute_internal_transfer(_NO_SESSION, ctx, _exec_req(conf, auth))
 
     assert data.outcome == "correction_required"
     assert data.reason == "insufficient_balance"
@@ -497,9 +463,7 @@ async def test_execute_missing_account_invalidates(monkeypatch):
         {from_acct.id: from_acct},  # to 계좌 소실
     )
 
-    data = await transfer_service.execute_internal_transfer(
-        _NO_SESSION, ctx, _exec_req(conf, auth)
-    )
+    data = await transfer_service.execute_internal_transfer(_NO_SESSION, ctx, _exec_req(conf, auth))
 
     assert data.outcome == "correction_required"
     assert data.reason == "account_inactive"
@@ -515,42 +479,15 @@ async def test_execute_ledger_outage_is_technical_error(monkeypatch):
     to_acct = _acct()
     conf = _confirmation(_fixed(from_acct, to_acct))
     auth = _auth(conf.id)
-    marks = _patch_execute_stack(
-        monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
-    )
-    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
-    monkeypatch.setattr(
-        transfer_service, "get_financial_client", lambda: _FakeLedger(error=True)
-    )
+    marks = _patch_execute_stack(monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct})
+    monkeypatch.setattr(transfer_service, "get_financial_client", lambda: _FakeLedger(error=True))
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.execute_internal_transfer(
-            _NO_SESSION, ctx, _exec_req(conf, auth)
-        )
+        await transfer_service.execute_internal_transfer(_NO_SESSION, ctx, _exec_req(conf, auth))
     assert exc.value.code == "BACKEND_TEMPORARY_ERROR"
     assert exc.value.retryable is True
     # 실행 확정 전 실패 — Confirmation 은 EXECUTED 로 전이되지 않는다.
     assert marks["executed"] is False
-
-
-@pytest.mark.asyncio
-async def test_execute_mock_mode_is_technical_error(monkeypatch):
-    """mock 모드는 원장이 없어 이체를 시뮬레이션하지 않는다(거짓 completed 방지)."""
-    ctx = _ctx()
-    from_acct = _acct()
-    to_acct = _acct()
-    conf = _confirmation(_fixed(from_acct, to_acct))
-    auth = _auth(conf.id)
-    _patch_execute_stack(
-        monkeypatch, conf, auth, {from_acct.id: from_acct, to_acct.id: to_acct}
-    )
-    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: False)
-
-    with pytest.raises(AgentToolError) as exc:
-        await transfer_service.execute_internal_transfer(
-            _NO_SESSION, ctx, _exec_req(conf, auth)
-        )
-    assert exc.value.code == "BACKEND_TEMPORARY_ERROR"
 
 
 # ── 라우터 게이트 ────────────────────────────────────────────────────────────

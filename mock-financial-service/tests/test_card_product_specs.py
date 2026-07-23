@@ -77,10 +77,7 @@ def test_product_name_is_nonempty_string():
 def test_annual_fee_within_plausible_range():
     for row in MOCK_CARD_PRODUCTS:
         fee = row["annual_fee"]
-        assert 0 <= fee <= MAX_ANNUAL_FEE, (
-            f"{row['product_name']}: annual_fee={fee} out of range "
-            f"[0, {MAX_ANNUAL_FEE}]"
-        )
+        assert 0 <= fee <= MAX_ANNUAL_FEE, f"{row['product_name']}: annual_fee={fee} out of range [0, {MAX_ANNUAL_FEE}]"
 
 
 # ── 3. benefits list has 1–5 items ───────────────────────────────────────────
@@ -90,9 +87,7 @@ def test_benefits_item_count_between_1_and_5():
     for row in MOCK_CARD_PRODUCTS:
         parsed = json.loads(row["benefits"])
         count = len(parsed)
-        assert 1 <= count <= 5, (
-            f"{row['product_name']}: benefits has {count} items (expected 1-5)"
-        )
+        assert 1 <= count <= 5, f"{row['product_name']}: benefits has {count} items (expected 1-5)"
 
 
 # ── 4. benefits text contains category-relevant keywords ─────────────────────
@@ -130,9 +125,7 @@ def test_benefits_mention_quality_keywords():
 
 def test_catalog_has_multiple_free_products():
     free_count = sum(1 for r in MOCK_CARD_PRODUCTS if r["annual_fee"] == 0)
-    assert free_count >= 3, (
-        f"Catalog has only {free_count} free (annual_fee=0) products; expected >= 3"
-    )
+    assert free_count >= 3, f"Catalog has only {free_count} free (annual_fee=0) products; expected >= 3"
 
 
 # ── 7. paid products (annual_fee > 0) have >= 2 benefit items ────────────────
@@ -154,10 +147,7 @@ def test_paid_products_have_sufficient_benefits():
 def test_product_name_min_length():
     for row in MOCK_CARD_PRODUCTS:
         name = row["product_name"]
-        assert len(name) >= 4, (
-            f"card_product_id={row['card_product_id']}: "
-            f"product_name too short: {name!r}"
-        )
+        assert len(name) >= 4, f"card_product_id={row['card_product_id']}: product_name too short: {name!r}"
 
 
 # ── 9. spec consistency: free-tier cards mention 연회비 무료 or 무료 ─────────

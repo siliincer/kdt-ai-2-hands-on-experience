@@ -15,9 +15,7 @@ from sqlalchemy import text
 
 
 def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
-    r = client.post(
-        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
-    )
+    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -47,9 +45,7 @@ def _run_close(client, business_date: str | None = None):
 def _count_closing_rows(db_engine, account_id: str) -> int:
     with db_engine.connect() as conn:
         row = conn.execute(
-            text(
-                "SELECT COUNT(*) FROM daily_closing_snapshots WHERE account_id = :aid"
-            ),
+            text("SELECT COUNT(*) FROM daily_closing_snapshots WHERE account_id = :aid"),
             {"aid": account_id},
         ).fetchone()
     return row[0]
@@ -139,12 +135,8 @@ def test_daily_close_balance_after_transfer(client):
     _transfer(client, sender, receiver, 60_000, "close-tx-001")
 
     body = _run_close(client)
-    sender_snap = next(
-        s for s in body["snapshots"] if s["account_id"] == sender["account_id"]
-    )
-    receiver_snap = next(
-        s for s in body["snapshots"] if s["account_id"] == receiver["account_id"]
-    )
+    sender_snap = next(s for s in body["snapshots"] if s["account_id"] == sender["account_id"])
+    receiver_snap = next(s for s in body["snapshots"] if s["account_id"] == receiver["account_id"])
 
     assert sender_snap["closing_balance"] == 140_000
     assert sender_snap["sum_credit"] == 200_000
@@ -175,8 +167,6 @@ def test_list_daily_closings_returns_history(client):
 
 
 def test_list_daily_closings_404_for_unknown_account(client):
-    r = client.get(
-        "/api/v1/batch/accounts/00000000-0000-0000-0000-000000000000/daily-closings"
-    )
+    r = client.get("/api/v1/batch/accounts/00000000-0000-0000-0000-000000000000/daily-closings")
     assert r.status_code == 404
     assert r.json()["error_code"] == "ACCOUNT_NOT_FOUND"

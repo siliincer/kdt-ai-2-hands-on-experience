@@ -23,9 +23,7 @@ ANALYTICS_KEY = "analytics-demo-key"
 
 
 def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
-    r = client.post(
-        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
-    )
+    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -85,9 +83,7 @@ def test_balance_updates_immediately_after_transfer(client):
     _transfer(client, sender, receiver, 50_000, "bal-test-001")
 
     sender_bal = client.get(f"/api/v1/accounts/{sender['account_id']}/balance").json()
-    receiver_bal = client.get(
-        f"/api/v1/accounts/{receiver['account_id']}/balance"
-    ).json()
+    receiver_bal = client.get(f"/api/v1/accounts/{receiver['account_id']}/balance").json()
     assert sender_bal["balance"] == 150_000
     assert receiver_bal["balance"] == 50_000
 

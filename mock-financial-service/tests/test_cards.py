@@ -7,9 +7,7 @@ ANALYTICS_KEY = "analytics-demo-key"
 
 
 def _create_account(client, owner="alice", initial_balance=100_000):
-    r = client.post(
-        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
-    )
+    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
     assert r.status_code == 201
     return r.json()
 
@@ -63,9 +61,7 @@ class TestCreateCard:
 
     def test_create_card_invalid_limit(self, client):
         acct = _create_account(client)
-        r = client.post(
-            "/api/v1/cards", json={"account_id": acct["account_id"], "limit": 0}
-        )
+        r = client.post("/api/v1/cards", json={"account_id": acct["account_id"], "limit": 0})
         assert r.status_code == 422
 
     def test_create_multiple_cards_same_account(self, client):
@@ -129,9 +125,7 @@ class TestCardCharge:
     def test_charge_missing_idempotency_key(self, client):
         acct = _create_account(client)
         card = _create_card(client, acct["account_id"], limit=10_000).json()
-        r = client.post(
-            f"/api/v1/cards/{card['card_id']}/charges", json={"amount": 5_000}
-        )
+        r = client.post(f"/api/v1/cards/{card['card_id']}/charges", json={"amount": 5_000})
         assert r.status_code == 422
         assert r.json()["error_code"] == "MISSING_IDEMPOTENCY_KEY"
 
@@ -227,9 +221,7 @@ class TestCardSettlement:
         # Bypass normal limit by charging using a different card with high limit
         # Instead, just directly charge more than account balance
         # (card limit is higher than account balance)
-        _charge(
-            client, card["card_id"], 10_000, "idem-insuf"
-        )  # limit=50k, charge=10k OK
+        _charge(client, card["card_id"], 10_000, "idem-insuf")  # limit=50k, charge=10k OK
         r = _settle(client, card["card_id"])  # account only has 5k
         assert r.status_code == 422
         assert r.json()["error_code"] == "INSUFFICIENT_BALANCE"

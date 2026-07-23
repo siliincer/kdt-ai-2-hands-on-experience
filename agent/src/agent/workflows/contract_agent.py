@@ -110,10 +110,7 @@ def build_contract_agent_graph(
         state: AgentState,
         config: RunnableConfig,
     ) -> dict[str, Any]:
-        content = str(
-            state.get("final_response")
-            or "요청하신 내용은 안전 정책상 처리할 수 없습니다."
-        )
+        content = str(state.get("final_response") or "요청하신 내용은 안전 정책상 처리할 수 없습니다.")
         event = dependencies.webhook_builder.blocked(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=GLOBAL_WORKFLOW_ID,
@@ -134,10 +131,7 @@ def build_contract_agent_graph(
         config: RunnableConfig,
     ) -> dict[str, Any]:
         del state
-        content = (
-            "아직 처리할 수 없는 요청입니다. 계좌, 잔액, 거래내역과 "
-            "기간 합계 조회를 요청해 주세요."
-        )
+        content = "아직 처리할 수 없는 요청입니다. 계좌, 잔액, 거래내역과 기간 합계 조회를 요청해 주세요."
         await _publish_notice(
             dependencies,
             config,

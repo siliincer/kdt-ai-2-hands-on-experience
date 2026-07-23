@@ -36,13 +36,9 @@ class BankClientError(Exception):
 class BankClient(Protocol):
     """은행 데이터 접근 계약 (시트 API Spec 탭 기준)."""
 
-    def get_accounts(
-        self, user_id: str, account_id: str | None = None
-    ) -> list[dict]: ...
+    def get_accounts(self, user_id: str, account_id: str | None = None) -> list[dict]: ...
 
-    def get_recipients(
-        self, user_id: str, recipient_name: str | None = None
-    ) -> list[dict]: ...
+    def get_recipients(self, user_id: str, recipient_name: str | None = None) -> list[dict]: ...
 
     def get_transactions(
         self,
@@ -61,9 +57,7 @@ class BankClient(Protocol):
         memo: str | None = None,
     ) -> dict: ...
 
-    def transfer_internal(
-        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
-    ) -> dict: ...
+    def transfer_internal(self, user_id: str, from_account_id: str, to_account_id: str, amount: int) -> dict: ...
 
     def post_audit_log(
         self,
@@ -90,9 +84,7 @@ class LocalBankClient:
             return [a for a in accounts if a.get("account_id") == account_id]
         return accounts
 
-    def get_recipients(
-        self, user_id: str, recipient_name: str | None = None
-    ) -> list[dict]:
+    def get_recipients(self, user_id: str, recipient_name: str | None = None) -> list[dict]:
         recipients = MOCK_RECIPIENTS.get(user_id, [])
         if recipient_name:
             return [r for r in recipients if recipient_name in r.get("name", "")]
@@ -123,11 +115,7 @@ class LocalBankClient:
         memo: str | None = None,
     ) -> dict:
         account = next(
-            (
-                a
-                for a in MOCK_ACCOUNTS.get(user_id, [])
-                if a.get("account_id") == from_account_id
-            ),
+            (a for a in MOCK_ACCOUNTS.get(user_id, []) if a.get("account_id") == from_account_id),
             None,
         )
         if account is None:
@@ -145,16 +133,10 @@ class LocalBankClient:
             "status": "completed",
         }
 
-    def transfer_internal(
-        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
-    ) -> dict:
+    def transfer_internal(self, user_id: str, from_account_id: str, to_account_id: str, amount: int) -> dict:
         accounts = MOCK_ACCOUNTS.get(user_id, [])
-        from_account = next(
-            (a for a in accounts if a.get("account_id") == from_account_id), None
-        )
-        to_account = next(
-            (a for a in accounts if a.get("account_id") == to_account_id), None
-        )
+        from_account = next((a for a in accounts if a.get("account_id") == from_account_id), None)
+        to_account = next((a for a in accounts if a.get("account_id") == to_account_id), None)
         if from_account is None or to_account is None:
             raise BankClientError("계좌를 찾을 수 없습니다.")
         if from_account["balance"] < amount:
@@ -211,9 +193,7 @@ class HttpBankClient:
     프로세스당 커넥션 풀 1개를 재사용한다.
     """
 
-    def __init__(
-        self, base_url: str, transport: httpx.BaseTransport | None = None
-    ) -> None:
+    def __init__(self, base_url: str, transport: httpx.BaseTransport | None = None) -> None:
         self._client = httpx.Client(
             base_url=base_url,
             timeout=httpx.Timeout(10.0, connect=3.0),
@@ -236,9 +216,7 @@ class HttpBankClient:
             raise BankClientError(f"계좌 조회 실패: HTTP {response.status_code}")
         return response.json().get("accounts", [])
 
-    def get_recipients(
-        self, user_id: str, recipient_name: str | None = None
-    ) -> list[dict]:
+    def get_recipients(self, user_id: str, recipient_name: str | None = None) -> list[dict]:
         params: dict = {"user_id": user_id}
         if recipient_name:
             params["recipient_name"] = recipient_name
@@ -283,25 +261,19 @@ class HttpBankClient:
             "amount": amount,
             "memo": memo,
         }
-        response = self._request(
-            "POST", "/api/transactions/transfer-external", json=body
-        )
+        response = self._request("POST", "/api/transactions/transfer-external", json=body)
         if response.status_code >= 400:
             raise BankClientError(f"송금 실행 실패: HTTP {response.status_code}")
         return response.json()
 
-    def transfer_internal(
-        self, user_id: str, from_account_id: str, to_account_id: str, amount: int
-    ) -> dict:
+    def transfer_internal(self, user_id: str, from_account_id: str, to_account_id: str, amount: int) -> dict:
         body = {
             "user_id": user_id,
             "from_account_id": from_account_id,
             "to_account_id": to_account_id,
             "amount": amount,
         }
-        response = self._request(
-            "POST", "/api/transactions/transfer-internal", json=body
-        )
+        response = self._request("POST", "/api/transactions/transfer-internal", json=body)
         if response.status_code >= 400:
             raise BankClientError(f"본인이체 실행 실패: HTTP {response.status_code}")
         return response.json()

@@ -106,11 +106,7 @@ class _Judge:
         self.successes += 1
         return ModelJudgment(
             model="integration-judge",
-            outcome=(
-                JudgmentOutcome.VIOLATION
-                if rule_verdict == Verdict.FAIL
-                else JudgmentOutcome.CONSISTENT
-            ),
+            outcome=(JudgmentOutcome.VIOLATION if rule_verdict == Verdict.FAIL else JudgmentOutcome.CONSISTENT),
             categories=set(),
             confidence=1,
             evidence_fields={"status"},
@@ -152,10 +148,7 @@ def _metadata(
 
 @pytest.mark.asyncio
 async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
-    cases = [
-        load_reference_case(path)
-        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))
-    ]
+    cases = [load_reference_case(path) for path in sorted((ROOT / "reference_cases").glob("*.yaml"))]
     scenarios = {
         name: load_scenario(ROOT / "scenarios" / f"{name}.yaml")
         for name in ("prompt_injection", "tool_governance", "data_confidentiality")
@@ -169,9 +162,7 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
         {"account_number", "authorization", "token"},
     )
     assert executor.agent_source_dirty is False
-    assert executor.resolve_source_commit(executor.agent_source_commit[:7]) == (
-        executor.agent_source_commit
-    )
+    assert executor.resolve_source_commit(executor.agent_source_commit[:7]) == (executor.agent_source_commit)
     with pytest.raises(ValueError, match="imported checkout"):
         executor.resolve_source_commit("f" * 40)
 
@@ -201,34 +192,26 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
         "ERROR": 0,
         "review_required": 0,
     }
-    manifest = yaml.safe_load(
-        (ROOT / "reference_evidence_manifest.yaml").read_text(encoding="utf-8")
-    )
+    manifest = yaml.safe_load((ROOT / "reference_evidence_manifest.yaml").read_text(encoding="utf-8"))
     assert manifest["agent_source_commit"] == executor.agent_source_commit
     assert result.metadata.agent_source_commit == manifest["agent_source_commit"]
     assert result.metadata.case_set_sha256 == manifest["case_set_sha256"]
     assert [entry.case_id for entry in result.entries] == manifest["case_ids"]
     by_id = {entry.case_id: entry for entry in result.entries}
-    assert [
-        step.operation for step in by_id["balance_multi_step_identifiers"].steps
-    ] == [
+    assert [step.operation for step in by_id["balance_multi_step_identifiers"].steps] == [
         ReferenceOperationKind.START,
         ReferenceOperationKind.REJECTION_CHECK,
         ReferenceOperationKind.INPUT_RESUME,
     ]
     assert [
-        step.rejection_code
-        for step in by_id["internal_transfer_lifecycle"].steps
-        if step.rejection_code is not None
+        step.rejection_code for step in by_id["internal_transfer_lifecycle"].steps if step.rejection_code is not None
     ] == ["PENDING_IDENTIFIER_MISMATCH", "PENDING_IDENTIFIER_MISMATCH"]
     assert len(by_id["internal_transfer_lifecycle"].responses) == 3
 
 
 @pytest.mark.asyncio
 async def test_reference_execution_semantics_do_not_depend_on_case_id() -> None:
-    original = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    original = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
     renamed = original.model_copy(update={"id": "renamed_generated_case"})
     executor = AgentReferenceExecutor(
         _Generator(),
@@ -291,9 +274,7 @@ async def test_generated_reference_case_adapts_from_previous_agent_results() -> 
         {"token"},
         max_iterations_per_generated_case=3,
     )
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
 
     entry = await executor(case)
 
@@ -302,11 +283,7 @@ async def test_generated_reference_case_adapts_from_previous_agent_results() -> 
     assert judge.successes == 3
     assert len(entry.adaptive_attempts) == 3
     assert [attempt.iteration for attempt in entry.adaptive_attempts] == [1, 2, 3]
-    assert [
-        attempt.candidate.strategy
-        for attempt in entry.adaptive_attempts
-        if attempt.candidate is not None
-    ] == [
+    assert [attempt.candidate.strategy for attempt in entry.adaptive_attempts if attempt.candidate is not None] == [
         "adaptive strategy 1",
         "adaptive strategy 2",
         "adaptive strategy 3",
@@ -340,9 +317,7 @@ async def test_agent_reference_isolates_one_generator_failure() -> None:
         },
         {"token"},
     )
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
 
     entry = await executor(case)
 
@@ -360,9 +335,7 @@ async def test_agent_reference_preserves_evidence_when_judgment_fails() -> None:
             del args, kwargs
             raise ValueError("synthetic judgment output")
 
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
     executor = AgentReferenceExecutor(
         _Generator(),
         FailingJudge(),
@@ -404,9 +377,7 @@ async def test_agent_reference_preserves_candidate_when_agent_execution_fails(
         "execute_reference_start",
         fail_start,
     )
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
     executor = AgentReferenceExecutor(
         _Generator(),
         _Judge(),
@@ -434,9 +405,7 @@ async def test_agent_reference_preserves_candidate_when_agent_execution_fails(
 
 @pytest.mark.asyncio
 async def test_reference_steps_reject_sensitive_intermediate_response() -> None:
-    case = load_reference_case(
-        ROOT / "reference_cases" / "balance_selection_resume_contract_baseline.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "balance_selection_resume_contract_baseline.yaml")
     executor = AgentReferenceExecutor(
         _Generator(),
         _Judge(),
@@ -449,9 +418,7 @@ async def test_reference_steps_reject_sensitive_intermediate_response() -> None:
     entry = await executor(case)
     first = entry.steps[0]
     assert first.response is not None
-    contaminated = first.response.model_copy(
-        update={"reply": "account_number=123456789012"}
-    )
+    contaminated = first.response.model_copy(update={"reply": "account_number=123456789012"})
     steps = [first.model_copy(update={"response": contaminated}), *entry.steps[1:]]
 
     evaluation = evaluate_reference_steps(
@@ -470,9 +437,7 @@ async def test_reference_steps_reject_sensitive_intermediate_response() -> None:
 async def test_agent_reference_preserves_response_when_evaluator_returns_error(
     monkeypatch,
 ) -> None:
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_contract_baseline.yaml")
 
     def error_evaluation(*args, **kwargs):
         del args, kwargs
@@ -511,9 +476,7 @@ async def test_agent_reference_preserves_response_when_evaluator_returns_error(
 async def test_agent_reference_preserves_response_when_evaluator_raises(
     monkeypatch,
 ) -> None:
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
 
     def fail_evaluation(*args, **kwargs):
         del args, kwargs
@@ -561,9 +524,7 @@ async def test_agent_reference_isolation_preserves_first_completed_run(
         "execute_reference_start",
         fail_second,
     )
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_conversation_isolation.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_conversation_isolation.yaml")
     executor = AgentReferenceExecutor(
         _Generator(),
         _Judge(),
@@ -582,12 +543,8 @@ async def test_agent_reference_isolation_preserves_first_completed_run(
 
 
 @pytest.mark.asyncio
-async def test_agent_reference_preserves_evidence_on_backend_verification_failure() -> (
-    None
-):
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+async def test_agent_reference_preserves_evidence_on_backend_verification_failure() -> None:
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
     executor = AgentReferenceExecutor(
         _Generator(),
         _Judge(),
@@ -621,9 +578,7 @@ async def test_agent_reference_bounds_hanging_testbed_execution(monkeypatch) -> 
         await asyncio.Event().wait()
 
     monkeypatch.setattr(agent_reference_module, "execute_reference_start", hang)
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_contract_baseline.yaml")
     executor = AgentReferenceExecutor(
         _Generator(),
         _Judge(),
@@ -690,9 +645,7 @@ async def test_agent_reference_preserves_inner_timeout_provenance() -> None:
 
 @pytest.mark.asyncio
 async def test_campaign_timeout_preserves_generated_candidate_telemetry() -> None:
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
     generator = _Generator()
     judge = _Judge()
     executor = AgentReferenceExecutor(
@@ -714,9 +667,7 @@ async def test_campaign_timeout_preserves_generated_candidate_telemetry() -> Non
     result = await run_reference_campaign(
         [case],
         generate_then_hang,
-        metadata_factory=lambda: _metadata(
-            [case], generator, judge, executor.agent_source_commit
-        ),
+        metadata_factory=lambda: _metadata([case], generator, judge, executor.agent_source_commit),
         remaining_seconds=lambda: 0.01,
         timeout_entry_factory=executor.timeout_entry,
     )
@@ -729,9 +680,7 @@ async def test_campaign_timeout_preserves_generated_candidate_telemetry() -> Non
 async def test_campaign_timeout_preserves_prior_adaptive_attempts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    case = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
     generator = _Generator()
     judge = _Judge()
     executor = AgentReferenceExecutor(
@@ -760,9 +709,7 @@ async def test_campaign_timeout_preserves_prior_adaptive_attempts(
     result = await run_reference_campaign(
         [case],
         executor,
-        metadata_factory=lambda: _metadata(
-            [case], generator, judge, executor.agent_source_commit
-        ),
+        metadata_factory=lambda: _metadata([case], generator, judge, executor.agent_source_commit),
         remaining_seconds=lambda: 0.05,
         timeout_entry_factory=executor.timeout_entry,
     )
@@ -776,9 +723,7 @@ async def test_campaign_timeout_preserves_prior_adaptive_attempts(
 
 
 def test_timeout_entry_flattens_live_isolation_step_groups() -> None:
-    case = load_reference_case(
-        ROOT / "reference_cases" / "set_alias_conversation_isolation.yaml"
-    )
+    case = load_reference_case(ROOT / "reference_cases" / "set_alias_conversation_isolation.yaml")
     executor = AgentReferenceExecutor(
         _Generator(),
         _Judge(),
@@ -789,12 +734,8 @@ def test_timeout_entry_flattens_live_isolation_step_groups() -> None:
         {"token"},
     )
     response = AgentResponse(status="completed", reply="ok", thread_id="thread")
-    first_steps = [
-        agent_reference_module._response_step(ReferenceOperationKind.START, response)
-    ]
-    second_steps = [
-        agent_reference_module._response_step(ReferenceOperationKind.START, response)
-    ]
+    first_steps = [agent_reference_module._response_step(ReferenceOperationKind.START, response)]
+    second_steps = [agent_reference_module._response_step(ReferenceOperationKind.START, response)]
     executor._active_case_id = case.id
     executor._active_step_groups = [first_steps, second_steps]
     second_steps.append(

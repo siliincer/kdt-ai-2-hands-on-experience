@@ -53,9 +53,7 @@ async def issue_sse_ticket(
     chat_session_id 를 넘기면 소유권 검증 후 바인딩하고,
     생략하면 새 대화 세션을 만들어 바인딩한다.
     """
-    resolved_chat_session_id = await resolve_chat_session(
-        session, current_user.id, chat_session_id
-    )
+    resolved_chat_session_id = await resolve_chat_session(session, current_user.id, chat_session_id)
     ticket = await grant_sse_ticket(redis, current_user.id, resolved_chat_session_id)
     return success_response(
         message="SSE 연결 티켓이 발급되었습니다.",
@@ -81,7 +79,5 @@ async def connect_sse(
     FE가 티켓을 재발급받아 수동 재연결할 때 헤더 대신 쿼리로 재개점을 전달한다.
     """
     resume_from = request.headers.get("Last-Event-ID") or last_event_id
-    async for event in relay_agent_stream(
-        redis_stream, context.chat_session_id, resume_from
-    ):
+    async for event in relay_agent_stream(redis_stream, context.chat_session_id, resume_from):
         yield event

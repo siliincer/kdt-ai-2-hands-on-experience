@@ -65,13 +65,8 @@ class ApprovalResume(BaseModel):
 
     @model_validator(mode="after")
     def validate_change_target(self) -> Self:
-        if (
-            self.approval_outcome != "change_requested"
-            and self.change_target is not None
-        ):
-            raise ValueError(
-                "change_target은 change_requested 승인 결과에만 사용할 수 있습니다."
-            )
+        if self.approval_outcome != "change_requested" and self.change_target is not None:
+            raise ValueError("change_target은 change_requested 승인 결과에만 사용할 수 있습니다.")
         return self
 
 

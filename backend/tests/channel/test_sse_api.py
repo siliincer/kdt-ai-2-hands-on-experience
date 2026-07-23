@@ -56,9 +56,7 @@ async def test_consume_sse_ticket_returns_context_and_deletes_key(mock_redis):
     chat_session_id = uuid4()
     sse_session_id = uuid4()
     mock_redis.getdel = AsyncMock(
-        return_value=json.dumps(
-            {"user_id": str(user_id), "chat_session_id": str(chat_session_id)}
-        )
+        return_value=json.dumps({"user_id": str(user_id), "chat_session_id": str(chat_session_id)})
     )
 
     context = await consume_sse_ticket(mock_redis, sse_session_id)
@@ -198,6 +196,25 @@ async def test_relay_closes_stream_after_error():
 
 
 @pytest.mark.asyncio
+async def test_relay_closes_stream_after_blocked():
+    # blocked(업무 차단 종료)도 done/error 와 함께 terminal → 스트림을 닫는다(계약점검 #1).
+    chat_session_id = uuid4()
+    key = agent_stream_key(chat_session_id)
+    fake = FakeStreamRedis(
+        [
+            [[key, [("1-0", {"event_type": "blocked", "content": "한도를 초과했어요."})]]],
+        ]
+    )
+
+    events = [ev async for ev in relay_agent_stream(fake, chat_session_id)]  # type: ignore
+
+    blocked_events = [event for event in events if event.event == "blocked"]
+    assert len(blocked_events) == 1
+    assert blocked_events[0].data.content == "한도를 초과했어요."
+    assert any(event.raw_data == "[DONE]" for event in events)
+
+
+@pytest.mark.asyncio
 async def test_relay_resumes_from_last_event_id():
     chat_session_id = uuid4()
     key = agent_stream_key(chat_session_id)
@@ -248,14 +265,10 @@ def test_connect_sse_relays_stream_events(client: TestClient):
 
     cache = AsyncMock()
     cache.getdel = AsyncMock(
-        return_value=json.dumps(
-            {"user_id": str(user_id), "chat_session_id": str(chat_session_id)}
-        )
+        return_value=json.dumps({"user_id": str(user_id), "chat_session_id": str(chat_session_id)})
     )
 
-    stream = FakeStreamRedis(
-        [[[key, [("1-0", {"event_type": "done", "content": "완료됨"})]]]]
-    )
+    stream = FakeStreamRedis([[[key, [("1-0", {"event_type": "done", "content": "완료됨"})]]]])
 
     async def override_cache():
         yield cache

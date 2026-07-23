@@ -13,6 +13,7 @@ const NAMED_EVENTS: AgentStreamEventType[] = [
   'authentication_required',
   'done',
   'error',
+  'blocked',
 ];
 
 export { CONNECT_URL, NAMED_EVENTS };

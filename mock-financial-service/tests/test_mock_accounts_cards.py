@@ -34,7 +34,7 @@ def seeded_session(db_engine):
 
 def test_mock_account_count(seeded_session):
     count = seeded_session.query(Account).count()
-    assert count == 5, f"Expected 5 Accounts, got {count}"
+    assert count == 7, f"Expected 7 Accounts, got {count}"
 
 
 # ── 2. Card total count ───────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ def test_mock_card_count_in_range(seeded_session):
 def test_mock_card_count_exact(seeded_session):
     """Exact fixture count: 8 cards."""
     count = seeded_session.query(Card).count()
-    assert count == 8, f"Expected 8 Cards, got {count}"
+    assert count == 10, f"Expected 10 Cards, got {count}"
 
 
 # ── 3. Cards per Account: 1-2 each ───────────────────────────────────────────
@@ -57,14 +57,8 @@ def test_mock_card_count_exact(seeded_session):
 def test_each_account_has_one_or_two_cards(seeded_session):
     accounts = seeded_session.query(Account).all()
     for acct in accounts:
-        n = (
-            seeded_session.query(Card)
-            .filter(Card.account_id == acct.account_id)
-            .count()
-        )
-        assert 1 <= n <= 2, (
-            f"Account {acct.account_id} ({acct.owner}) has {n} cards; expected 1-2"
-        )
+        n = seeded_session.query(Card).filter(Card.account_id == acct.account_id).count()
+        assert 1 <= n <= 2, f"Account {acct.account_id} ({acct.owner}) has {n} cards; expected 1-2"
 
 
 # ── 4. FK integrity: every Card.account_id points to a real Account ───────────
@@ -74,9 +68,7 @@ def test_all_card_account_ids_are_valid(seeded_session):
     valid_ids = {a.account_id for a in seeded_session.query(Account).all()}
     cards = seeded_session.query(Card).all()
     for card in cards:
-        assert card.account_id in valid_ids, (
-            f"Card {card.card_id} references unknown account_id {card.account_id}"
-        )
+        assert card.account_id in valid_ids, f"Card {card.card_id} references unknown account_id {card.account_id}"
 
 
 # ── 5. Data-layer sanity: MOCK_* constants match ORM rows ─────────────────────
@@ -84,7 +76,7 @@ def test_all_card_account_ids_are_valid(seeded_session):
 
 def test_mock_constants_match_db_rows(seeded_session):
     """Fixture dicts and DB rows are consistent."""
-    assert len(MOCK_ACCOUNTS) == 5
+    assert len(MOCK_ACCOUNTS) == 7
     assert 5 <= len(MOCK_CARDS) <= 10
 
     db_account_ids = {a.account_id for a in seeded_session.query(Account).all()}

@@ -32,11 +32,7 @@ def _now() -> datetime:
 
 def _generate_account_number() -> str:
     """국내 은행 계좌번호 관용 포맷(3-3-6자리)으로 랜덤 생성."""
-    return (
-        f"{random.randint(0, 999):03d}-"
-        f"{random.randint(0, 999):03d}-"
-        f"{random.randint(0, 999999):06d}"
-    )
+    return f"{random.randint(0, 999):03d}-{random.randint(0, 999):03d}-{random.randint(0, 999999):06d}"
 
 
 class Account(Base):
@@ -48,9 +44,7 @@ class Account(Base):
     # (real name) and bank_name; purely a display label, no business logic
     # depends on it.
     alias: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    bank_name: Mapped[str] = mapped_column(
-        String(50), nullable=False, default=BANK_NAME
-    )
+    bank_name: Mapped[str] = mapped_column(String(50), nullable=False, default=BANK_NAME)
     account_number: Mapped[str] = mapped_column(
         String(20), nullable=False, unique=True, default=_generate_account_number
     )
@@ -59,13 +53,9 @@ class Account(Base):
     # only to verify this value is legit — see crud.reconcile_balance().
     balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KRW")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
-    ledger_entries: Mapped[list["LedgerEntry"]] = relationship(
-        "LedgerEntry", back_populates="account"
-    )
+    ledger_entries: Mapped[list["LedgerEntry"]] = relationship("LedgerEntry", back_populates="account")
     cards: Mapped[list["Card"]] = relationship("Card", back_populates="account")
 
 
@@ -75,19 +65,13 @@ class Card(Base):
     __tablename__ = "cards"
 
     card_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.account_id"), nullable=False, index=True
-    )
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.account_id"), nullable=False, index=True)
     limit: Mapped[int] = mapped_column(BigInteger, nullable=False)  # spending cap
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="KRW")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
     account: Mapped["Account"] = relationship("Account", back_populates="cards")
-    ledger_entries: Mapped[list["CardLedgerEntry"]] = relationship(
-        "CardLedgerEntry", back_populates="card"
-    )
+    ledger_entries: Mapped[list["CardLedgerEntry"]] = relationship("CardLedgerEntry", back_populates="card")
 
 
 class CardLedgerEntry(Base):
@@ -95,26 +79,16 @@ class CardLedgerEntry(Base):
 
     __tablename__ = "card_ledger_entries"
 
-    card_ledger_entry_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid
-    )
-    card_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("cards.card_id"), nullable=False, index=True
-    )
-    amount: Mapped[int] = mapped_column(
-        BigInteger, nullable=False
-    )  # charge amount, non-negative
-    idempotency_key: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
-    )
+    card_ledger_entry_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    card_id: Mapped[str] = mapped_column(String(36), ForeignKey("cards.card_id"), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)  # charge amount, non-negative
+    idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     # optional merchant/store label (e.g. "이마트", "배달의민족"). Real card
     # networks receive this from the merchant terminal at authorization time;
     # this app's POST /cards/{id}/charges doesn't collect one from the client,
     # so it stays null unless set directly (mock data always sets it).
     merchant_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
     card: Mapped["Card"] = relationship("Card", back_populates="ledger_entries")
 
@@ -130,38 +104,20 @@ class Transaction(Base):
 
     __tablename__ = "transactions"
 
-    transaction_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid
-    )
-    idempotency_key: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
-    )
+    transaction_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    sender_account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.account_id"), nullable=False
-    )
-    receiver_account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.account_id"), nullable=False
-    )
+    sender_account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.account_id"), nullable=False)
+    receiver_account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.account_id"), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    status: Mapped[str] = mapped_column(
-        Enum("success", "failure", name="transaction_status"), nullable=False
-    )
+    status: Mapped[str] = mapped_column(Enum("success", "failure", name="transaction_status"), nullable=False)
     # Settlement discriminator fields (null for normal transfers)
     settlement_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    settlement_card_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
-    settlement_watermark_rowid: Mapped[int | None] = mapped_column(
-        BigInteger, nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    settlement_card_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    settlement_watermark_rowid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
-    ledger_entries: Mapped[list["LedgerEntry"]] = relationship(
-        "LedgerEntry", back_populates="transaction"
-    )
+    ledger_entries: Mapped[list["LedgerEntry"]] = relationship("LedgerEntry", back_populates="transaction")
 
 
 class LedgerEntry(Base):
@@ -170,28 +126,16 @@ class LedgerEntry(Base):
     __tablename__ = "ledger_entries"
 
     entry_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    transaction_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("transactions.transaction_id"), nullable=False
-    )
-    account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.account_id"), nullable=False
-    )
+    transaction_id: Mapped[str] = mapped_column(String(36), ForeignKey("transactions.transaction_id"), nullable=False)
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.account_id"), nullable=False)
     # DEBIT = 차변(출금, 음수), CREDIT = 대변(입금, 양수)
-    entry_type: Mapped[str] = mapped_column(
-        Enum("DEBIT", "CREDIT", name="entry_type"), nullable=False
-    )
+    entry_type: Mapped[str] = mapped_column(Enum("DEBIT", "CREDIT", name="entry_type"), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)  # always positive
     running_balance: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
-    account: Mapped["Account"] = relationship(
-        "Account", back_populates="ledger_entries"
-    )
-    transaction: Mapped["Transaction"] = relationship(
-        "Transaction", back_populates="ledger_entries"
-    )
+    account: Mapped["Account"] = relationship("Account", back_populates="ledger_entries")
+    transaction: Mapped["Transaction"] = relationship("Transaction", back_populates="ledger_entries")
 
 
 class DailyClosingSnapshot(Base):
@@ -205,17 +149,13 @@ class DailyClosingSnapshot(Base):
 
     __tablename__ = "daily_closing_snapshots"
 
-    account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.account_id"), primary_key=True
-    )
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.account_id"), primary_key=True)
     business_date: Mapped[date] = mapped_column(Date, primary_key=True)
     closing_balance: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sum_credit: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sum_debit: Mapped[int] = mapped_column(BigInteger, nullable=False)
     last_entry_rowid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
     account: Mapped["Account"] = relationship("Account")
 
@@ -228,9 +168,7 @@ class CardProduct(Base):
 
     __tablename__ = "card_products"
 
-    card_product_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid
-    )
+    card_product_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     product_name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str] = mapped_column(
         Enum(*CARD_PRODUCT_CATEGORIES, name="card_product_category"),
@@ -238,9 +176,7 @@ class CardProduct(Base):
     )
     annual_fee: Mapped[int] = mapped_column(Integer, nullable=False)  # KRW
     benefits: Mapped[str] = mapped_column(Text, nullable=False)  # JSON-encoded list
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
 
 
 class AuditLog(Base):
@@ -248,17 +184,11 @@ class AuditLog(Base):
 
     __tablename__ = "audit_logs"
 
-    audit_log_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_uuid
-    )
+    audit_log_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     actor: Mapped[str] = mapped_column(String(255), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(
-        Enum("success", "failure", name="audit_status"), nullable=False
-    )
+    status: Mapped[str] = mapped_column(Enum("success", "failure", name="audit_status"), nullable=False)
     payload_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_now
-    )
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)

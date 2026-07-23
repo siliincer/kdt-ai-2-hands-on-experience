@@ -39,9 +39,7 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column(
-            "available_methods", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("available_methods", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "created_at",
@@ -66,12 +64,8 @@ def upgrade() -> None:
         ["confirmation_id"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_auth_contexts_status"), "auth_contexts", ["status"], unique=False
-    )
-    op.create_index(
-        op.f("ix_auth_contexts_user_id"), "auth_contexts", ["user_id"], unique=False
-    )
+    op.create_index(op.f("ix_auth_contexts_status"), "auth_contexts", ["status"], unique=False)
+    op.create_index(op.f("ix_auth_contexts_user_id"), "auth_contexts", ["user_id"], unique=False)
     # ### end Alembic commands ###
 
 

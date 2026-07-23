@@ -244,10 +244,7 @@ def test_prompt_injection_run_and_report(tmp_path):
     assert "- `wf_global_agent_entry`: `PASS`" in markdown_report
     assert "- Target workflow: `wf_global_agent_entry`" in markdown_report
     assert len(result.loop_summaries) == 3
-    assert all(
-        summary.termination == LoopTermination.ITERATION_LIMIT
-        for summary in result.loop_summaries
-    )
+    assert all(summary.termination == LoopTermination.ITERATION_LIMIT for summary in result.loop_summaries)
     assert budget.used == 2 + len(scenario.attacks) * 3 * 3
 
 
@@ -285,9 +282,7 @@ def test_reference_workflow_routing_mismatch_is_execution_error(tmp_path):
     assert result.results[0].execution_error == "workflow routing:ValueError"
     assert result.results[0].turns[0].verdict == Verdict.ERROR
     assert "workflow:routing_mismatch" in result.results[0].evidence
-    markdown = write_report(result, tmp_path, config.safety.redact_fields)[
-        1
-    ].read_text()
+    markdown = write_report(result, tmp_path, config.safety.redact_fields)[1].read_text()
     assert "- Observed workflow: `wf_balance_inquiry`" in markdown
     assert "- Runtime/state status: `completed` / `completed`" in markdown
     assert "- Tool request paths: none" in markdown
@@ -389,11 +384,7 @@ def test_model_disagreement_requires_review_without_overriding_rules():
     assert result.review_required is True
     assert result.judgment_telemetry is not None
     assert result.judgment_telemetry.disagreements == 9
-    assert all(
-        turn.judgment_agrees_with_rules is False
-        for attack in result.results
-        for turn in attack.turns
-    )
+    assert all(turn.judgment_agrees_with_rules is False for attack in result.results for turn in attack.turns)
 
 
 def test_sensitive_response_remains_failed_after_report_redaction(tmp_path):
@@ -471,14 +462,10 @@ def test_report_fails_closed_before_writing(tmp_path, monkeypatch):
 
     turn = result.results[0].turns[0]
     assert turn.response is not None
-    unsafe_response = turn.response.model_copy(
-        update={"reply": "계좌는 123 456 789012 입니다"}
-    )
+    unsafe_response = turn.response.model_copy(update={"reply": "계좌는 123 456 789012 입니다"})
     unsafe_turn = turn.model_copy(update={"response": unsafe_response})
     unsafe_result = result.model_copy(
-        update={
-            "results": [result.results[0].model_copy(update={"turns": [unsafe_turn]})]
-        }
+        update={"results": [result.results[0].model_copy(update={"turns": [unsafe_turn]})]}
     )
     monkeypatch.setattr(reporter_module, "redact", lambda value, _fields: value)
 
@@ -510,13 +497,9 @@ def test_report_redacts_camel_case_extra_response_fields(tmp_path):
             "clientSecret": "opaque-secret",
         }
     )
-    updated_turn = turn.model_copy(
-        update={"response": AgentResponse.model_validate(response_payload)}
-    )
+    updated_turn = turn.model_copy(update={"response": AgentResponse.model_validate(response_payload)})
     updated_result = result.model_copy(
-        update={
-            "results": [result.results[0].model_copy(update={"turns": [updated_turn]})]
-        }
+        update={"results": [result.results[0].model_copy(update={"turns": [updated_turn]})]}
     )
 
     json_path, _ = write_report(
@@ -595,8 +578,7 @@ def test_markdown_report_neutralizes_all_external_markdown(tmp_path):
 
     first = result.results[0]
     unsafe_markup = (
-        "![remote](https://review.invalid/tracker.png) "
-        "[link](https://review.invalid/) *emphasis* > quote | cell"
+        "![remote](https://review.invalid/tracker.png) [link](https://review.invalid/) *emphasis* > quote | cell"
     )
     assert first.turns[0].response is not None
     unsafe_response = first.turns[0].response.model_copy(
@@ -605,9 +587,7 @@ def test_markdown_report_neutralizes_all_external_markdown(tmp_path):
             "status": f"blocked {unsafe_markup}\n# Forged Verdict: PASS",
             "thread_id": f"thread {unsafe_markup}",
             "prompt_for": f"state {unsafe_markup}",
-            "ui": AgentUiEnvelope(
-                type="notice [x](https://x.invalid)\n## Forged Section"
-            ),
+            "ui": AgentUiEnvelope(type="notice [x](https://x.invalid)\n## Forged Section"),
         }
     )
     unsafe = first.model_copy(
@@ -629,9 +609,7 @@ def test_markdown_report_neutralizes_all_external_markdown(tmp_path):
     result = result.model_copy(
         update={
             "scenario_name": unsafe_markup,
-            "attacker_telemetry": result.attacker_telemetry.model_copy(
-                update={"model": unsafe_markup}
-            ),
+            "attacker_telemetry": result.attacker_telemetry.model_copy(update={"model": unsafe_markup}),
             "results": [unsafe],
         }
     )
@@ -658,12 +636,7 @@ def test_markdown_report_neutralizes_all_external_markdown(tmp_path):
 
 
 def test_report_redacts_embedded_authentication_values():
-    value = {
-        "reply": (
-            "token=sk-local Cookie: sid=abc Authorization: Basic dXNlcjpwYXNz "
-            "api_key='local-key'"
-        )
-    }
+    value = {"reply": ("token=sk-local Cookie: sid=abc Authorization: Basic dXNlcjpwYXNz api_key='local-key'")}
 
     redacted = redact(value, set())
 
@@ -745,9 +718,7 @@ def test_agent_chat_rejects_missing_or_empty_thread_id(response_payload):
     with AgentClient(
         config.target,
         RequestBudget(config.execution.max_requests_per_run),
-        httpx.MockTransport(
-            lambda _request: httpx.Response(200, json=response_payload)
-        ),
+        httpx.MockTransport(lambda _request: httpx.Response(200, json=response_payload)),
     ) as client:
         with pytest.raises(ValueError):
             client.chat("test", "user_001")
@@ -779,11 +750,7 @@ def test_recovered_generator_retry_does_not_invalidate_run():
 def test_unexpected_ledger_mutation_stops_remaining_cases():
     config = load_config(ROOT / "config.example.yaml")
     config = config.model_copy(
-        update={
-            "adaptive_attack": config.adaptive_attack.model_copy(
-                update={"max_iterations_per_attack": 1}
-            )
-        }
+        update={"adaptive_attack": config.adaptive_attack.model_copy(update={"max_iterations_per_attack": 1})}
     )
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
     generator = _SeedGenerator()
@@ -832,9 +799,7 @@ def test_unexpected_ledger_mutation_stops_remaining_cases():
         result = run_scenario(config, scenario, client, "user_001", generator)
 
     assert result.verdict == Verdict.FAIL
-    assert result.execution_reason == (
-        "scenario stopped after an unexpected ledger mutation"
-    )
+    assert result.execution_reason == ("scenario stopped after an unexpected ledger mutation")
     assert len(result.results) == 1
     assert generator.calls == 1
     assert "ledger_state:unexpected_mutation" in result.results[0].evidence
@@ -956,9 +921,7 @@ def test_multi_turn_scenario_preserves_thread_ids():
     assert result.verdict == Verdict.PASS
     assert [len(item.turns) for item in result.results] == [1, 1, 1, 2, 2, 2, 3]
     assert all(
-        request.get("thread_id") is not None
-        for request in requests
-        if request["message"] in {"승인", "인증완료"}
+        request.get("thread_id") is not None for request in requests if request["message"] in {"승인", "인증완료"}
     )
     assert budget.used == 28
 
@@ -982,9 +945,7 @@ def test_multi_turn_scenario_rejects_thread_drift():
                         "thread_id": "thread-1",
                         "prompt_for": "transfer.approval_decision",
                         "ui": {"type": "confirm_modal"},
-                        "execution_evidence": _workflow_evidence(
-                            "wf_external_transfer"
-                        ),
+                        "execution_evidence": _workflow_evidence("wf_external_transfer"),
                     },
                 )
             return httpx.Response(
@@ -1058,9 +1019,7 @@ def test_agent_client_rejects_response_over_byte_limit():
 def test_terminal_safe_status_stops_remaining_turns():
     config = load_config(ROOT / "config.example.yaml")
     scenario = load_scenario(ROOT / "scenarios" / "approval_bypass.yaml")
-    terminal_attack = scenario.attacks[1].model_copy(
-        update={"expected_ledger": scenario.attacks[0].expected_ledger}
-    )
+    terminal_attack = scenario.attacks[1].model_copy(update={"expected_ledger": scenario.attacks[0].expected_ledger})
     scenario = scenario.model_copy(update={"attacks": [terminal_attack]})
     budget = RequestBudget(config.execution.max_requests_per_run)
     messages = []
@@ -1168,11 +1127,7 @@ def test_malformed_target_ui_becomes_reported_execution_error(malformed_ui, tmp_
 def test_adaptive_iteration_limit_one_still_generates_candidates():
     config = load_config(ROOT / "config.example.yaml")
     config = config.model_copy(
-        update={
-            "adaptive_attack": config.adaptive_attack.model_copy(
-                update={"max_iterations_per_attack": 1}
-            )
-        }
+        update={"adaptive_attack": config.adaptive_attack.model_copy(update={"max_iterations_per_attack": 1})}
     )
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
     budget = RequestBudget(config.execution.max_requests_per_run)
@@ -1327,9 +1282,7 @@ def test_failure_survives_ledger_error_and_keeps_generation_metadata(tmp_path):
     assert attack.generated_by_llm is True
     assert attack.generation_strategy == "seed candidate for contract testing"
     assert result.loop_summaries[0].termination == (LoopTermination.EXECUTION_ERROR)
-    markdown = write_report(result, tmp_path, config.safety.redact_fields)[
-        1
-    ].read_text()
+    markdown = write_report(result, tmp_path, config.safety.redact_fields)[1].read_text()
     rendered = MarkdownIt("commonmark").render(markdown)
     assert "Execution error: ledger verification:HTTPStatusError" in rendered
     assert "security expectation mismatch" in rendered
@@ -1376,9 +1329,7 @@ def test_failure_survives_followup_chat_error(tmp_path):
     assert "target chat failed" in attack.reason
     assert attack.generated_by_llm is True
     assert result.loop_summaries[0].termination == LoopTermination.EXECUTION_ERROR
-    markdown = write_report(result, tmp_path, config.safety.redact_fields)[
-        1
-    ].read_text()
+    markdown = write_report(result, tmp_path, config.safety.redact_fields)[1].read_text()
     rendered = MarkdownIt("commonmark").render(markdown)
     assert "Execution error: target chat:HTTPStatusError" in rendered
     assert "security expectation mismatch" in rendered
@@ -1541,9 +1492,7 @@ def test_adaptive_generator_improves_until_evidence_failure():
     assert result.llm_telemetry.attempts == 0
     assert result.execution_reason is not None
     assert "attacker LLM generated" in result.execution_reason
-    assert result.loop_summaries[0].termination == (
-        LoopTermination.EXPECTATION_MISMATCH
-    )
+    assert result.loop_summaries[0].termination == (LoopTermination.EXPECTATION_MISMATCH)
     assert result.loop_summaries[0].iterations_completed == 3
 
 
@@ -1629,31 +1578,19 @@ def test_report_uses_canonical_policy_for_unicode_and_custom_inline_keys():
 
 def test_report_redacts_partial_marker_and_multiword_inline_values():
     raw = {
-        "reply": (
-            "token=[REDACTED]tail\n"
-            "session hint=first second value\n"
-            "token=third value at 12:30 status=blocked"
-        )
+        "reply": ("token=[REDACTED]tail\nsession hint=first second value\ntoken=third value at 12:30 status=blocked")
     }
 
     assert contains_sensitive_data(raw, {"session_hint"})
     redacted = redact(raw, {"session_hint"})
 
-    assert redacted == {
-        "reply": (
-            "token=[REDACTED]\nsession hint=[REDACTED]\ntoken=[REDACTED] status=blocked"
-        )
-    }
+    assert redacted == {"reply": ("token=[REDACTED]\nsession hint=[REDACTED]\ntoken=[REDACTED] status=blocked")}
     assert not contains_sensitive_data(redacted, {"session_hint"})
 
 
 def test_report_supports_long_and_non_ascii_configured_inline_keys():
     fields = {"one two three four five", "내부 추적 식별자"}
-    raw = {
-        "reply": (
-            "one two three four five=long custom value\n내부 추적 식별자=한국어 설정 값"
-        )
-    }
+    raw = {"reply": ("one two three four five=long custom value\n내부 추적 식별자=한국어 설정 값")}
 
     assert contains_sensitive_data(raw, fields)
     redacted = redact(raw, fields)
@@ -1818,11 +1755,7 @@ def test_labeled_two_group_account_value_is_redacted():
 def test_failed_ledger_verification_stops_remaining_cases():
     config = load_config(ROOT / "config.example.yaml")
     config = config.model_copy(
-        update={
-            "adaptive_attack": config.adaptive_attack.model_copy(
-                update={"max_iterations_per_attack": 1}
-            )
-        }
+        update={"adaptive_attack": config.adaptive_attack.model_copy(update={"max_iterations_per_attack": 1})}
     )
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
     generator = _SeedGenerator()
@@ -1845,10 +1778,7 @@ def test_failed_ledger_verification_stops_remaining_cases():
 
     assert len(result.results) == 1
     assert generator.calls == 1
-    assert (
-        result.execution_reason
-        == "scenario stopped because ledger integrity is unknown"
-    )
+    assert result.execution_reason == "scenario stopped because ledger integrity is unknown"
     assert "ledger_state:integrity_unknown" in result.results[0].evidence
 
 

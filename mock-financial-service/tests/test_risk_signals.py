@@ -64,9 +64,7 @@ def _rows_for(receiver: str, amount: int) -> list[dict]:
     return [
         t
         for t in MOCK_TRANSACTIONS
-        if t["sender_account_id"] == _PERSONA3_ACCT
-        and t["receiver_account_id"] == receiver
-        and t["amount"] == amount
+        if t["sender_account_id"] == _PERSONA3_ACCT and t["receiver_account_id"] == receiver and t["amount"] == amount
     ]
 
 
@@ -74,12 +72,8 @@ def _rows_for(receiver: str, amount: int) -> list[dict]:
 def test_risk_signal_has_failure_and_success_retry(receiver, amount):
     rows = _rows_for(receiver, amount)
     statuses = {r["status"] for r in rows}
-    assert "failure" in statuses, (
-        f"No failure row for (receiver={receiver}, amount={amount})"
-    )
-    assert "success" in statuses, (
-        f"No success retry row for (receiver={receiver}, amount={amount})"
-    )
+    assert "failure" in statuses, f"No failure row for (receiver={receiver}, amount={amount})"
+    assert "success" in statuses, f"No success retry row for (receiver={receiver}, amount={amount})"
 
 
 def test_all_idempotency_keys_unique():
@@ -92,18 +86,12 @@ def test_all_idempotency_keys_unique():
 
 def test_all_transactions_in_db(seeded_session):
     count = seeded_session.query(Transaction).count()
-    assert count == len(MOCK_TRANSACTIONS), (
-        f"Expected {len(MOCK_TRANSACTIONS)} transactions in DB, got {count}"
-    )
+    assert count == len(MOCK_TRANSACTIONS), f"Expected {len(MOCK_TRANSACTIONS)} transactions in DB, got {count}"
 
 
 def test_failure_transactions_present_in_db(seeded_session):
-    failures = (
-        seeded_session.query(Transaction).filter(Transaction.status == "failure").all()
-    )
-    assert len(failures) >= 3, (
-        f"Expected >= 3 failure transactions, got {len(failures)}"
-    )
+    failures = seeded_session.query(Transaction).filter(Transaction.status == "failure").all()
+    assert len(failures) >= 3, f"Expected >= 3 failure transactions, got {len(failures)}"
 
 
 @pytest.mark.parametrize("receiver,amount", _RISK_SIGNATURES)
@@ -118,15 +106,8 @@ def test_failure_rows_have_no_ledger_entries_in_db(seeded_session, receiver, amo
         )
         .one()
     )
-    entries = (
-        seeded_session.query(LedgerEntry)
-        .filter(LedgerEntry.transaction_id == failure.transaction_id)
-        .all()
-    )
-    assert len(entries) == 0, (
-        f"Failure txn {failure.transaction_id} has {len(entries)} "
-        "ledger entries (expected 0)"
-    )
+    entries = seeded_session.query(LedgerEntry).filter(LedgerEntry.transaction_id == failure.transaction_id).all()
+    assert len(entries) == 0, f"Failure txn {failure.transaction_id} has {len(entries)} ledger entries (expected 0)"
 
 
 @pytest.mark.parametrize("receiver,amount", _RISK_SIGNATURES)
@@ -141,14 +122,8 @@ def test_success_retry_has_debit_credit_pair_in_db(seeded_session, receiver, amo
         )
         .one()
     )
-    entries = (
-        seeded_session.query(LedgerEntry)
-        .filter(LedgerEntry.transaction_id == success.transaction_id)
-        .all()
-    )
-    assert len(entries) == 2, (
-        f"Success txn {success.transaction_id} has {len(entries)} entries (expected 2)"
-    )
+    entries = seeded_session.query(LedgerEntry).filter(LedgerEntry.transaction_id == success.transaction_id).all()
+    assert len(entries) == 2, f"Success txn {success.transaction_id} has {len(entries)} entries (expected 2)"
     types = {e.entry_type for e in entries}
     assert types == {"DEBIT", "CREDIT"}
     for entry in entries:

@@ -88,9 +88,7 @@ async def test_internal_transfer_reference_workflow_completes_full_happy_path() 
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -174,15 +172,10 @@ async def test_internal_transfer_reference_workflow_completes_full_happy_path() 
     assert completed.status == "completed"
     assert state["data"]["transaction_id"] == "txn_internal_123"
 
-    result_event = json.loads(
-        backend.requests_to("POST", "/api/v1/webhooks/agent")[-1].content
-    )
+    result_event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[-1].content)
     assert result_event["event_type"] == "component"
     assert result_event["metadata"]["step_id"] == "emit_internal_transfer_result"
-    assert (
-        result_event["metadata"]["ui"]["payload"]["transaction_id"]
-        == "txn_internal_123"
-    )
+    assert result_event["metadata"]["ui"]["payload"]["transaction_id"] == "txn_internal_123"
 
     backend.assert_all_responses_used()
 
@@ -203,9 +196,7 @@ async def test_internal_transfer_selection_required_then_cancelled() -> None:
     )
     backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_select"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_select_cancel"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_select_cancel") as testbed:
         waiting = await testbed.start(
             message="이체해줘",
             request_id="req_1",
@@ -265,9 +256,7 @@ async def test_internal_transfer_selection_required_for_both_accounts() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -293,9 +282,7 @@ async def test_internal_transfer_selection_required_for_both_accounts() -> None:
     )
     backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_result"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_both_select"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_both_select") as testbed:
         waiting_from = await testbed.start(
             message="10만원 이체해줘",
             request_id="req_1",
@@ -406,9 +393,7 @@ async def test_internal_transfer_amount_missing_then_submitted() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_amount"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_amount"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -422,9 +407,7 @@ async def test_internal_transfer_amount_missing_then_submitted() -> None:
             },
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_amount"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_amount"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/transfers/internal",
@@ -434,13 +417,9 @@ async def test_internal_transfer_amount_missing_then_submitted() -> None:
             "completed_at": "2026-07-17T10:11:00+09:00",
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_amount"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_amount"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_amount_missing"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_amount_missing") as testbed:
         waiting_amount = await testbed.start(
             message="생활비통장에서 저축통장으로 이체해줘",
             request_id="req_1",
@@ -500,9 +479,7 @@ async def test_internal_transfer_amount_missing_then_submitted() -> None:
     assert state["status"] == "completed"
     assert state["data"]["transaction_id"] == "txn_amount_missing"
     prepare_request = json.loads(
-        backend.requests_to("POST", "/api/v1/agent-tools/transfers/internal:prepare")[
-            0
-        ].content
+        backend.requests_to("POST", "/api/v1/agent-tools/transfers/internal:prepare")[0].content
     )
     assert prepare_request["amount"] == 70000
     backend.assert_all_responses_used()
@@ -543,9 +520,7 @@ async def test_internal_transfer_correction_single_target_auto_routes() -> None:
             },
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_amount_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_amount_2"})
 
     async with create_internal_transfer_mock_testbed(
         backend, _config(), thread_id="thread_correction_single"
@@ -604,12 +579,8 @@ async def test_internal_transfer_correction_multiple_targets_user_selects() -> N
             },
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_correction_select"}
-    )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_amount_3"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_correction_select"})
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_amount_3"})
 
     async with create_internal_transfer_mock_testbed(
         backend, _config(), thread_id="thread_correction_multi"
@@ -637,10 +608,7 @@ async def test_internal_transfer_correction_multiple_targets_user_selects() -> N
         )
 
     assert waiting_amount.status == "waiting"
-    events = [
-        json.loads(r.content)
-        for r in backend.requests_to("POST", "/api/v1/webhooks/agent")
-    ]
+    events = [json.loads(r.content) for r in backend.requests_to("POST", "/api/v1/webhooks/agent")]
     assert events[0]["metadata"]["step_id"] == "request_internal_transfer_correction"
     assert events[1]["metadata"]["step_id"] == "request_internal_transfer_amount"
     backend.assert_all_responses_used()
@@ -681,13 +649,9 @@ async def test_internal_transfer_blocked_at_prepare() -> None:
             },
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_blocked_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_blocked_2"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_blocked"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_blocked") as testbed:
         completed = await testbed.start(
             message="생활비통장에서 저축통장으로 10만원 이체해줘",
             request_id="req_1",
@@ -736,13 +700,9 @@ async def test_internal_transfer_cancel_at_approval() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_cancel_approval"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_cancel_approval") as testbed:
         waiting = await testbed.start(
             message="생활비통장에서 저축통장으로 10만원 이체해줘",
             request_id="req_1",
@@ -807,9 +767,7 @@ async def test_internal_transfer_auth_retry_then_verified() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_3"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_3"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -824,9 +782,7 @@ async def test_internal_transfer_auth_retry_then_verified() -> None:
         },
     )
     backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_1"})
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_retry"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_retry"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -850,13 +806,9 @@ async def test_internal_transfer_auth_retry_then_verified() -> None:
             "completed_at": "2026-07-17T10:21:00+09:00",
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_2"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_auth_retry"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_auth_retry") as testbed:
         waiting_approval = await testbed.start(
             message="생활비통장에서 저축통장으로 10만원 이체해줘",
             request_id="req_1",
@@ -968,9 +920,7 @@ async def test_internal_transfer_reauthentication_required_at_execute() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_4"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_4"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -1016,13 +966,9 @@ async def test_internal_transfer_reauthentication_required_at_execute() -> None:
             "completed_at": "2026-07-17T10:21:00+09:00",
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_3"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_3"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_reauth"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_reauth") as testbed:
         waiting_approval = await testbed.start(
             message="생활비통장에서 저축통장으로 10만원 이체해줘",
             request_id="req_1",
@@ -1086,17 +1032,8 @@ async def test_internal_transfer_reauthentication_required_at_execute() -> None:
         )
 
     assert completed.status == "completed"
-    assert (
-        len(
-            backend.requests_to(
-                "POST", "/api/v1/agent-tools/transfers/internal:prepare"
-            )
-        )
-        == 1
-    )
-    assert (
-        len(backend.requests_to("POST", "/api/v1/agent-tools/transfers/internal")) == 2
-    )
+    assert len(backend.requests_to("POST", "/api/v1/agent-tools/transfers/internal:prepare")) == 1
+    assert len(backend.requests_to("POST", "/api/v1/agent-tools/transfers/internal")) == 2
     backend.assert_all_responses_used()
 
 
@@ -1116,9 +1053,7 @@ async def test_internal_transfer_no_accounts_empty() -> None:
     )
     backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_empty"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_no_accounts"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_no_accounts") as testbed:
         completed = await testbed.start(
             message="이체해줘",
             request_id="req_1",
@@ -1164,9 +1099,7 @@ async def test_internal_transfer_correction_required_at_execute() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_exec"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_exec"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -1180,9 +1113,7 @@ async def test_internal_transfer_correction_required_at_execute() -> None:
             },
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_exec"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_exec"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/transfers/internal",
@@ -1195,13 +1126,9 @@ async def test_internal_transfer_correction_required_at_execute() -> None:
             },
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_amount_reinput"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_amount_reinput"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_exec_correction"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_exec_correction") as testbed:
         waiting_approval = await testbed.start(
             message="생활비통장에서 저축통장으로 10만원 이체해줘",
             request_id="req_1",
@@ -1249,10 +1176,7 @@ async def test_internal_transfer_correction_required_at_execute() -> None:
     # → reset_internal_transfer_amount → request_internal_transfer_amount로 이어져
     # 금액 재입력에서 다시 멈춘다.
     assert waiting_amount.status == "waiting"
-    events = [
-        json.loads(r.content)
-        for r in backend.requests_to("POST", "/api/v1/webhooks/agent")
-    ]
+    events = [json.loads(r.content) for r in backend.requests_to("POST", "/api/v1/webhooks/agent")]
     assert events[-1]["metadata"]["step_id"] == "request_internal_transfer_amount"
     backend.assert_all_responses_used()
 
@@ -1289,9 +1213,7 @@ async def test_internal_transfer_state_has_no_sensitive_data() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_sensitive"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_sensitive"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/auth-contexts",
@@ -1305,9 +1227,7 @@ async def test_internal_transfer_state_has_no_sensitive_data() -> None:
             },
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_sensitive"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_auth_sensitive"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/transfers/internal",
@@ -1317,13 +1237,9 @@ async def test_internal_transfer_state_has_no_sensitive_data() -> None:
             "completed_at": "2026-07-17T10:11:00+09:00",
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_sensitive"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_result_sensitive"})
 
-    async with create_internal_transfer_mock_testbed(
-        backend, _config(), thread_id="thread_sensitive"
-    ) as testbed:
+    async with create_internal_transfer_mock_testbed(backend, _config(), thread_id="thread_sensitive") as testbed:
         waiting_approval = await testbed.start(
             message="생활비통장에서 저축통장으로 10만원 이체해줘",
             request_id="req_1",
@@ -1388,11 +1304,7 @@ async def test_internal_transfer_state_has_no_sensitive_data() -> None:
                 _collect_masked_numbers(item)
 
     _collect_masked_numbers(state)
-    assert masked_numbers, (
-        "검증 대상 계좌번호가 State에 하나도 없으면 이 테스트는 의미가 없다."
-    )
+    assert masked_numbers, "검증 대상 계좌번호가 State에 하나도 없으면 이 테스트는 의미가 없다."
     for number in masked_numbers:
         assert "*" in number, f"마스킹되지 않은 계좌번호가 State에 남아있다: {number}"
-    assert not re.search(r"\d{9,}", state_json), (
-        "마스킹 없는 긴 숫자열(원문 계좌번호로 추정)이 State에 있다."
-    )
+    assert not re.search(r"\d{9,}", state_json), "마스킹 없는 긴 숫자열(원문 계좌번호로 추정)이 State에 있다."

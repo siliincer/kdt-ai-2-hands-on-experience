@@ -93,11 +93,7 @@ def _response_step(
 
 def _rejection_step(evaluation: ReferenceCaseEvaluation) -> ReferenceExecutionStep:
     prefix = "resume_rejected:"
-    codes = [
-        item.removeprefix(prefix)
-        for item in evaluation.evidence
-        if item.startswith(prefix)
-    ]
+    codes = [item.removeprefix(prefix) for item in evaluation.evidence if item.startswith(prefix)]
     if len(codes) != 1:
         raise ValueError("successful rejection evaluation requires one rejection code")
     return ReferenceExecutionStep(
@@ -132,9 +128,7 @@ def _partial_error_entry(
         ),
         rule_evaluation=rule_evaluation,
         candidate=candidate,
-        responses=[
-            step.response for step in preserved_steps if step.response is not None
-        ],
+        responses=[step.response for step in preserved_steps if step.response is not None],
         steps=preserved_steps,
         review_required=True,
         error_stage=stage,
@@ -209,9 +203,7 @@ class AgentReferenceExecutor:
                 timeout=5,
             )
         except (OSError, subprocess.SubprocessError) as exc:
-            raise ValueError(
-                "Agent source commit does not exist in the imported checkout"
-            ) from exc
+            raise ValueError("Agent source commit does not exist in the imported checkout") from exc
         resolved = completed.stdout.strip()
         if not re.fullmatch(r"[0-9a-f]{40,64}", resolved):
             raise ValueError("Agent source commit did not resolve to an object id")
@@ -255,11 +247,7 @@ class AgentReferenceExecutor:
             TimeoutError,
             ValueError,
         ) as exc:
-            stage = (
-                "case_execution_timeout"
-                if isinstance(exc, RequestBudgetError)
-                else "case_execution"
-            )
+            stage = "case_execution_timeout" if isinstance(exc, RequestBudgetError) else "case_execution"
             return _partial_error_entry(
                 case,
                 stage,
@@ -274,9 +262,7 @@ class AgentReferenceExecutor:
         for iteration in range(1, self._max_iterations_per_generated_case + 1):
             self._generation_history = history
             entry = await self._execute_once(case)
-            self._active_adaptive_attempts.append(
-                self._adaptive_attempt(iteration, entry)
-            )
+            self._active_adaptive_attempts.append(self._adaptive_attempt(iteration, entry))
             final_entry = entry
             if entry.evaluation is None or entry.evaluation.verdict != Verdict.PASS:
                 break
@@ -286,9 +272,7 @@ class AgentReferenceExecutor:
             raise RuntimeError("adaptive reference execution produced no result")
         payload = final_entry.model_dump(mode="python")
         payload["adaptive_attempts"] = self._active_adaptive_attempts
-        payload["review_required"] = any(
-            item.review_required for item in self._active_adaptive_attempts
-        )
+        payload["review_required"] = any(item.review_required for item in self._active_adaptive_attempts)
         return ReferenceCampaignEntry.model_validate(payload)
 
     @staticmethod
@@ -370,9 +354,7 @@ class AgentReferenceExecutor:
             case,
             "case_execution_timeout",
             timeout_error,
-            candidate=(
-                self._active_candidate if self._active_case_id == case.id else None
-            ),
+            candidate=(self._active_candidate if self._active_case_id == case.id else None),
             steps=(
                 [step for group in self._active_step_groups for step in group]
                 if self._active_case_id == case.id
@@ -409,9 +391,7 @@ class AgentReferenceExecutor:
                 return await awaitable
         except TimeoutError as exc:
             if timeout_context.expired():
-                raise RequestBudgetError(
-                    "reference Testbed deadline exhausted"
-                ) from exc
+                raise RequestBudgetError("reference Testbed deadline exhausted") from exc
             raise
 
     async def _single(self, case: ReferenceCase) -> ReferenceCampaignEntry:
@@ -590,9 +570,7 @@ class AgentReferenceExecutor:
                         case_contract=case,
                         status="executed",
                         evaluation=rejection,
-                        responses=[
-                            step.response for step in steps if step.response is not None
-                        ],
+                        responses=[step.response for step in steps if step.response is not None],
                         steps=steps,
                     )
             try:
@@ -713,14 +691,10 @@ class AgentReferenceExecutor:
                 steps=[
                     *steps,
                 ],
-                rule_evaluation=next(
-                    item for item in direct_evaluations if item.verdict == Verdict.ERROR
-                ),
+                rule_evaluation=next(item for item in direct_evaluations if item.verdict == Verdict.ERROR),
             )
         if any(item.verdict == Verdict.FAIL for item in direct_evaluations):
-            evaluation = next(
-                item for item in direct_evaluations if item.verdict == Verdict.FAIL
-            )
+            evaluation = next(item for item in direct_evaluations if item.verdict == Verdict.FAIL)
             return ReferenceCampaignEntry(
                 case_id=case.id,
                 workflow_id=case.target_workflow_id,
@@ -822,9 +796,7 @@ class AgentReferenceExecutor:
             second_steps: list[ReferenceExecutionStep] = []
             self._active_step_groups = [first_steps, second_steps]
             alternate_message = (
-                case.message.replace("여행 자금", "커피값")
-                if alias_change
-                else case.message.replace("급여", "저축")
+                case.message.replace("여행 자금", "커피값") if alias_change else case.message.replace("급여", "저축")
             )
             try:
                 second = await self._bounded(
@@ -869,25 +841,17 @@ class AgentReferenceExecutor:
                     "evidence_validation",
                     ValueError("isolation step evidence is invalid"),
                     steps=all_steps,
-                    rule_evaluation=next(
-                        item
-                        for item in step_evaluations
-                        if item.verdict == Verdict.ERROR
-                    ),
+                    rule_evaluation=next(item for item in step_evaluations if item.verdict == Verdict.ERROR),
                 )
             if any(item.verdict == Verdict.FAIL for item in step_evaluations):
-                evaluation = next(
-                    item for item in step_evaluations if item.verdict == Verdict.FAIL
-                )
+                evaluation = next(item for item in step_evaluations if item.verdict == Verdict.FAIL)
                 return ReferenceCampaignEntry(
                     case_id=case.id,
                     workflow_id=case.target_workflow_id,
                     case_contract=case,
                     status="executed",
                     evaluation=evaluation,
-                    responses=[
-                        step.response for step in all_steps if step.response is not None
-                    ],
+                    responses=[step.response for step in all_steps if step.response is not None],
                     steps=all_steps,
                 )
             try:
@@ -910,9 +874,7 @@ class AgentReferenceExecutor:
                 case_contract=case,
                 status="executed",
                 evaluation=evaluation,
-                responses=[
-                    step.response for step in all_steps if step.response is not None
-                ],
+                responses=[step.response for step in all_steps if step.response is not None],
                 steps=all_steps,
             )
         try:
@@ -928,10 +890,7 @@ class AgentReferenceExecutor:
                     candidate.message if candidate is not None else case.message,
                     case.id,
                     alias_change=alias_change,
-                    verify_stale=(
-                        case.execution_kind
-                        == ReferenceExecutionKind.APPROVAL_IDENTIFIERS
-                    ),
+                    verify_stale=(case.execution_kind == ReferenceExecutionKind.APPROVAL_IDENTIFIERS),
                     steps=steps,
                 )
             )
@@ -991,9 +950,7 @@ class AgentReferenceExecutor:
                 execution_context_id=f"exec_{suffix}",
                 workflow_contract=contract,
             )
-            execution_steps.append(
-                _response_step(ReferenceOperationKind.START, waiting)
-            )
+            execution_steps.append(_response_step(ReferenceOperationKind.START, waiting))
             if verify_stale:
 
                 async def stale_resume() -> Any:
@@ -1024,9 +981,7 @@ class AgentReferenceExecutor:
                 ),
                 workflow_contract=contract,
             )
-            execution_steps.append(
-                _response_step(ReferenceOperationKind.APPROVAL_RESUME, completed)
-            )
+            execution_steps.append(_response_step(ReferenceOperationKind.APPROVAL_RESUME, completed))
         backend.assert_all_responses_used()
         return completed
 
@@ -1180,9 +1135,7 @@ class AgentReferenceExecutor:
                 ),
                 workflow_contract=contract,
             )
-            steps.append(
-                _response_step(ReferenceOperationKind.APPROVAL_RESUME, completed)
-            )
+            steps.append(_response_step(ReferenceOperationKind.APPROVAL_RESUME, completed))
         backend.assert_all_responses_used()
         return completed
 
@@ -1298,9 +1251,7 @@ class AgentReferenceExecutor:
                 ),
                 workflow_contract=contract,
             )
-            steps.append(
-                _response_step(ReferenceOperationKind.APPROVAL_RESUME, completed)
-            )
+            steps.append(_response_step(ReferenceOperationKind.APPROVAL_RESUME, completed))
         backend.assert_all_responses_used()
         return completed
 
@@ -1438,12 +1389,8 @@ class AgentReferenceExecutor:
         *,
         steps: list[ReferenceExecutionStep] | None = None,
     ) -> ReferenceCampaignEntry:
-        execution_steps = steps or [
-            _response_step(ReferenceOperationKind.START, response)
-        ]
-        responses = [
-            step.response for step in execution_steps if step.response is not None
-        ]
+        execution_steps = steps or [_response_step(ReferenceOperationKind.START, response)]
+        responses = [step.response for step in execution_steps if step.response is not None]
         try:
             evaluation = evaluate_reference_steps(
                 case,
@@ -1502,10 +1449,7 @@ class AgentReferenceExecutor:
         agreement = (
             None
             if judgment.outcome == JudgmentOutcome.UNCERTAIN
-            else (
-                (judgment.outcome == JudgmentOutcome.VIOLATION)
-                == (evaluation.verdict == Verdict.FAIL)
-            )
+            else ((judgment.outcome == JudgmentOutcome.VIOLATION) == (evaluation.verdict == Verdict.FAIL))
         )
         return ReferenceCampaignEntry(
             case_id=case.id,
@@ -1527,9 +1471,7 @@ class AgentReferenceExecutor:
             steps: list[ReferenceExecutionStep] = []
             self._active_step_groups = [steps]
             try:
-                response = await self._bounded(
-                    self._internal_transfer_block(case, steps=steps)
-                )
+                response = await self._bounded(self._internal_transfer_block(case, steps=steps))
             except (httpx.HTTPError, AssertionError, RuntimeError, ValueError) as exc:
                 return _partial_error_entry(
                     case,
@@ -1602,25 +1544,17 @@ class AgentReferenceExecutor:
                     "evidence_validation",
                     ValueError("isolation step evidence is invalid"),
                     steps=all_steps,
-                    rule_evaluation=next(
-                        item
-                        for item in step_evaluations
-                        if item.verdict == Verdict.ERROR
-                    ),
+                    rule_evaluation=next(item for item in step_evaluations if item.verdict == Verdict.ERROR),
                 )
             if any(item.verdict == Verdict.FAIL for item in step_evaluations):
-                evaluation = next(
-                    item for item in step_evaluations if item.verdict == Verdict.FAIL
-                )
+                evaluation = next(item for item in step_evaluations if item.verdict == Verdict.FAIL)
                 return ReferenceCampaignEntry(
                     case_id=case.id,
                     workflow_id=case.target_workflow_id,
                     case_contract=case,
                     status="executed",
                     evaluation=evaluation,
-                    responses=[
-                        step.response for step in all_steps if step.response is not None
-                    ],
+                    responses=[step.response for step in all_steps if step.response is not None],
                     steps=all_steps,
                 )
             try:
@@ -1643,9 +1577,7 @@ class AgentReferenceExecutor:
                 case_contract=case,
                 status="executed",
                 evaluation=evaluation,
-                responses=[
-                    step.response for step in all_steps if step.response is not None
-                ],
+                responses=[step.response for step in all_steps if step.response is not None],
                 steps=all_steps,
             )
         try:
@@ -1661,10 +1593,7 @@ class AgentReferenceExecutor:
                     candidate.message if candidate is not None else case.message,
                     case.id,
                     internal=internal,
-                    verify_stale=(
-                        case.execution_kind
-                        == ReferenceExecutionKind.APPROVAL_AUTHENTICATION_IDENTIFIERS
-                    ),
+                    verify_stale=(case.execution_kind == ReferenceExecutionKind.APPROVAL_AUTHENTICATION_IDENTIFIERS),
                     steps=steps,
                 )
             )
@@ -1707,9 +1636,7 @@ class AgentReferenceExecutor:
                 execution_context_id=f"exec_{suffix}",
                 workflow_contract=contract,
             )
-            execution_steps.append(
-                _response_step(ReferenceOperationKind.START, approval)
-            )
+            execution_steps.append(_response_step(ReferenceOperationKind.START, approval))
             if verify_stale:
 
                 async def stale_approval() -> Any:
@@ -1958,9 +1885,7 @@ class AgentReferenceExecutor:
         *,
         steps: list[ReferenceExecutionStep] | None = None,
     ) -> ReferenceCampaignEntry:
-        execution_steps = steps or [
-            _response_step(ReferenceOperationKind.START, response)
-        ]
+        execution_steps = steps or [_response_step(ReferenceOperationKind.START, response)]
         evaluation = evaluate_reference_steps(
             case,
             execution_steps,
@@ -1982,9 +1907,7 @@ class AgentReferenceExecutor:
             case_contract=case,
             status="executed",
             evaluation=evaluation,
-            responses=[
-                step.response for step in execution_steps if step.response is not None
-            ],
+            responses=[step.response for step in execution_steps if step.response is not None],
             steps=execution_steps,
         )
 
@@ -2034,9 +1957,7 @@ class AgentReferenceExecutor:
         alternate: bool = False,
         identifier_suffix: str | None = None,
     ) -> dict[str, Any]:
-        contract = dict(
-            self._contract_store.get_workflow(case.target_workflow_id.value)
-        )
+        contract = dict(self._contract_store.get_workflow(case.target_workflow_id.value))
         requests = (
             case.alternate_expected_tool_requests
             if alternate and case.alternate_expected_tool_requests
@@ -2077,9 +1998,7 @@ class AgentReferenceExecutor:
         resume: bool = False,
     ) -> None:
         workflow = case.target_workflow_id
-        empty_account_terminal = case.expected_terminal_ui_types == {
-            "account_card_list"
-        }
+        empty_account_terminal = case.expected_terminal_ui_types == {"account_card_list"}
         if workflow == BusinessWorkflow.ACCOUNT_LIST:
             backend.add_success(
                 "GET",
@@ -2097,11 +2016,7 @@ class AgentReferenceExecutor:
                         "account_ids": [],
                     }
                     if empty_account_terminal
-                    else _account_resolution(
-                        selection=(
-                            resume and workflow == BusinessWorkflow.BALANCE_INQUIRY
-                        )
-                    )
+                    else _account_resolution(selection=(resume and workflow == BusinessWorkflow.BALANCE_INQUIRY))
                 ),
             )
         if resume:
@@ -2183,9 +2098,7 @@ def _load_agent_api() -> _AgentApi:
         external_transfer = importlib.import_module("agent.testing.external_transfer")
         hitl = importlib.import_module("agent.runtime.hitl")
     except ImportError as exc:
-        raise RuntimeError(
-            "latest Agent testing modules are required for the reference campaign"
-        ) from exc
+        raise RuntimeError("latest Agent testing modules are required for the reference campaign") from exc
     source_file = getattr(account_list, "__file__", None)
     if not isinstance(source_file, str):
         raise RuntimeError("Agent module does not expose a source path")
@@ -2199,28 +2112,14 @@ def _load_agent_api() -> _AgentApi:
         source_dirty=source_dirty,
         source_root=source_root,
         factories={
-            BusinessWorkflow.ACCOUNT_LIST: (
-                account_list.create_account_list_mock_testbed
-            ),
+            BusinessWorkflow.ACCOUNT_LIST: (account_list.create_account_list_mock_testbed),
             BusinessWorkflow.BALANCE_INQUIRY: balance.create_balance_mock_testbed,
-            BusinessWorkflow.TRANSACTION_HISTORY: (
-                transactions.create_transaction_history_mock_testbed
-            ),
-            BusinessWorkflow.PERIOD_AMOUNT_SUMMARY: (
-                summary.create_period_amount_summary_mock_testbed
-            ),
-            BusinessWorkflow.SET_DEFAULT_ACCOUNT: (
-                default_account.create_default_account_change_mock_testbed
-            ),
-            BusinessWorkflow.SET_ACCOUNT_ALIAS: (
-                account_alias.create_account_alias_change_mock_testbed
-            ),
-            BusinessWorkflow.INTERNAL_TRANSFER: (
-                internal_transfer.create_internal_transfer_mock_testbed
-            ),
-            BusinessWorkflow.EXTERNAL_TRANSFER: (
-                external_transfer.create_external_transfer_mock_testbed
-            ),
+            BusinessWorkflow.TRANSACTION_HISTORY: (transactions.create_transaction_history_mock_testbed),
+            BusinessWorkflow.PERIOD_AMOUNT_SUMMARY: (summary.create_period_amount_summary_mock_testbed),
+            BusinessWorkflow.SET_DEFAULT_ACCOUNT: (default_account.create_default_account_change_mock_testbed),
+            BusinessWorkflow.SET_ACCOUNT_ALIAS: (account_alias.create_account_alias_change_mock_testbed),
+            BusinessWorkflow.INTERNAL_TRANSFER: (internal_transfer.create_internal_transfer_mock_testbed),
+            BusinessWorkflow.EXTERNAL_TRANSFER: (external_transfer.create_external_transfer_mock_testbed),
         },
     )
 
@@ -2257,9 +2156,7 @@ def _agent_git_state(source_file: Path) -> tuple[str, bool, Path]:
             timeout=5,
         ).stdout
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        raise RuntimeError(
-            "Agent source must come from a readable Git checkout"
-        ) from exc
+        raise RuntimeError("Agent source must come from a readable Git checkout") from exc
     return commit, bool(status.strip()), root
 
 
@@ -2281,9 +2178,7 @@ def _account_resolution(*, selection: bool) -> dict[str, Any]:
     if selection:
         accounts.append(_account("secondary_b"))
     return {
-        "account_resolution_outcome": (
-            "selection_required" if selection else "resolved"
-        ),
+        "account_resolution_outcome": ("selection_required" if selection else "resolved"),
         "accounts": accounts,
         "account_ids": [] if selection else ["acc_living"],
     }

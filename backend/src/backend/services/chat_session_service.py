@@ -13,9 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..repository.chat_repository import create_chat_session, get_chat_session
 
 
-async def resolve_chat_session(
-    session: AsyncSession, user_id: UUID, chat_session_id: UUID | None
-) -> UUID:
+async def resolve_chat_session(session: AsyncSession, user_id: UUID, chat_session_id: UUID | None) -> UUID:
     """chat_session_id 를 확정한다.
 
     - 주어지면: 이 유저 소유인지 검증(불일치 → 404).
@@ -29,16 +27,12 @@ async def resolve_chat_session(
     return new_session.id
 
 
-async def verify_chat_session_owner(
-    session: AsyncSession, user_id: UUID, chat_session_id: UUID
-) -> None:
+async def verify_chat_session_owner(session: AsyncSession, user_id: UUID, chat_session_id: UUID) -> None:
     """기존 세션의 소유권만 검증(생성하지 않음). approve 등에서 사용."""
     await _assert_owner(session, user_id, chat_session_id)
 
 
-async def _assert_owner(
-    session: AsyncSession, user_id: UUID, chat_session_id: UUID
-) -> None:
+async def _assert_owner(session: AsyncSession, user_id: UUID, chat_session_id: UUID) -> None:
     if await get_chat_session(session, chat_session_id, user_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,11 +1,14 @@
 #  테스트 전반에 공유되는 설정과 Fixture(준비물)를 넣는 곳
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app as fastapi_app  # 실제 FastAPI 인스턴스 위치
+from backend.services.financial import financial_client as _financial_client
 
 
 @pytest.fixture
@@ -43,3 +46,33 @@ def setup_test_env():
 
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"  # 예시
     yield
+
+
+# 3. 계정계(정보계) HTTP stub — mock 일원화(작업 B) 이후 계정계는 항상 http 이므로,
+#    테스트는 httpx.MockTransport 로 응답을 흉내낸다. balances/ledgers 를
+#    external_account_id 로 채우면 get_financial_client() 가 그 값으로 응답한다.
+@pytest.fixture
+def financial_stub(monkeypatch):
+    balances: dict[str, dict] = {}
+    ledgers: dict[str, list[dict]] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        parts = request.url.path.rstrip("/").split("/")
+        kind = parts[-1]  # balance | ledger
+        account_id = parts[-2]
+        if kind == "balance":
+            data = balances.get(account_id)
+            if data is None:
+                return httpx.Response(404, json={"error_code": "ACCOUNT_NOT_FOUND"})
+            return httpx.Response(200, json=data)
+        if kind == "ledger":
+            return httpx.Response(200, json=ledgers.get(account_id, []))
+        return httpx.Response(404, json={"error_code": "NOT_FOUND"})
+
+    client = _financial_client.FinancialServiceClient(
+        base_url="http://financial.test",
+        analytics_key="analytics-demo-key",
+        transport=httpx.MockTransport(handler),
+    )
+    monkeypatch.setattr(_financial_client, "_client", client)
+    return SimpleNamespace(balances=balances, ledgers=ledgers)

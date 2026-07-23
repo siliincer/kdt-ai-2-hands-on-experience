@@ -58,7 +58,7 @@ def load_result(fresh_engine):
 
 def test_load_into_db_account_count(load_result):
     _, summary = load_result
-    assert summary["accounts"] == 5
+    assert summary["accounts"] == 7
 
 
 def test_load_into_db_card_count_in_range(load_result):
@@ -80,9 +80,7 @@ def test_card_account_fk_integrity_in_db(load_result):
     with Session(engine) as s:
         valid_ids = {a.account_id for a in s.query(Account).all()}
         for card in s.query(Card).all():
-            assert card.account_id in valid_ids, (
-                f"Card {card.card_id} references unknown account_id {card.account_id}"
-            )
+            assert card.account_id in valid_ids, f"Card {card.card_id} references unknown account_id {card.account_id}"
 
 
 def test_cards_per_account_one_or_two_in_db(load_result):
@@ -92,9 +90,7 @@ def test_cards_per_account_one_or_two_in_db(load_result):
         accounts = s.query(Account).all()
         for acct in accounts:
             n = s.query(Card).filter(Card.account_id == acct.account_id).count()
-            assert 1 <= n <= 2, (
-                f"Account {acct.account_id} has {n} cards in DB; expected 1-2"
-            )
+            assert 1 <= n <= 2, f"Account {acct.account_id} has {n} cards in DB; expected 1-2"
 
 
 def test_card_products_no_fk_to_cards_structural(fresh_engine):
@@ -102,14 +98,10 @@ def test_card_products_no_fk_to_cards_structural(fresh_engine):
     inspector = inspect(fresh_engine)
     fks = inspector.get_foreign_keys("card_products")
     for fk in fks:
-        assert fk.get("referred_table") != "cards", (
-            "card_products must not reference the cards table"
-        )
+        assert fk.get("referred_table") != "cards", "card_products must not reference the cards table"
     # also must not reference accounts
     for fk in fks:
-        assert fk.get("referred_table") != "accounts", (
-            "card_products must not reference the accounts table"
-        )
+        assert fk.get("referred_table") != "accounts", "card_products must not reference the accounts table"
 
 
 def test_card_product_category_distribution_in_db(load_result):
@@ -120,9 +112,7 @@ def test_card_product_category_distribution_in_db(load_result):
         cat_counts = Counter(p.category for p in products)
 
     expected = {"외식", "쇼핑", "여행", "웹구독", "마트/편의점"}
-    assert set(cat_counts.keys()) == expected, (
-        f"Unexpected categories in DB: {set(cat_counts.keys()) - expected}"
-    )
+    assert set(cat_counts.keys()) == expected, f"Unexpected categories in DB: {set(cat_counts.keys()) - expected}"
     for cat, n in cat_counts.items():
         assert n == 4, f"Category '{cat}' has {n} rows in DB; expected 4"
 
@@ -135,7 +125,7 @@ def test_json_fixture_parses_and_counts_match():
     from financial_service.demo_fixtures import to_json
 
     data = json.loads(to_json())
-    assert len(data["accounts"]) == 5
+    assert len(data["accounts"]) == 7
     assert 5 <= len(data["cards"]) <= 10
     assert len(data["card_products"]) == 20
 
@@ -148,8 +138,7 @@ def test_json_fixture_card_account_fk_integrity():
     valid_ids = {a["account_id"] for a in data["accounts"]}
     for card in data["cards"]:
         assert card["account_id"] in valid_ids, (
-            f"JSON card {card['card_id']} references "
-            f"unknown account_id {card['account_id']}"
+            f"JSON card {card['card_id']} references unknown account_id {card['account_id']}"
         )
 
 
@@ -159,9 +148,5 @@ def test_json_fixture_card_products_standalone():
 
     data = json.loads(to_json())
     for cp in data["card_products"]:
-        assert "card_id" not in cp, (
-            f"card_product {cp['card_product_id']} must not have card_id"
-        )
-        assert "account_id" not in cp, (
-            f"card_product {cp['card_product_id']} must not have account_id"
-        )
+        assert "card_id" not in cp, f"card_product {cp['card_product_id']} must not have card_id"
+        assert "account_id" not in cp, f"card_product {cp['card_product_id']} must not have account_id"

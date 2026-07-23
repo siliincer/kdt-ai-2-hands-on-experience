@@ -131,18 +131,12 @@ def _patch_stack(
 
     monkeypatch.setattr(transfer_service, "get_owned_account", _get_owned)
     monkeypatch.setattr(transfer_service, "get_account_by_id", _get_any)
-    monkeypatch.setattr(
-        transfer_service, "get_recipient_candidate_by_id", _get_candidate
-    )
+    monkeypatch.setattr(transfer_service, "get_recipient_candidate_by_id", _get_candidate)
     monkeypatch.setattr(transfer_service, "mark_candidate_consumed", _consume)
-    monkeypatch.setattr(
-        transfer_service, "get_executed_external_transfers", _get_history
-    )
+    monkeypatch.setattr(transfer_service, "get_executed_external_transfers", _get_history)
     monkeypatch.setattr(transfer_service, "read_available_balance", _read_balance)
     monkeypatch.setattr(transfer_service, "get_executed_transfers_since", _daily)
-    monkeypatch.setattr(
-        transfer_service.confirmation_service, "create_pending", _create_pending
-    )
+    monkeypatch.setattr(transfer_service.confirmation_service, "create_pending", _create_pending)
     return marks
 
 
@@ -180,9 +174,7 @@ async def test_prepare_with_candidate_ready_and_warns(monkeypatch):
         candidate=cand,
     )
 
-    data = await transfer_service.prepare_external_transfer(
-        _NO_SESSION, ctx, _req_candidate(from_acct, cand)
-    )
+    data = await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_candidate(from_acct, cand))
 
     assert data.outcome == "ready_for_confirmation"
     view = data.confirmation_view
@@ -207,9 +199,7 @@ async def test_prepare_with_expired_candidate_410(monkeypatch):
     _patch_stack(monkeypatch, owned={from_acct.id: from_acct}, candidate=cand)
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.prepare_external_transfer(
-            _NO_SESSION, ctx, _req_candidate(from_acct, cand)
-        )
+        await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_candidate(from_acct, cand))
     assert exc.value.status_code == 410
     assert exc.value.code == "RECIPIENT_CANDIDATE_EXPIRED"
 
@@ -222,9 +212,7 @@ async def test_prepare_with_consumed_candidate_410(monkeypatch):
     _patch_stack(monkeypatch, owned={from_acct.id: from_acct}, candidate=cand)
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.prepare_external_transfer(
-            _NO_SESSION, ctx, _req_candidate(from_acct, cand)
-        )
+        await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_candidate(from_acct, cand))
     assert exc.value.code == "RECIPIENT_CANDIDATE_EXPIRED"
 
 
@@ -249,9 +237,7 @@ async def test_prepare_candidate_lost_consume_race_410(monkeypatch):
     monkeypatch.setattr(transfer_service, "mark_candidate_consumed", _lost)
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.prepare_external_transfer(
-            _NO_SESSION, ctx, _req_candidate(from_acct, cand)
-        )
+        await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_candidate(from_acct, cand))
     assert exc.value.status_code == 410
     assert exc.value.code == "RECIPIENT_CANDIDATE_EXPIRED"
 
@@ -264,9 +250,7 @@ async def test_prepare_with_other_users_candidate_404(monkeypatch):
     _patch_stack(monkeypatch, owned={from_acct.id: from_acct}, candidate=cand)
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.prepare_external_transfer(
-            _NO_SESSION, ctx, _req_candidate(from_acct, cand)
-        )
+        await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_candidate(from_acct, cand))
     assert exc.value.status_code == 404
     assert exc.value.code == "RECIPIENT_NOT_FOUND"
 
@@ -286,9 +270,7 @@ async def test_prepare_with_history_recipient_ready_default(monkeypatch):
         history=[_history(recipient.id)],
     )
 
-    data = await transfer_service.prepare_external_transfer(
-        _NO_SESSION, ctx, _req_recipient(from_acct, recipient.id)
-    )
+    data = await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_recipient(from_acct, recipient.id))
 
     assert data.outcome == "ready_for_confirmation"
     view = data.confirmation_view
@@ -312,9 +294,7 @@ async def test_prepare_recipient_not_in_history_404(monkeypatch):
     )
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.prepare_external_transfer(
-            _NO_SESSION, ctx, _req_recipient(from_acct, stranger.id)
-        )
+        await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_recipient(from_acct, stranger.id))
     assert exc.value.code == "RECIPIENT_NOT_FOUND"
 
 
@@ -330,9 +310,7 @@ async def test_prepare_inactive_recipient_is_correction(monkeypatch):
         history=[_history(recipient.id)],
     )
 
-    data = await transfer_service.prepare_external_transfer(
-        _NO_SESSION, ctx, _req_recipient(from_acct, recipient.id)
-    )
+    data = await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_recipient(from_acct, recipient.id))
 
     assert data.outcome == "correction_required"
     assert data.reason == "recipient_not_verified"
@@ -353,9 +331,7 @@ async def test_prepare_self_recipient_is_correction(monkeypatch):
         history=[_history(own_other.id)],
     )
 
-    data = await transfer_service.prepare_external_transfer(
-        _NO_SESSION, ctx, _req_recipient(from_acct, own_other.id)
-    )
+    data = await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_recipient(from_acct, own_other.id))
 
     assert data.outcome == "correction_required"
     assert data.reason == "recipient_not_verified"
@@ -374,9 +350,7 @@ async def test_prepare_insufficient_balance_correction(monkeypatch):
         balance=10,
     )
 
-    data = await transfer_service.prepare_external_transfer(
-        _NO_SESSION, ctx, _req_recipient(from_acct, recipient.id)
-    )
+    data = await transfer_service.prepare_external_transfer(_NO_SESSION, ctx, _req_recipient(from_acct, recipient.id))
 
     assert data.outcome == "correction_required"
     assert data.reason == "insufficient_balance"
@@ -456,19 +430,11 @@ def _patch_execute_stack(monkeypatch, conf, auth, *, owned, any_accounts, balanc
     async def _daily(session, user_id, since):
         return []
 
-    monkeypatch.setattr(
-        transfer_service.confirmation_service, "load_for_execute", _load_conf
-    )
-    monkeypatch.setattr(
-        transfer_service.auth_context_service, "load_verified", _load_auth
-    )
+    monkeypatch.setattr(transfer_service.confirmation_service, "load_for_execute", _load_conf)
+    monkeypatch.setattr(transfer_service.auth_context_service, "load_verified", _load_auth)
     monkeypatch.setattr(transfer_service.confirmation_service, "mark_executed", _mark)
-    monkeypatch.setattr(
-        transfer_service.confirmation_service, "invalidate", _invalidate_conf
-    )
-    monkeypatch.setattr(
-        transfer_service.auth_context_service, "invalidate", _invalidate_auth
-    )
+    monkeypatch.setattr(transfer_service.confirmation_service, "invalidate", _invalidate_conf)
+    monkeypatch.setattr(transfer_service.auth_context_service, "invalidate", _invalidate_auth)
     monkeypatch.setattr(transfer_service, "get_owned_account", _get_owned)
     monkeypatch.setattr(transfer_service, "get_account_by_id", _get_any)
     monkeypatch.setattr(transfer_service, "read_available_balance", _read_balance)
@@ -489,9 +455,7 @@ class _FakeLedger:
 
 
 def _exec_req(conf):
-    return TransferExecuteRequest(
-        confirmation_id=str(conf.id), auth_context_id=str(uuid4())
-    )
+    return TransferExecuteRequest(confirmation_id=str(conf.id), auth_context_id=str(uuid4()))
 
 
 @pytest.mark.asyncio
@@ -510,12 +474,9 @@ async def test_execute_external_completed(monkeypatch):
         balance=1_000_000,
     )
     fake = _FakeLedger()
-    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
     monkeypatch.setattr(transfer_service, "get_financial_client", lambda: fake)
 
-    data = await transfer_service.execute_external_transfer(
-        _NO_SESSION, ctx, _exec_req(conf)
-    )
+    data = await transfer_service.execute_external_transfer(_NO_SESSION, ctx, _exec_req(conf))
 
     assert data.outcome == "completed"
     assert data.transaction_id == "txn_ext_123"
@@ -544,9 +505,7 @@ async def test_execute_external_expired_auth_requires_reauth(monkeypatch):
         balance=1_000_000,
     )
 
-    data = await transfer_service.execute_external_transfer(
-        _NO_SESSION, ctx, _exec_req(conf)
-    )
+    data = await transfer_service.execute_external_transfer(_NO_SESSION, ctx, _exec_req(conf))
 
     assert data.outcome == "reauthentication_required"
     assert data.reason == "auth_context_expired"
@@ -571,9 +530,7 @@ async def test_execute_external_recipient_now_inactive_invalidates(monkeypatch):
         balance=1_000_000,
     )
 
-    data = await transfer_service.execute_external_transfer(
-        _NO_SESSION, ctx, _exec_req(conf)
-    )
+    data = await transfer_service.execute_external_transfer(_NO_SESSION, ctx, _exec_req(conf))
 
     assert data.outcome == "correction_required"
     assert data.reason == "recipient_not_verified"
@@ -598,9 +555,7 @@ async def test_execute_external_insufficient_balance_invalidates(monkeypatch):
         balance=10,  # 승인 이후 잔액 감소
     )
 
-    data = await transfer_service.execute_external_transfer(
-        _NO_SESSION, ctx, _exec_req(conf)
-    )
+    data = await transfer_service.execute_external_transfer(_NO_SESSION, ctx, _exec_req(conf))
 
     assert data.outcome == "correction_required"
     assert data.reason == "insufficient_balance"
@@ -623,15 +578,10 @@ async def test_execute_external_ledger_outage_is_technical_error(monkeypatch):
         any_accounts={recipient.id: recipient},
         balance=1_000_000,
     )
-    monkeypatch.setattr(transfer_service, "is_financial_http_mode", lambda: True)
-    monkeypatch.setattr(
-        transfer_service, "get_financial_client", lambda: _FakeLedger(error=True)
-    )
+    monkeypatch.setattr(transfer_service, "get_financial_client", lambda: _FakeLedger(error=True))
 
     with pytest.raises(AgentToolError) as exc:
-        await transfer_service.execute_external_transfer(
-            _NO_SESSION, ctx, _exec_req(conf)
-        )
+        await transfer_service.execute_external_transfer(_NO_SESSION, ctx, _exec_req(conf))
     assert exc.value.code == "BACKEND_TEMPORARY_ERROR"
     assert exc.value.retryable is True
     assert marks["executed"] is False  # 실행 확정 전 실패
