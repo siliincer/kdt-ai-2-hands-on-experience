@@ -17,7 +17,11 @@ export default function App() {
 
   useEffect(() => {
     if (sessionStorage.getItem('rf_logged_in') === '1') {
-      login({ id: 'restored', name: '사용자' });
+      // 로그인 시 저장해둔 이름/식별자를 복원한다(없으면 안전한 기본값).
+      login({
+        id: sessionStorage.getItem('rf_user_id') ?? 'restored',
+        name: sessionStorage.getItem('rf_user_name') ?? '사용자',
+      });
     }
   }, [login]);
 
