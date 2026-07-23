@@ -171,6 +171,7 @@ def build_set_account_alias_graph(
                 "title": "별칭을 변경할 계좌를 선택해 주세요.",
                 "accounts": _account_options(data.get("accounts")),
                 "actions": ["select", "cancel"],
+                "multiple": False,
             },
         )
         resumed = _resume_data(state, dependencies.interaction_runtime, event)
@@ -211,6 +212,7 @@ def build_set_account_alias_graph(
                 "title": "별칭을 변경할 수 있는 계좌가 없습니다.",
                 "accounts": [],
                 "actions": [],
+                "multiple": False,
             },
         )
         await _publish(dependencies, event, config)
@@ -661,6 +663,9 @@ def build_set_account_alias_graph(
 def _confirmation_payload(raw_view: Any) -> dict[str, Any]:
     view = raw_view if isinstance(raw_view, Mapping) else {}
     return {
+        # FE ConfirmModalUI가 이 값으로 표시 분기 + 승인 시 backend component를 정한다
+        # (backend _CONFIRMATION_COMPONENTS와 문자열 일치 필수).
+        "purpose": "account_alias",
         "account": view.get("account"),
         "alias": view.get("alias"),
         "expires_at": view.get("expires_at"),
