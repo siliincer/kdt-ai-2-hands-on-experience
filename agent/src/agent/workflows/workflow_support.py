@@ -201,6 +201,25 @@ def build_tool_error_update(default_message: str) -> ToolErrorUpdate:
     return update
 
 
+def preserve_value_on_reset(
+    data: Mapping[str, Any], update: dict[str, Any], *, keys: tuple[str, ...]
+) -> dict[str, Any]:
+    """수정(reset) Node가 지운 필드를 "변경" 흐름이면 되살린다.
+
+    승인 화면에서 modify_* 버튼으로 재입력에 들어왔다가(이미 confirmation_id가
+    있던 경우) 취소하면, 그 재입력 화면은 이 원래 값 그대로 Prepare를 다시
+    호출해 새 confirmation을 받는다 — 예전 confirmation은 modify_* 클릭 시점에
+    이미 1회용으로 폐기돼(계약 7.6) 재사용하면 승인 시 409가 난다. confirmation_id
+    자체는 재사용하지 않으므로 보존 대상이 아니다. 최초 확정 단계에서는
+    confirmation_id가 없으므로 아무 효과가 없다(필드가 그대로 비워진 채 진행).
+    """
+    if data.get("confirmation_id") is None:
+        return update
+    for key in keys:
+        update[key] = data.get(key)
+    return update
+
+
 def terminal_update(
     step_id: str,
     *,

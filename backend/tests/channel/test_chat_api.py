@@ -250,7 +250,7 @@ def _patch_auth(auth_context, password_ok):
     전달된 auth_status 를 캡처한다.
     """
     user = SimpleNamespace(password_hash="hash")
-    calls = {"verified": 0, "failed": 0, "resumed": []}
+    calls = {"verified": 0, "failed": 0, "resumed": [], "published": 0}
 
     async def _owner(session, uid, cid):
         return None
@@ -265,6 +265,9 @@ def _patch_auth(auth_context, password_ok):
 
     async def _set_status(session, ac, status, **kw):
         calls["failed"] += 1
+
+    async def _publish_cancellation_done(chat_session_id):
+        calls["published"] += 1
 
     # auth_context → confirmation → execution_context(agent_thread_id) 해소 경로.
     confirmation = SimpleNamespace(execution_context_id=uuid4())
@@ -284,6 +287,7 @@ def _patch_auth(auth_context, password_ok):
             AsyncMock(return_value=context),
         ),
         patch.object(chat_service, "get_agent_client", lambda: agent_stub),
+        patch.object(chat_service, "publish_cancellation_done", _publish_cancellation_done),
     ]
     return patches, calls
 
@@ -318,6 +322,23 @@ async def test_authenticate_wrong_password_fails():
             p.stop()
     assert result == "failed"
     assert calls["failed"] == 1 and calls["resumed"] == ["failed"]
+
+
+@pytest.mark.asyncio
+async def test_authenticate_cancelled_resumes_and_publishes_done():
+    user_id = uuid4()
+    auth = _auth_context(user_id)
+    patches, calls = _patch_auth(auth, password_ok=True)
+    for p in patches:
+        p.start()
+    try:
+        result = await chat_service.authenticate_and_resume(AsyncMock(), user_id, uuid4(), str(auth.id), None, True)
+    finally:
+        for p in patches:
+            p.stop()
+    assert result == "cancelled"
+    assert calls["resumed"] == ["cancelled"]
+    assert calls["published"] == 1
 
 
 @pytest.mark.asyncio
@@ -361,7 +382,7 @@ def test_is_cancel_input_detects_any_outcome():
     assert not chat_service._is_cancel_input({})
 
 
-def _patch_resume_input(cancel_value: bool):
+def _patch_resume_input(cancel_value: bool, *, has_prior_confirmation: bool = False):
     """resume_after_input 의존성을 대체하고 publish 호출을 캡처한다."""
     calls = {"published": 0, "resumed": 0}
 
@@ -381,12 +402,16 @@ def _patch_resume_input(cancel_value: bool):
     async def _publish(cs, content="x"):
         calls["published"] += 1
 
+    async def _has_confirmation(session, ec):
+        return has_prior_confirmation
+
     patches = [
         patch.object(chat_service, "verify_chat_session_owner", _owner),
         patch.object(chat_service, "consume_pending_input", _consume),
         patch.object(chat_service, "_resolve_agent_thread_id", _resolve),
         patch.object(chat_service, "get_agent_client", lambda: _Agent()),
         patch.object(chat_service, "publish_cancellation_done", _publish),
+        patch.object(chat_service, "has_confirmation_for_execution_context", _has_confirmation),
     ]
     return patches, calls
 
@@ -403,6 +428,49 @@ async def test_resume_input_cancel_publishes_terminal_done():
             uuid4(),
             "input_1",
             {"recipient_selection_outcome": "cancelled"},
+        )
+    finally:
+        for p in patches:
+            p.stop()
+    assert calls == {"published": 1, "resumed": 1}
+
+
+@pytest.mark.asyncio
+async def test_resume_input_cancel_with_prior_confirmation_skips_publish():
+    """이미 승인 화면까지 도달했던 실행이면(Confirmation 존재) 재입력 취소가
+    "변경" 흐름의 복귀일 수 있어 즉시 done을 보내지 않는다(Agent가 이어서
+    need_approval을 보낸다)."""
+    patches, calls = _patch_resume_input(cancel_value=True, has_prior_confirmation=True)
+    for p in patches:
+        p.start()
+    try:
+        await chat_service.resume_after_input(
+            AsyncMock(),
+            uuid4(),
+            uuid4(),
+            "input_1",
+            {"recipient_selection_outcome": "cancelled"},
+        )
+    finally:
+        for p in patches:
+            p.stop()
+    assert calls == {"published": 0, "resumed": 1}
+
+
+@pytest.mark.asyncio
+async def test_resume_input_auth_retry_cancel_publishes_even_with_prior_confirmation():
+    """auth_retry_outcome 취소는 승인 화면으로 돌아가는 경로가 그래프에 없으므로
+    (항상 END) Confirmation 존재 여부와 무관하게 즉시 done을 보낸다."""
+    patches, calls = _patch_resume_input(cancel_value=True, has_prior_confirmation=True)
+    for p in patches:
+        p.start()
+    try:
+        await chat_service.resume_after_input(
+            AsyncMock(),
+            uuid4(),
+            uuid4(),
+            "input_1",
+            {"auth_retry_outcome": "cancelled"},
         )
     finally:
         for p in patches:

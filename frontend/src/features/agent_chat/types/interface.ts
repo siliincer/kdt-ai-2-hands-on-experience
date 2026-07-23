@@ -76,6 +76,7 @@ export interface ChatRuntime {
     decision: ApprovalDecision,
     args?: Record<string, unknown>,
     component?: string,
+    changeTarget?: string,
   ) => Promise<void>;
   /**
    * 일반 입력·선택 대기(need_input) UI 에서 제출 시 호출(UI-HITL 계약 1.5).
@@ -86,10 +87,15 @@ export interface ChatRuntime {
     value: Record<string, unknown>,
   ) => Promise<void>;
   /**
-   * 추가 인증(auth_request) UI 에서 비밀번호 재확인 제출 시 호출(계약 3.8).
+   * 추가 인증(auth_request) UI 에서 비밀번호 재확인 제출 또는 취소 시 호출(계약 3.8).
    * 비밀번호는 Backend 까지만 전달되고 후속은 SSE 로 흘러온다. 반환값은 검증 상태.
+   * cancelled=true 일 때는 password 를 생략한다.
    */
-  authenticate: (authContextId: string, password: string) => Promise<string>;
+  authenticate: (
+    authContextId: string,
+    password?: string,
+    cancelled?: boolean,
+  ) => Promise<string>;
   /**
    * recipient_select UI 의 신규 계좌 입력 시 호출(계약 부록 29.2).
    * 은행·계좌번호 원문을 Backend 로 검증해 recipient_candidate_id 를 받는다.

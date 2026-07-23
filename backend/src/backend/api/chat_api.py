@@ -93,6 +93,7 @@ async def authenticate_agent_action(
         payload.chat_session_id,
         payload.auth_context_id,
         payload.password,
+        payload.cancelled,
     )
     return success_response(
         message="인증 결과가 접수되었습니다.",

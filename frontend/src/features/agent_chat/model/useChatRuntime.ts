@@ -57,6 +57,7 @@ export function useChatRuntime(): ChatRuntime {
       decision: ApprovalDecision;
       args?: Record<string, unknown>;
       component?: string;
+      changeTarget?: string;
     }) =>
       approveAgentAction(
         vars.chatSessionId,
@@ -64,6 +65,7 @@ export function useChatRuntime(): ChatRuntime {
         vars.decision,
         vars.args,
         vars.component,
+        vars.changeTarget,
       ),
   });
   const submitInputMutation = useMutation({
@@ -79,12 +81,14 @@ export function useChatRuntime(): ChatRuntime {
     mutationFn: (vars: {
       chatSessionId: string;
       authContextId: string;
-      password: string;
+      password?: string;
+      cancelled?: boolean;
     }) =>
       authenticateAgentAction(
         vars.chatSessionId,
         vars.authContextId,
         vars.password,
+        vars.cancelled,
       ),
   });
   const verifyRecipientMutation = useMutation({
@@ -161,6 +165,7 @@ export function useChatRuntime(): ChatRuntime {
       decision: ApprovalDecision,
       args?: Record<string, unknown>,
       component?: string,
+      changeTarget?: string,
     ) => {
       const chatSessionId = chatSessionIdRef.current;
       if (!chatSessionId) return;
@@ -170,6 +175,7 @@ export function useChatRuntime(): ChatRuntime {
         decision,
         args,
         component,
+        changeTarget,
       });
       // 후속 이벤트는 열려 있는 스트림으로 흘러와 현재 메시지에 이어 fold 된다.
     },
@@ -191,13 +197,14 @@ export function useChatRuntime(): ChatRuntime {
   );
 
   const authenticate = useCallback(
-    async (authContextId: string, password: string) => {
+    async (authContextId: string, password?: string, cancelled?: boolean) => {
       const chatSessionId = chatSessionIdRef.current;
       if (!chatSessionId) return 'failed';
       const { auth_status } = await authenticateMutation.mutateAsync({
         chatSessionId,
         authContextId,
         password,
+        cancelled,
       });
       // 후속 이벤트(결과 또는 재인증)는 열려 있는 스트림으로 흘러온다.
       return auth_status;

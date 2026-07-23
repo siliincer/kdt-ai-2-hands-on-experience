@@ -18,8 +18,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
 
-# 이 mock 서비스가 표현하는 단일 은행명 — 모든 계좌에 고정 부여
-BANK_NAME = "KDT은행"
+# 이 mock 서비스는 가상의 단일 은행("KDT은행")이 아니라 실제 시중은행 여러 곳을
+# 표현한다 — bank_name을 안 정하고 계좌를 만들면(예: 회원가입 프로비저닝) 이 중
+# 하나를 무작위로 배정한다.
+REAL_BANK_NAMES: tuple[str, ...] = ("신한은행", "국민은행", "우리은행", "하나은행", "농협은행")
 
 
 def _uuid() -> str:
@@ -44,7 +46,9 @@ class Account(Base):
     # (real name) and bank_name; purely a display label, no business logic
     # depends on it.
     alias: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    bank_name: Mapped[str] = mapped_column(String(50), nullable=False, default=BANK_NAME)
+    bank_name: Mapped[str] = mapped_column(
+        String(50), nullable=False, default=lambda: random.choice(REAL_BANK_NAMES)
+    )
     account_number: Mapped[str] = mapped_column(
         String(20), nullable=False, unique=True, default=_generate_account_number
     )

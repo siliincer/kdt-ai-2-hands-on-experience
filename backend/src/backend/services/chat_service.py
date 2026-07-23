@@ -24,7 +24,10 @@ from ..repository.auth_context_repository import (
     set_auth_context_status,
 )
 from ..repository.chat_repository import add_chat_message
-from ..repository.confirmation_repository import get_confirmation_by_id
+from ..repository.confirmation_repository import (
+    get_confirmation_by_id,
+    has_confirmation_for_execution_context,
+)
 from ..repository.execution_context_repository import (
     get_execution_context_by_id,
     set_agent_thread_id,
@@ -63,6 +66,19 @@ def _new_request_id(kind: str) -> str:
 def _is_cancel_input(value: dict) -> bool:
     """입력·선택 회신 value 가 취소인지 판정한다(어떤 `*_outcome` 이든 'cancelled')."""
     return any(key.endswith("_outcome") and val == "cancelled" for key, val in value.items())
+
+
+# 승인 화면 modify_* 재입력 취소만 "이전 승인 화면으로 되돌아갈 수 있음" — Workflow
+# 그래프에 cancelled_return 경로가 있는 Step 들의 outcome 키만 여기 포함한다. 이 목록에
+# 없는 취소(예: auth_retry_outcome)는 항상 전체 종료이므로 done을 미룰 이유가 없다.
+_RETURN_CAPABLE_OUTCOME_KEYS = frozenset(
+    {"account_selection_outcome", "recipient_selection_outcome", "amount_input_outcome"}
+)
+
+
+def _is_return_capable_cancel(value: dict) -> bool:
+    """이 취소가 이전 승인 화면으로 되돌아갈 수 있는 Step에서 온 것인지 판정한다."""
+    return any(key in _RETURN_CAPABLE_OUTCOME_KEYS and val == "cancelled" for key, val in value.items())
 
 
 async def _resolve_agent_thread_id(session: AsyncSession, execution_context_id: UUID | None) -> tuple[str, UUID]:
@@ -233,8 +249,14 @@ async def resume_after_input(
         input_request_id=input_request_id,
         value=value,
     )
-    # 취소 종료는 Backend 책임(계약: Agent 는 cancelled 시 done 을 보내지 않음).
-    if _is_cancel_input(value):
+    # 취소 종료는 Backend 책임(계약: Agent 는 cancelled 시 done 을 보내지 않음) —
+    # 단, 이 실행 Context에 Confirmation이 이미 한 번이라도 있었으면(승인 화면까지
+    # 도달한 적 있음) 이 취소는 "변경" 흐름이 이전 승인 화면으로 되돌아가는 것일
+    # 수 있다. 그 경우 Agent가 need_approval을 다시 보내므로 여기서 먼저 done을
+    # 보내면 그 이벤트보다 앞서 도착해 화면이 끝난 것처럼 보인다 — 건너뛴다.
+    if _is_cancel_input(value) and not (
+        _is_return_capable_cancel(value) and await has_confirmation_for_execution_context(session, execution_context_id)
+    ):
         await publish_cancellation_done(chat_session_id)
 
 
@@ -243,13 +265,14 @@ async def authenticate_and_resume(
     user_id: UUID,
     chat_session_id: UUID,
     auth_context_id: str,
-    password: str,
+    password: str | None,
+    cancelled: bool = False,
 ) -> str:
     """추가 인증(비밀번호 재확인) → 검증 후 에이전트를 재개한다(계약 3.8·7.2).
 
     인증 원문(비밀번호)은 Backend 까지만 오고 Agent 로 전달하지 않는다. Backend 가
-    검증한 결과 상태(verified/failed)만 재개에 사용한다. 반환값은 결과 상태다.
-    검증 실패(세션·인증 상태)는 HTTPException 으로 같은 UI 에서 처리한다.
+    검증한 결과 상태(verified/failed/cancelled)만 재개에 사용한다. 반환값은 결과
+    상태다. 검증 실패(세션·인증 상태)는 HTTPException 으로 같은 UI 에서 처리한다.
     """
     await verify_chat_session_owner(session, user_id, chat_session_id)
 
@@ -278,15 +301,18 @@ async def authenticate_and_resume(
             detail="이미 처리된 인증 요청입니다.",
         )
 
-    user = await get_user_by_id(session, str(user_id))
-    verified = bool(user and password and verify_password(password, user.password_hash))
-
-    if verified:
-        await auth_context_service.mark_verified(session, auth_context)
-        auth_status = "verified"
+    if cancelled:
+        await set_auth_context_status(session, auth_context, AuthContextStatus.CANCELLED)
+        auth_status = "cancelled"
     else:
-        await set_auth_context_status(session, auth_context, AuthContextStatus.FAILED)
-        auth_status = "failed"
+        user = await get_user_by_id(session, str(user_id))
+        verified = bool(user and password and verify_password(password, user.password_hash))
+        if verified:
+            await auth_context_service.mark_verified(session, auth_context)
+            auth_status = "verified"
+        else:
+            await set_auth_context_status(session, auth_context, AuthContextStatus.FAILED)
+            auth_status = "failed"
 
     # 인증은 Confirmation 에 딸린 추가 관문이다. auth_context → confirmation → 실행
     # Context 로 Agent thread 를 찾아 재개한다.
@@ -300,6 +326,10 @@ async def authenticate_and_resume(
         auth_context_id=auth_context_id,
         auth_status=auth_status,
     )
+    # 취소 종료는 Backend 책임(계약: Agent 는 cancelled 시 done 을 보내지 않음).
+    # 인증 취소는 항상 전체 종료다(승인 화면으로 돌아가는 "변경" 개념이 없음).
+    if cancelled:
+        await publish_cancellation_done(chat_session_id)
     return auth_status
 
 

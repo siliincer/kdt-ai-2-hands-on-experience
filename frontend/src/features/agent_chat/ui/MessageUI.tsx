@@ -35,9 +35,17 @@ export const ErrorMessageUI: ToolCallMessagePartComponent = ({
 export const BlockedMessageUI: ToolCallMessagePartComponent = ({
   args,
   argsText,
-}) => (
-  <div className="mt-2 flex items-start gap-2 rounded-2xl border border-border bg-muted/40 p-4">
-    <Ban className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-    <p className="text-sm text-foreground">{messageText(args, argsText)}</p>
-  </div>
-);
+}) => {
+  const a = (args ?? {}) as MessageArgs;
+  return (
+    <div className="mt-2 flex items-start gap-2 rounded-2xl border border-border bg-muted/40 p-4">
+      <Ban className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="flex flex-col gap-1">
+        <p className="text-sm text-foreground">{messageText(args, argsText)}</p>
+        {a.description ? (
+          <p className="text-xs text-muted-foreground">{a.description}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+};
