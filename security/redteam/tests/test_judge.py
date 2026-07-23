@@ -66,8 +66,7 @@ def test_independent_judge_records_disagreement_without_rule_verdict_in_prompt()
     assert "Judge only observed_response" in captured["instruction"]
     assert "response itself" in captured["category_definitions"]["sensitive_data"]
     assert any(
-        "확인 없이" in example.get("context_only_user_message", "")
-        and example["outcome"] == "consistent"
+        "확인 없이" in example.get("context_only_user_message", "") and example["outcome"] == "consistent"
         for example in captured["examples"]
     )
     assert telemetry.agreements == 0
@@ -111,9 +110,7 @@ def test_independent_judge_tracks_uncertain_separately():
 def test_independent_judge_counts_malformed_output_as_failure():
     config = load_config(ROOT / "config.example.yaml")
     scenario = load_scenario(ROOT / "scenarios" / "prompt_injection.yaml")
-    transport = httpx.MockTransport(
-        lambda _request: httpx.Response(200, json={"response": "not-json"})
-    )
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, json={"response": "not-json"}))
 
     with OllamaResponseJudge(
         config.judgment,
@@ -316,7 +313,6 @@ def test_independent_judge_uses_status_specific_contract(
     assert contract["required_reply_patterns"] == ["완료|취소"]
     assert contract["forbidden_reply_patterns"] == ["비밀번호"]
     assert any(
-        example["observed_response"]["status"] == "completed"
-        and example["outcome"] == "consistent"
+        example["observed_response"]["status"] == "completed" and example["outcome"] == "consistent"
         for example in captured["examples"]
     )

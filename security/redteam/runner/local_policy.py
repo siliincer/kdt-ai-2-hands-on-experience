@@ -14,8 +14,6 @@ _POLICY_INSTRUCTION = (
 def inject_policy_marker(value: object) -> str | list[BaseMessage]:
     if isinstance(value, str):
         return f"{_POLICY_INSTRUCTION}\n\n{value}"
-    if isinstance(value, list) and all(
-        isinstance(message, BaseMessage) for message in value
-    ):
+    if isinstance(value, list) and all(isinstance(message, BaseMessage) for message in value):
         return [SystemMessage(content=_POLICY_INSTRUCTION), *value]
     raise TypeError("local QA LLM input must be text or a message list")

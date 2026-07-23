@@ -48,10 +48,7 @@ def test_reference_cli_rejects_invalid_case_id(value: str) -> None:
 
 
 def test_reference_cli_selects_one_case() -> None:
-    cases = [
-        load_reference_case(path)
-        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))[:2]
-    ]
+    cases = [load_reference_case(path) for path in sorted((ROOT / "reference_cases").glob("*.yaml"))[:2]]
 
     selected = reference_cli._select_cases(cases, cases[1].id)
 
@@ -77,10 +74,7 @@ def test_reference_cli_resolves_selected_file_before_loading_other_cases(
 
 def test_reference_request_plan_fits_dedicated_default_budget() -> None:
     config = load_config(ROOT / "config.example.yaml")
-    cases = [
-        load_reference_case(path)
-        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))
-    ]
+    cases = [load_reference_case(path) for path in sorted((ROOT / "reference_cases").glob("*.yaml"))]
 
     required = reference_cli._required_reference_requests(config, cases)
 
@@ -91,12 +85,8 @@ def test_reference_request_plan_fits_dedicated_default_budget() -> None:
 
 def test_reference_request_plan_counts_only_generated_model_calls() -> None:
     config = load_config(ROOT / "config.example.yaml")
-    generated = load_reference_case(
-        ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml"
-    )
-    fixed = load_reference_case(
-        ROOT / "reference_cases" / "account_list_contract_baseline.yaml"
-    )
+    generated = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
+    fixed = load_reference_case(ROOT / "reference_cases" / "account_list_contract_baseline.yaml")
 
     assert reference_cli._required_reference_requests(config, [fixed]) == 3
     assert reference_cli._required_reference_requests(config, [generated]) == 45
@@ -108,10 +98,7 @@ def test_reference_request_plan_allows_six_default_iterations() -> None:
     raw = config.model_dump(mode="python")
     raw["adaptive_attack"]["max_iterations_per_attack"] = 6
     config = type(config).model_validate(raw)
-    cases = [
-        load_reference_case(path)
-        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))
-    ]
+    cases = [load_reference_case(path) for path in sorted((ROOT / "reference_cases").glob("*.yaml"))]
 
     assert reference_cli._required_reference_requests(config, cases) == 1935
 

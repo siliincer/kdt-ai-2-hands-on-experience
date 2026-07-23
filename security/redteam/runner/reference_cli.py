@@ -70,9 +70,7 @@ def _iteration_count(value: str) -> int:
 
 def _case_id(value: str) -> str:
     if not re.fullmatch(r"[a-z0-9_]+", value):
-        raise argparse.ArgumentTypeError(
-            "case id must contain lowercase letters, numbers, and _"
-        )
+        raise argparse.ArgumentTypeError("case id must contain lowercase letters, numbers, and _")
     return value
 
 
@@ -110,9 +108,7 @@ def _required_reference_requests(
         + config.judgment.max_attempts_per_evaluation
     )
     return preflight_requests + (
-        generated
-        * config.adaptive_attack.max_iterations_per_attack
-        * generated_iteration_requests
+        generated * config.adaptive_attack.max_iterations_per_attack * generated_iteration_requests
     )
 
 
@@ -144,9 +140,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-iterations",
         type=_iteration_count,
-        help=(
-            "maximum generated-input iterations per reference case (defaults to config)"
-        ),
+        help=("maximum generated-input iterations per reference case (defaults to config)"),
     )
     parser.add_argument(
         "--case-id",
@@ -203,18 +197,14 @@ async def _run(
     except OSError as exc:
         raise ValueError("failed to inspect reference case set") from exc
     if case_set_bytes > MAX_REFERENCE_CASE_SET_BYTES:
-        raise ValueError(
-            f"reference campaign case files exceed {MAX_REFERENCE_CASE_SET_BYTES} bytes"
-        )
+        raise ValueError(f"reference campaign case files exceed {MAX_REFERENCE_CASE_SET_BYTES} bytes")
     cases = [load_reference_case(path) for path in case_paths]
     if not cases:
         raise ValueError("reference cases directory is empty")
     cases = _select_cases(cases, case_id)
     generated_cases = sum(case.generation is not None for case in cases)
     planned_iterations = (
-        generated_cases * config.adaptive_attack.max_iterations_per_attack
-        + len(cases)
-        - generated_cases
+        generated_cases * config.adaptive_attack.max_iterations_per_attack + len(cases) - generated_cases
     )
     required_requests = _required_reference_requests(config, cases)
     request_limit = config.execution.max_reference_requests_per_run
@@ -255,19 +245,14 @@ async def _run(
                 scenarios,
                 config.safety.redact_fields,
                 budget,
-                max_iterations_per_generated_case=(
-                    config.adaptive_attack.max_iterations_per_attack
-                ),
+                max_iterations_per_generated_case=(config.adaptive_attack.max_iterations_per_attack),
             )
             agent_source_commit = executor.agent_source_commit
             if (
                 args.agent_source_commit is not None
-                and executor.resolve_source_commit(args.agent_source_commit)
-                != agent_source_commit
+                and executor.resolve_source_commit(args.agent_source_commit) != agent_source_commit
             ):
-                raise ValueError(
-                    "imported Agent checkout does not match --agent-source-commit"
-                )
+                raise ValueError("imported Agent checkout does not match --agent-source-commit")
             if executor.agent_source_dirty:
                 raise ValueError("imported Agent source directory has local changes")
             result = await run_reference_campaign(
@@ -277,9 +262,7 @@ async def _run(
                     agent_source_commit=agent_source_commit,
                     case_set_kind=(
                         "default"
-                        if case_id is None
-                        and args.cases_dir.resolve()
-                        == (REDTEAM_ROOT / "reference_cases").resolve()
+                        if case_id is None and args.cases_dir.resolve() == (REDTEAM_ROOT / "reference_cases").resolve()
                         else "custom"
                     ),
                     runner_git_commit=runner_git_commit,
@@ -290,9 +273,7 @@ async def _run(
                     generator_model_digest=model_digests[config.adaptive_attack.model],
                     judgment_model=config.judgment.model,
                     judgment_model_digest=model_digests[config.judgment.model],
-                    max_iterations_per_generated_case=(
-                        config.adaptive_attack.max_iterations_per_attack
-                    ),
+                    max_iterations_per_generated_case=(config.adaptive_attack.max_iterations_per_attack),
                     generator_telemetry=generator.telemetry(),
                     judgment_telemetry=judge.telemetry(),
                 ),
@@ -365,9 +346,7 @@ def main() -> int:
             started_monotonic=started_monotonic,
             output_dir=args.output_dir,
             redact_fields=redact_fields,
-            finalization_timeout_seconds=(
-                config.execution.report_finalization_timeout_seconds
-            ),
+            finalization_timeout_seconds=(config.execution.report_finalization_timeout_seconds),
         )
         if paths is not None:
             print(f"Error report: {paths[0]} {paths[1]}")

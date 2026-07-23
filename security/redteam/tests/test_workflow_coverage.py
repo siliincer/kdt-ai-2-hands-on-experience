@@ -67,20 +67,14 @@ def test_workflow_coverage_references_existing_scenarios_and_evidence():
     attack_ids = {}
     attack_workflows = {}
     reference_cases = {
-        case.id: case
-        for case in (
-            load_reference_case(path)
-            for path in (ROOT / "reference_cases").glob("*.yaml")
-        )
+        case.id: case for case in (load_reference_case(path) for path in (ROOT / "reference_cases").glob("*.yaml"))
     }
 
     for method, filename in manifest["methods"].items():
         scenario = load_scenario(ROOT / "scenarios" / filename)
         assert scenario.id
         attack_ids[method] = {attack.id for attack in scenario.attacks}
-        attack_workflows[method] = {
-            attack.id: attack.target_workflow_id.value for attack in scenario.attacks
-        }
+        attack_workflows[method] = {attack.id: attack.target_workflow_id.value for attack in scenario.attacks}
 
     for workflow_id, methods in manifest["coverage"].items():
         for method, cell in methods.items():
@@ -96,15 +90,12 @@ def test_workflow_coverage_references_existing_scenarios_and_evidence():
                 assert evidence or reference_evidence
                 if evidence:
                     assert set(evidence) <= attack_ids[method]
-                    assert {
-                        attack_workflows[method][attack_id] for attack_id in evidence
-                    } == {workflow_id}
+                    assert {attack_workflows[method][attack_id] for attack_id in evidence} == {workflow_id}
                 if reference_evidence:
                     assert set(reference_evidence) <= set(reference_cases)
-                    assert {
-                        reference_cases[case_id].target_workflow_id.value
-                        for case_id in reference_evidence
-                    } == {workflow_id}
+                    assert {reference_cases[case_id].target_workflow_id.value for case_id in reference_evidence} == {
+                        workflow_id
+                    }
 
             rationale = cell.get("rationale")
             if cell["status"] == "not_applicable":
@@ -115,18 +106,13 @@ def test_workflow_coverage_references_existing_scenarios_and_evidence():
 
 def test_completed_reference_manifest_matches_the_exact_case_set() -> None:
     manifest = _reference_manifest()
-    cases = [
-        load_reference_case(path)
-        for path in sorted((ROOT / "reference_cases").glob("*.yaml"))
-    ]
+    cases = [load_reference_case(path) for path in sorted((ROOT / "reference_cases").glob("*.yaml"))]
 
     assert manifest["version"] == 1
     assert manifest["status"] == "completed"
     assert isinstance(manifest["agent_source_commit"], str)
     assert len(manifest["agent_source_commit"]) == 40
-    assert manifest["verification_test"] == (
-        "security/redteam/tests/test_agent_reference_integration.py"
-    )
+    assert manifest["verification_test"] == ("security/redteam/tests/test_agent_reference_integration.py")
     assert manifest["case_ids"] == [case.id for case in cases]
     assert manifest["case_set_sha256"] == _canonical_sha256(cases)
 
@@ -140,9 +126,7 @@ def test_coverage_and_reference_manifest_use_same_agent_revision() -> None:
 
 def test_workflow_coverage_counts_only_meaningful_cells():
     manifest = _coverage()
-    cells = [
-        cell for methods in manifest["coverage"].values() for cell in methods.values()
-    ]
+    cells = [cell for methods in manifest["coverage"].values() for cell in methods.values()]
 
     assert sum(cell["status"] != "not_applicable" for cell in cells) == 55
     assert sum(cell["status"] == "not_applicable" for cell in cells) == 9
@@ -157,9 +141,7 @@ def test_workflow_coverage_counts_only_meaningful_cells():
         "wf_period_amount_summary",
     }
     expected_not_applicable = {
-        (workflow, method)
-        for workflow in read_workflows
-        for method in {"approval_bypass", "risk_manipulation"}
+        (workflow, method) for workflow in read_workflows for method in {"approval_bypass", "risk_manipulation"}
     }
     expected_not_applicable.add(("wf_account_list", "multi_step_attack"))
     actual_not_applicable = {
@@ -169,9 +151,7 @@ def test_workflow_coverage_counts_only_meaningful_cells():
         if cell["status"] == "not_applicable"
     }
     assert actual_not_applicable == expected_not_applicable
-    expected_planned = {
-        (workflow, "audit_log_tampering") for workflow in read_workflows
-    }
+    expected_planned = {(workflow, "audit_log_tampering") for workflow in read_workflows}
     actual_planned = {
         (workflow, method)
         for workflow, methods in manifest["coverage"].items()

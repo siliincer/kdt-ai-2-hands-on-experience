@@ -51,18 +51,14 @@ _ASSIGNMENT_VALUE_SEPARATOR = frozenset("\r\n,;?&#{}[]\"'")
 _URL_VALUE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
 _ACCOUNT_CANDIDATE = re.compile(r"(?<!\d)\d{2,16}(?:[ -]+\d{2,16})*(?!\d)")
 _MFS_ACCOUNT_CANDIDATE = re.compile(r"(?i)(?<![A-Z0-9])MFS[0-9A-F]{12}(?![A-Z0-9])")
-_ACCOUNT_LABEL = re.compile(
-    r"(?i)(?:계좌(?:\s*번호)?|account\s*(?:number|no)?|bank\s*account)"
-)
+_ACCOUNT_LABEL = re.compile(r"(?i)(?:계좌(?:\s*번호)?|account\s*(?:number|no)?|bank\s*account)")
 _BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 _AUTH_VALUE = re.compile(
     r"(?im)\b(authorization\s*[:=]\s*).*?"
     r"(?=\s+(?:token|api[_-]?key|secret|password|(?:set-)?cookie|authorization)"
     r"\s*[:=]|$)"
 )
-_COOKIE_VALUE = re.compile(
-    r"(?i)\b((?:set-)?cookie\s*[:=]\s*)[^,\s;]+(?:\s*;\s*[^,\s;]+)*"
-)
+_COOKIE_VALUE = re.compile(r"(?i)\b((?:set-)?cookie\s*[:=]\s*)[^,\s;]+(?:\s*;\s*[^,\s;]+)*")
 
 
 def _matching_key_suffix_start(
@@ -180,11 +176,7 @@ def _is_account_candidate(text: str, match: re.Match[str]) -> bool:
 def _account_spans(value: str) -> list[tuple[int, int]]:
     scan, offsets = _normalized_scan_with_offsets(value)
     spans = []
-    matches = [
-        match
-        for pattern in (_ACCOUNT_CANDIDATE, _MFS_ACCOUNT_CANDIDATE)
-        for match in pattern.finditer(scan)
-    ]
+    matches = [match for pattern in (_ACCOUNT_CANDIDATE, _MFS_ACCOUNT_CANDIDATE) for match in pattern.finditer(scan)]
     for match in sorted(matches, key=lambda item: item.start()):
         if match.re is _ACCOUNT_CANDIDATE and not _is_account_candidate(scan, match):
             continue
@@ -209,10 +201,7 @@ def _redact_account_text(value: str) -> str:
 
 
 def _scalar_sequence_account(value: Sequence[object]) -> bool:
-    has_nested_value = any(
-        isinstance(item, (Mapping, Sequence)) and not isinstance(item, str)
-        for item in value
-    )
+    has_nested_value = any(isinstance(item, (Mapping, Sequence)) and not isinstance(item, str) for item in value)
     if not value or has_nested_value:
         return False
     scalar_text = " ".join(str(item) for item in value if isinstance(item, (str, int)))
@@ -290,9 +279,7 @@ def _assignment_operators(
         if sensitive_start is not None:
             key_start = search_floor + sensitive_start
         key = scan[key_start : operator.start()].strip("\"'")
-        is_url_scheme = operator.group() == ":" and scan[operator.end() :].startswith(
-            "//"
-        )
+        is_url_scheme = operator.group() == ":" and scan[operator.end() :].startswith("//")
 
         value_boundary = key_start
         while value_boundary > 0:
@@ -305,14 +292,9 @@ def _assignment_operators(
             value_boundary -= 1
 
         has_record_boundary = key_start == 0 or (
-            scan[key_start - 1].isspace()
-            or scan[key_start - 1] in _ASSIGNMENT_RECORD_PREFIX
+            scan[key_start - 1].isspace() or scan[key_start - 1] in _ASSIGNMENT_RECORD_PREFIX
         )
-        if (
-            has_record_boundary
-            and any(character.isalpha() for character in key)
-            and not is_url_scheme
-        ):
+        if has_record_boundary and any(character.isalpha() for character in key) and not is_url_scheme:
             result.append(
                 _AssignmentOperator(
                     start=operator.start(),
@@ -321,11 +303,7 @@ def _assignment_operators(
                     value_boundary=value_boundary,
                     line_boundary=last_line_boundary,
                     sensitive=sensitive_start is not None,
-                    structured=(
-                        operator.group() == ":"
-                        and key_start > 0
-                        and scan[key_start - 1] in "\"'"
-                    ),
+                    structured=(operator.group() == ":" and key_start > 0 and scan[key_start - 1] in "\"'"),
                 )
             )
         previous_operator_end = operator.end()
@@ -367,9 +345,7 @@ def _assignment_value_spans(
                 value_end = url_end
             elif operator.structured:
                 structural_ends = [
-                    position
-                    for separator in ",}"
-                    if (position := scan.find(separator, value_start)) >= 0
+                    position for separator in ",}" if (position := scan.find(separator, value_start)) >= 0
                 ]
                 value_end = min(structural_ends, default=len(scan))
             else:
@@ -377,10 +353,7 @@ def _assignment_value_spans(
                 if next_index < len(assignments):
                     next_assignment = assignments[next_index]
                     value_end = next_assignment.value_boundary
-                    if (
-                        next_assignment.line_boundary is not None
-                        and next_assignment.line_boundary > value_start
-                    ):
+                    if next_assignment.line_boundary is not None and next_assignment.line_boundary > value_start:
                         value_end = min(value_end, next_assignment.line_boundary)
                 else:
                     value_end = len(scan)

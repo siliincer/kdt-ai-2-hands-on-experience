@@ -237,18 +237,12 @@ async def _response_from_testbed(
             require_complete=result.status != "waiting",
         ),
         backend_exchanges_valid=(
-            _backend_exchanges_valid(backend_exchanges)
-            if backend_exchanges is not None
-            else None
+            _backend_exchanges_valid(backend_exchanges) if backend_exchanges is not None else None
         ),
         state_projection_digest=_digest(state, digest_key),
         state_projection_values=_state_projection_values(state, digest_key),
         webhook_payload_digest=_digest(webhook_payload_events, digest_key),
-        backend_exchange_digest=(
-            _digest(backend_exchanges, digest_key)
-            if backend_exchanges is not None
-            else None
-        ),
+        backend_exchange_digest=(_digest(backend_exchanges, digest_key) if backend_exchanges is not None else None),
     )
     return AgentResponse(
         reply=_bounded_text(state.get("final_response"), "final response"),
@@ -298,9 +292,7 @@ def _collect_timeline_evidence(
                 tool_ids.append(webhook_step_tools[step_id])
             continue
         query_keys = item.get("query_keys", [])
-        if not isinstance(query_keys, list) or any(
-            not isinstance(key, str) for key in query_keys
-        ):
+        if not isinstance(query_keys, list) or any(not isinstance(key, str) for key in query_keys):
             raise ValueError("reference tool request query keys must be text")
         paths.append(path)
         requests.append(
@@ -309,9 +301,7 @@ def _collect_timeline_evidence(
                 path=path,
                 query_keys=query_keys,
                 payload_digest=(
-                    _digest(item["payload"], digest_key)
-                    if isinstance(item.get("payload"), Mapping)
-                    else None
+                    _digest(item["payload"], digest_key) if isinstance(item.get("payload"), Mapping) else None
                 ),
             )
         )
@@ -431,9 +421,7 @@ def _digest(value: object, key: bytes) -> str:
     return hmac.new(key, encoded, hashlib.sha256).hexdigest()
 
 
-def _state_projection_values(
-    state: Mapping[str, Any], digest_key: bytes
-) -> dict[str, list[str]]:
+def _state_projection_values(state: Mapping[str, Any], digest_key: bytes) -> dict[str, list[str]]:
     projected: dict[str, set[str]] = {}
 
     def visit(value: object, active_key: str | None = None) -> None:
@@ -442,9 +430,7 @@ def _state_projection_values(
                 normalized = key.casefold() if isinstance(key, str) else ""
                 selected = normalized if normalized in _STATE_ISOLATION_KEYS else None
                 if selected is not None and isinstance(nested, (Mapping, list)):
-                    projected.setdefault(selected, set()).add(
-                        _digest(nested, digest_key)
-                    )
+                    projected.setdefault(selected, set()).add(_digest(nested, digest_key))
                 else:
                     visit(nested, selected)
             return
@@ -516,13 +502,9 @@ def _tool_arguments_valid(
             or not isinstance(optional_arguments, Mapping)
             or not set(payload) <= set(required_arguments) | set(optional_arguments)
             or not _valid_business_arguments(payload, known_accounts)
+            or any(not _argument_value_matches(payload.get(key), value) for key, value in required_arguments.items())
             or any(
-                not _argument_value_matches(payload.get(key), value)
-                for key, value in required_arguments.items()
-            )
-            or any(
-                key in payload
-                and not _optional_argument_matches(payload[key], expectation)
+                key in payload and not _optional_argument_matches(payload[key], expectation)
                 for key, expectation in optional_arguments.items()
             )
         ):
@@ -534,9 +516,7 @@ def _argument_value_matches(actual: object, expected: object) -> bool:
     if isinstance(expected, bool) and isinstance(actual, str):
         return actual.casefold() == str(expected).casefold()
     if isinstance(expected, int) and not isinstance(expected, bool):
-        return actual == expected or (
-            isinstance(actual, str) and actual.isdecimal() and int(actual) == expected
-        )
+        return actual == expected or (isinstance(actual, str) and actual.isdecimal() and int(actual) == expected)
     if isinstance(expected, list) and len(expected) == 1 and isinstance(actual, str):
         return actual == expected[0]
     return actual == expected
@@ -573,8 +553,7 @@ def _expected_tool_requests(
             or not isinstance(arguments, Mapping)
             or not isinstance(optional_arguments, Mapping)
             or any(
-                not isinstance(key, str) or not isinstance(value, Mapping)
-                for key, value in optional_arguments.items()
+                not isinstance(key, str) or not isinstance(value, Mapping) for key, value in optional_arguments.items()
             )
         ):
             raise ValueError("reference tool request expectations are invalid")
@@ -583,9 +562,7 @@ def _expected_tool_requests(
                 "method": method,
                 "path": path,
                 "required_arguments": dict(arguments),
-                "optional_arguments": {
-                    key: dict(value) for key, value in optional_arguments.items()
-                },
+                "optional_arguments": {key: dict(value) for key, value in optional_arguments.items()},
             }
         )
     return expected
@@ -627,9 +604,7 @@ def _valid_business_arguments(
     if not isinstance(value, Mapping):
         return True
     for key, nested in value.items():
-        if key.endswith("_hint") and (
-            not isinstance(nested, str) or not 0 < len(nested.strip()) <= 200
-        ):
+        if key.endswith("_hint") and (not isinstance(nested, str) or not 0 < len(nested.strip()) <= 200):
             return False
         if key in {"account_id", "from_account_id", "to_account_id"}:
             if not isinstance(nested, str) or not nested:
@@ -639,30 +614,18 @@ def _valid_business_arguments(
         if key == "exclude_account_ids" and isinstance(nested, str):
             nested = [nested]
         if key in {"account_ids", "exclude_account_ids"}:
-            if not isinstance(nested, list) or any(
-                not isinstance(item, str) or not item for item in nested
-            ):
+            if not isinstance(nested, list) or any(not isinstance(item, str) or not item for item in nested):
                 return False
             if len(nested) != len(set(nested)):
                 return False
             if known_accounts and not set(nested) <= known_accounts:
                 return False
         if key in {"page_size", "limit"}:
-            numeric = (
-                int(nested)
-                if isinstance(nested, str) and nested.isdecimal()
-                else nested
-            )
-            if (
-                not isinstance(numeric, int)
-                or isinstance(numeric, bool)
-                or not 1 <= numeric <= 100
-            ):
+            numeric = int(nested) if isinstance(nested, str) and nested.isdecimal() else nested
+            if not isinstance(numeric, int) or isinstance(numeric, bool) or not 1 <= numeric <= 100:
                 return False
         if key == "amount" and (
-            not isinstance(nested, int)
-            or isinstance(nested, bool)
-            or not 1 <= nested <= 1_000_000_000
+            not isinstance(nested, int) or isinstance(nested, bool) or not 1 <= nested <= 1_000_000_000
         ):
             return False
         if key.endswith("_date"):
@@ -704,9 +667,7 @@ def _valid_business_arguments(
         ):
             return False
         if key in {"alias", "account_hint", "recipient_name_hint", "keyword"}:
-            if nested is not None and (
-                not isinstance(nested, str) or not nested.strip() or len(nested) > 100
-            ):
+            if nested is not None and (not isinstance(nested, str) or not nested.strip() or len(nested) > 100):
                 return False
         if isinstance(nested, (Mapping, list)) and not _valid_nested_arguments(
             nested,
@@ -783,9 +744,7 @@ def _trace_evidence(value: object) -> list[WorkflowTraceEvidence]:
     if not isinstance(value, list):
         raise ValueError("reference execution trace must be a list")
     if len(value) > MAX_REFERENCE_TRACE_ITEMS:
-        raise ValueError(
-            f"reference execution trace exceeds {MAX_REFERENCE_TRACE_ITEMS} entries"
-        )
+        raise ValueError(f"reference execution trace exceeds {MAX_REFERENCE_TRACE_ITEMS} entries")
     trace = []
     for item in value:
         if not isinstance(item, Mapping):
