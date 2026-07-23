@@ -552,8 +552,8 @@ async def test_external_transfer_amount_missing_then_submitted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_external_transfer_correction_single_target_auto_routes() -> None:
-    """수정 대상이 하나면 선택 화면 없이 바로 그 항목 재입력으로 간다."""
+async def test_external_transfer_correction_single_target_shows_reason() -> None:
+    """수정 대상이 하나여도 반려 사유를 보여주고 확인을 받은 뒤 재입력으로 간다."""
 
     backend = MockBackend()
     backend.add_success(
@@ -596,7 +596,8 @@ async def test_external_transfer_correction_single_target_auto_routes() -> None:
 
     assert waiting.status == "waiting"
     event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[0].content)
-    assert event["metadata"]["step_id"] == "request_external_transfer_amount"
+    assert event["metadata"]["step_id"] == "request_external_transfer_correction"
+    assert event["metadata"]["ui"]["payload"]["title"] == "금액을 변경해 주세요."
     backend.assert_all_responses_used()
 
 
@@ -1271,12 +1272,12 @@ async def test_external_transfer_correction_required_at_execute() -> None:
             ),
         )
 
-    # Execute가 correction_required(amount) → route_correction(single) →
-    # reset_external_transfer_amount → request_external_transfer_amount로 이어져
-    # 금액 재입력에서 다시 멈춘다.
+    # Execute가 correction_required(amount) → route_correction →
+    # request_external_transfer_correction으로 이어져 반려 사유를 보여주고
+    # 확인을 기다리며 멈춘다(사유 없이 곧장 재입력으로 넘어가지 않는다).
     assert waiting_amount.status == "waiting"
     events = [json.loads(r.content) for r in backend.requests_to("POST", "/api/v1/webhooks/agent")]
-    assert events[-1]["metadata"]["step_id"] == "request_external_transfer_amount"
+    assert events[-1]["metadata"]["step_id"] == "request_external_transfer_correction"
     backend.assert_all_responses_used()
 
 

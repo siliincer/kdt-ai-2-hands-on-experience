@@ -47,8 +47,12 @@ WORKFLOW_ID = "wf_external_transfer"
 _tool_error_update = build_tool_error_update("송금을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 # 관리시트 route_key=limit_exceeded(1회 송금 한도) 스펙 — Prepare 호출 전에 먼저 걸러
-# 백엔드까지 안 보내고 바로 차단한다.
-_TRANSFER_LIMIT = 50_000_000
+# 백엔드까지 안 보내고 바로 차단한다. backend/src/backend/services/agent_tools/
+# policy_constants.py의 MAX_SINGLE_TRANSFER_KRW와 반드시 같은 값이어야 한다 —
+# 여기서 걸러지지 않은 초과 금액은 결국 backend에서 correction_required(단일
+# target=["amount"])로 조용히 반려되는데, 그 경로는 사유를 사용자에게 보여주지
+# 않고 바로 금액 재입력으로 넘어간다(별도 버그, 아직 안 고침).
+_TRANSFER_LIMIT = 5_000_000
 
 # 승인·수정 화면의 정정 대상 3종 — route_external_transfer_correction,
 # request_external_transfer_approval, request_external_transfer_correction이 공유한다.
@@ -222,9 +226,18 @@ def build_external_transfer_graph(
                 ValueError("출금 계좌 확인 결과가 올바르지 않습니다."),
             )
         account_ids = list(result.get("account_ids") or [])
+        accounts = list(result.get("accounts") or [])
+        # 발화에 출금 계좌를 콕 집지 않았고 후보가 여러 개라도, 기본 출금 계좌가
+        # 있으면 매번 물어보지 않고 그걸로 확정한다 — 승인 화면에서 언제든
+        # ERow(수정 진입점)로 바꿀 수 있으니 선택 단계를 강제할 필요가 없다.
+        if outcome == "selection_required" and not data.get("from_account_hint"):
+            default_account = next((a for a in accounts if a.get("is_default")), None)
+            if default_account is not None:
+                outcome = "resolved"
+                account_ids = [default_account["account_id"]]
         update: dict[str, Any] = {
             "account_resolution_outcome": outcome,
-            "accounts": list(result.get("accounts") or []),
+            "accounts": accounts,
         }
         if outcome == "resolved":
             if len(account_ids) != 1:
@@ -549,14 +562,12 @@ def build_external_transfer_graph(
                 "current_step_id": "route_external_transfer_correction",
                 "route_key": "invalid",
             }
-        if len(valid_targets) == 1:
-            return {
-                "current_step_id": "route_external_transfer_correction",
-                "route_key": f"single:{valid_targets[0]}",
-            }
+        # 대상이 하나뿐이어도 곧장 재입력으로 넘어가지 않는다 — 반려 사유(title,
+        # 예: "1회 이체 한도를 초과했습니다")를 보여주고 사용자가 확인을 눌러야
+        # 다음으로 진행된다(사유 없이 조용히 재입력창만 뜨던 버그 수정).
         return {
             "current_step_id": "route_external_transfer_correction",
-            "route_key": "multiple",
+            "route_key": "valid",
         }
 
     async def request_external_transfer_correction(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -974,10 +985,7 @@ def build_external_transfer_graph(
         "route_external_transfer_correction",
         _route_key,
         {
-            "single:from_account": "reset_external_from_account",
-            "single:recipient": "reset_external_recipient",
-            "single:amount": "reset_external_transfer_amount",
-            "multiple": "request_external_transfer_correction",
+            "valid": "request_external_transfer_correction",
             "invalid": "emit_external_transfer_error",
         },
     )
@@ -1056,6 +1064,10 @@ def _confirmation_payload(raw_view: Any) -> dict[str, Any]:
         "variant": view.get("variant"),
         "warning_codes": view.get("warning_codes"),
         "expires_at": view.get("expires_at"),
+        # FE ConfirmModalUI는 이 필드로 행별 수정 진입점(ERow)을 켠다 — "actions"는
+        # FE가 실제로 읽지 않는 죽은 필드였다(기본계좌 지정해도 출금계좌를 승인
+        # 화면에서 못 바꾸던 버그의 원인).
+        "allowed_change_targets": ["from_account", "recipient", "amount"],
         "actions": [
             "approve",
             "modify_from_account",
