@@ -277,3 +277,5 @@ fe-be-sync/
 
 # Backend logs (RotatingFileHandler 출력, 운영 모드)
 backend_logs/
+# Local AI handoff
+/docs/gpt-handoff-current-status.md
