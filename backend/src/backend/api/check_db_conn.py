@@ -1,8 +1,9 @@
-import asyncpg
 import redis.asyncio as aioredis
 from fastapi import APIRouter
+from sqlalchemy import text
 
 from ..core.load_environment_var import settings
+from ..db.postgres import engine
 from ..schemas.response import CommonResponse
 from ..utils.build_response import success_response
 
@@ -13,11 +14,10 @@ health_router = APIRouter(prefix="/dbhealth", tags=["Health"])
 async def check_health():
     status = {}
 
-    # 1. PostgreSQL (asyncpg) 연결 확인
+    # 1. 실제 애플리케이션 SQLAlchemy 엔진으로 PostgreSQL 연결 확인
     try:
-        # asyncpg.connect는 비동기 함수이므로 await가 필수입니다.
-        conn = await asyncpg.connect(settings.DATABASE_URL, timeout=3)
-        await conn.close()
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
         status["postgres"] = "connected"
     except Exception as e:
         status["postgres"] = f"failed: {str(e)}"
