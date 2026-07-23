@@ -1,7 +1,7 @@
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChatRequest(BaseModel):
@@ -70,4 +70,18 @@ class AgentAuthenticateRequest(BaseModel):
 
     chat_session_id: UUID
     auth_context_id: str = Field(min_length=1, description="Backend 가 발급한 인증 id")
-    password: str = Field(min_length=1, description="비밀번호 재확인 원문")
+    password: str | None = Field(
+        default=None,
+        min_length=1,
+        description="비밀번호 재확인 원문. 취소(cancel=True) 시에는 생략한다.",
+    )
+    cancel: bool = Field(
+        default=False,
+        description="추가 인증을 취소하고 송금을 중단한다(비밀번호 없이 워크플로우 취소).",
+    )
+
+    @model_validator(mode="after")
+    def _require_password_unless_cancel(self) -> "AgentAuthenticateRequest":
+        if not self.cancel and not self.password:
+            raise ValueError("비밀번호가 필요합니다.")
+        return self

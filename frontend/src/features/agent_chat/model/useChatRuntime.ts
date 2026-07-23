@@ -79,12 +79,14 @@ export function useChatRuntime(): ChatRuntime {
     mutationFn: (vars: {
       chatSessionId: string;
       authContextId: string;
-      password: string;
+      password: string | null;
+      cancel?: boolean;
     }) =>
       authenticateAgentAction(
         vars.chatSessionId,
         vars.authContextId,
         vars.password,
+        vars.cancel ?? false,
       ),
   });
   const verifyRecipientMutation = useMutation({
@@ -191,15 +193,21 @@ export function useChatRuntime(): ChatRuntime {
   );
 
   const authenticate = useCallback(
-    async (authContextId: string, password: string) => {
+    async (
+      authContextId: string,
+      password: string,
+      options?: { cancel?: boolean },
+    ) => {
       const chatSessionId = chatSessionIdRef.current;
       if (!chatSessionId) return 'failed';
       const { auth_status } = await authenticateMutation.mutateAsync({
         chatSessionId,
         authContextId,
-        password,
+        // 취소 시 비밀번호는 무시된다(백엔드가 cancel 로 분기).
+        password: options?.cancel ? null : password,
+        cancel: options?.cancel ?? false,
       });
-      // 후속 이벤트(결과 또는 재인증)는 열려 있는 스트림으로 흘러온다.
+      // 후속 이벤트(결과·재인증) 또는 취소 terminal done 이 열린 스트림으로 흘러온다.
       return auth_status;
     },
     [authenticateMutation],
