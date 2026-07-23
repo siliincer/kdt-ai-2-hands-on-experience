@@ -57,7 +57,8 @@ def test_request_id_filter_injects_value():
 
     set_request_id("req_abc123")
     assert f.filter(record) is True
-    assert record.request_id == "req_abc123"
+    # request_id 는 필터가 LogRecord 에 동적으로 주입하는 속성이라 getattr 로 읽는다.
+    assert getattr(record, "request_id") == "req_abc123"
 
 
 def test_request_id_filter_defaults_to_dash():
@@ -68,4 +69,4 @@ def test_request_id_filter_defaults_to_dash():
     f = RequestIdFilter()
     record = logging.LogRecord("n", logging.INFO, __file__, 1, "msg", None, None)
     assert f.filter(record) is True
-    assert record.request_id == "-"
+    assert getattr(record, "request_id") == "-"

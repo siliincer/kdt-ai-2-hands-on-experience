@@ -1,6 +1,6 @@
 """애플리케이션 로깅 설정(중앙 집중).
 
-정책(BE_Coding §TODO 2순위):
+로깅 정책
 - 개발(is_dev=True): 콘솔(StreamHandler) + DEBUG.
 - 운영(is_dev=False): 콘솔 끄고(sys.stdout 비용 회피) `backend_logs/app.log` 에 직접 기록 +
   크기 기반 회전(RotatingFileHandler, 기본 20MB × backupCount) + INFO.

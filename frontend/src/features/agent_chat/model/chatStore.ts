@@ -41,5 +41,24 @@ export const useChatStore = create<ChatState>((set) => ({
       };
     }),
 
+  failRunning: (text) =>
+    set((state) => {
+      const targetId = state.runningId;
+      if (!targetId) return state;
+      return {
+        runningId: null,
+        messages: state.messages.map((message) =>
+          message.id === targetId
+            ? {
+                ...message,
+                // 빈 running 버블을 남기지 않도록 사유 텍스트로 마감한다.
+                parts: [...message.parts, { type: 'text', text }],
+                status: 'error',
+              }
+            : message,
+        ),
+      };
+    }),
+
   reset: () => set({ messages: [], runningId: null }),
 }));
