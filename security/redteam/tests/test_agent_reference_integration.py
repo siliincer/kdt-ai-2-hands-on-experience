@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
-import subprocess
 import warnings
 from collections.abc import Sequence
 from dataclasses import replace
@@ -205,25 +204,7 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
     manifest = yaml.safe_load(
         (ROOT / "reference_evidence_manifest.yaml").read_text(encoding="utf-8")
     )
-    expected_agent_revision = subprocess.run(
-        [
-            "git",
-            "log",
-            "-1",
-            "--format=%H",
-            "--",
-            "agent/src",
-            "agent/pyproject.toml",
-            "pyproject.toml",
-            "uv.lock",
-        ],
-        cwd=ROOT.parents[1],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=5,
-    ).stdout.strip()
-    assert manifest["agent_source_commit"] == expected_agent_revision
+    assert manifest["agent_source_commit"] == executor.agent_source_commit
     assert result.metadata.agent_source_commit == manifest["agent_source_commit"]
     assert result.metadata.case_set_sha256 == manifest["case_set_sha256"]
     assert [entry.case_id for entry in result.entries] == manifest["case_ids"]
