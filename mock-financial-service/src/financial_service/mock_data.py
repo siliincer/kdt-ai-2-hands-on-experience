@@ -782,9 +782,7 @@ def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict], di
     ledger_entries, so mock rows have to satisfy the same invariant).
     """
     seq = _Counter()
-    # 개시 입금을 아래에서 명시적 거래로 walk에 넣으므로 0에서 시작한다(원장과의
-    # 이중계산 방지 — _STARTING_BALANCE로 미리 채우지 않는다).
-    balance: dict[str, int] = {}
+    balance: dict[str, int] = dict(_STARTING_BALANCE)
     # events: (date, kind, account_id, receiver_or_card, amount, status, merchant)
     # merchant is None for "transfer" kind; a merchant/store label for "card".
     events: list[tuple[date, str, str, str, int, str, str | None]] = []
@@ -798,12 +796,6 @@ def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict], di
             return
         card_id = cards[card_index % len(cards)]
         events.append((d, "card", account_id, card_id, amount, "success", merchant))
-
-    # _STARTING_BALANCE는 balance dict에만 주입되고 원장 항목이 없으면 Account.balance
-    # 불변식(SUM(CREDIT)-SUM(DEBIT) == balance)이 깨진다 — 타임라인 맨 앞에 개시 입금
-    # 거래로 명시적으로 기록해 둔다(외부입금원 acct-b099 발신, SALARY/FRIEND와 동일 취급).
-    for _acct, _opening_amount in _STARTING_BALANCE.items():
-        add_transfer(date(2026, 3, 10), "OPENING", _acct, _opening_amount)
 
     # ── 김지훈 (acct-0001) — 안정형 직장인, salary day 25 ─────────────────────
     for y, m, first, last in _MONTH_WINDOWS:
@@ -1033,7 +1025,7 @@ def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict], di
             continue
 
         # "transfer" (account transfer / general payment / income / risk signal)
-        sender_key = "acct-b099-0000-0000-000000000099" if a in ("SALARY", "FRIEND", "OPENING") else a
+        sender_key = "acct-b099-0000-0000-000000000099" if a in ("SALARY", "FRIEND") else a
         # External payroll/friend sources are not modeled as a real Account —
         # use a shared external-source placeholder so the FK target still
         # resolves to an existing Account without polluting the 5 user / 7

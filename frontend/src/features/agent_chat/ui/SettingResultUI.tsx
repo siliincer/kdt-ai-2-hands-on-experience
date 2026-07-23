@@ -1,7 +1,5 @@
 import { Check } from 'lucide-react';
 
-import { joinParts } from '../utils/format';
-
 import { HITL_CARD } from './uiStyles';
 
 import type { SettingResultArgs } from '../types/hitl';
@@ -38,10 +36,7 @@ export const SettingResultUI: ToolCallMessagePartComponent = ({ args }) => {
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">계좌</span>
             <span className="text-sm text-foreground">
-              {joinParts(
-                a.account.account_alias ?? a.account.bank_name,
-                a.account.masked_account_number,
-              )}
+              {a.account.masked_account_number}
             </span>
           </div>
         ) : null}

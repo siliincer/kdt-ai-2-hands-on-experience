@@ -257,7 +257,6 @@ def build_external_transfer_graph(
                 "title": "출금할 계좌를 선택해 주세요.",
                 "accounts": _account_options(data.get("accounts")),
                 "actions": ["select", "cancel"],
-                "multiple": False,
             },
         )
         # ResumeStateMapper가 resume.value.account_ids[0]을 from_account_id로
@@ -300,7 +299,6 @@ def build_external_transfer_graph(
                 "title": "출금 가능한 계좌가 없습니다.",
                 "accounts": [],
                 "actions": [],
-                "multiple": False,
             },
         )
         await _publish(dependencies, event, config)
@@ -1022,9 +1020,6 @@ def build_external_transfer_graph(
 def _confirmation_payload(raw_view: Any) -> dict[str, Any]:
     view = raw_view if isinstance(raw_view, Mapping) else {}
     return {
-        # FE ConfirmModalUI가 이 값으로 표시 분기 + 승인 시 backend component를 정한다
-        # (backend _CONFIRMATION_COMPONENTS와 문자열 일치 필수).
-        "purpose": "external_transfer",
         "from_account": view.get("from_account"),
         "recipient": view.get("recipient"),
         "amount": view.get("amount"),

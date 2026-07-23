@@ -148,7 +148,6 @@ def build_set_default_account_graph(
                 "title": "새 기본 출금 계좌를 선택해 주세요.",
                 "accounts": _account_options(data.get("accounts")),
                 "actions": ["select", "cancel"],
-                "multiple": False,
             },
         )
         resumed = _resume_data(state, dependencies.interaction_runtime, event)
@@ -189,7 +188,6 @@ def build_set_default_account_graph(
                 "title": "변경 가능한 계좌가 없습니다.",
                 "accounts": [],
                 "actions": [],
-                "multiple": False,
             },
         )
         await _publish(dependencies, event, config)
@@ -515,12 +513,6 @@ def build_set_default_account_graph(
 def _confirmation_payload(raw_view: Any) -> dict[str, Any]:
     view = raw_view if isinstance(raw_view, Mapping) else {}
     return {
-        # FE ConfirmModalUI가 이 값으로 표시 분기 + 승인 시 backend component를 정한다
-        # (backend _CONFIRMATION_COMPONENTS와 문자열 일치 필수).
-        "purpose": "default_account",
-        # ConfirmModalUI의 default_account 표시 분기는 `account` 키를 읽는다
-        # (frontend/src/features/agent_chat/types/hitl.ts ConfirmModalArgs.account).
-        "account": view.get("new_default_account"),
         "current_default_account": view.get("current_default_account"),
         "new_default_account": view.get("new_default_account"),
         "expires_at": view.get("expires_at"),

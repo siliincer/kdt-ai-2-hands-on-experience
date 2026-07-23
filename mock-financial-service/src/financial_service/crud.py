@@ -8,6 +8,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .models import (
+    BANK_NAME,
     Account,
     AuditLog,
     Card,
@@ -250,6 +251,13 @@ def transfer(
         if payload.sender_account_number == payload.receiver_account_number:
             raise ValidationError("SELF_TRANSFER", "Sender and receiver must differ")
 
+        # 이 mock 서비스는 단일 은행만 표현 — receiver_bank_name이 그 은행이 아니면 거절
+        if payload.receiver_bank_name != BANK_NAME:
+            raise ValidationError(
+                "BANK_NOT_SUPPORTED",
+                f"Unsupported bank: {payload.receiver_bank_name} (only {BANK_NAME})",
+            )
+
         sender = get_account_by_number(db, payload.sender_account_number)
         if sender is None:
             raise NotFoundError("ACCOUNT_NOT_FOUND", f"Sender {payload.sender_account_number} not found")
@@ -259,16 +267,6 @@ def transfer(
             raise NotFoundError(
                 "ACCOUNT_NOT_FOUND",
                 f"Receiver {payload.receiver_account_number} not found",
-            )
-
-        # 이 mock 서비스는 원장이 하나뿐인 단일 은행 시스템이지만, 타행 송금 UX는
-        # 다은행을 이 한 은행처럼 처리한다 — 하드코딩된 은행명 상수 하나만 허용하는 게
-        # 아니라, 받는 계좌에 실제 등록된 은행명과 일치하는지만 검사한다.
-        if payload.receiver_bank_name != receiver.bank_name:
-            raise ValidationError(
-                "RECEIVER_BANK_MISMATCH",
-                f"Receiver account {payload.receiver_account_number} is registered under "
-                f"'{receiver.bank_name}', not '{payload.receiver_bank_name}'",
             )
 
         sender_id = sender.account_id

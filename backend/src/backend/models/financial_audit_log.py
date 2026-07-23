@@ -28,9 +28,7 @@ class FinancialAuditLog(Base):
     )
     # confirmation_created / setting_change_completed 등(계약 25.2)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    # Agent 합성 request_id("req_start_"+32자hex+":"+step_id)가 64자를 넘는 사례가
-    # 있어(예: "prepare_account_alias_change", "prepare_external_transfer") 여유있게 둔다.
-    request_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # 감사 기록은 Context/Confirmation 정리와 무관하게 남아야 하므로 FK 를 걸지 않는다.
     execution_context_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     chat_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

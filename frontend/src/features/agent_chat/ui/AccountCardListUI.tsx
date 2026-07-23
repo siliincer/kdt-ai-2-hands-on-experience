@@ -27,22 +27,16 @@ export const AccountCardListUI: ToolCallMessagePartComponent = ({ args }) => {
   const a = (args ?? {}) as AccountCardListArgs;
   const accounts = a.accounts ?? [];
   const inputRequestId = a.inputRequestId;
-  const multiple = a.multiple ?? false;
 
   const [selected, setSelected] = useState<string[]>([]);
   const [outcome, setOutcome] = useState<'selected' | 'cancelled' | null>(null);
 
-  const toggle = (accountId: string) => {
-    if (!multiple) {
-      setSelected([accountId]);
-      return;
-    }
+  const toggle = (accountId: string) =>
     setSelected((prev) =>
       prev.includes(accountId)
         ? prev.filter((id) => id !== accountId)
         : [...prev, accountId],
     );
-  };
 
   const respond = (next: 'selected' | 'cancelled') => {
     if (!inputRequestId || outcome) return;
