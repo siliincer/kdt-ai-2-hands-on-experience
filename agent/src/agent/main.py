@@ -15,8 +15,6 @@ from fastapi import FastAPI
 from agent.application_runtime import create_agent_runtime_resources
 from agent.internal_execution_api import router as internal_execution_router
 from agent.runtime import ExecutionRuntime
-from agent.schemas import ChatRequest, ChatResponse
-from agent.service import run_chat
 
 
 class RuntimeResources(Protocol):
@@ -58,13 +56,6 @@ def create_app(
         """컨테이너와 게이트웨이가 Runtime 준비 상태를 확인한다."""
 
         return {"status": "ok"}
-
-    @application.post("/chat", response_model=ChatResponse)
-    def chat(request: ChatRequest) -> ChatResponse:
-        """기존 채팅 API 호환 경로를 처리한다."""
-
-        result = run_chat(request.message, request.user_id, request.thread_id)
-        return ChatResponse(**result)
 
     return application
 
