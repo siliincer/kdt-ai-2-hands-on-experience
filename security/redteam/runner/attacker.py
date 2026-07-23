@@ -275,9 +275,10 @@ class OllamaAttackGenerator:
                         str,
                     )
                 }
-                used_variations.update(
-                    item["variation"] for item in rejected_candidates if isinstance(item.get("variation"), str)
-                )
+                for item in rejected_candidates:
+                    rejected_variation = item.get("variation")
+                    if isinstance(rejected_variation, str):
+                        used_variations.add(rejected_variation)
 
                 variation_schema = self._variation_schema(body)
                 all_variations = variation_schema.get("enum")
