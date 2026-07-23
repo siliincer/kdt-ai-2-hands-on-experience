@@ -37,7 +37,7 @@ def test_all_sections_are_lists(fixtures):
 
 
 def test_accounts_count(fixtures):
-    assert len(fixtures["accounts"]) == 5
+    assert len(fixtures["accounts"]) == 7
 
 
 def test_accounts_required_fields(fixtures):
@@ -185,7 +185,7 @@ def test_to_json_parses_to_correct_structure():
 
     parsed = json.loads(to_json())
     assert set(parsed.keys()) == {"accounts", "cards", "card_products"}
-    assert len(parsed["accounts"]) == 5
+    assert len(parsed["accounts"]) == 7
     assert 5 <= len(parsed["cards"]) <= 10
     assert len(parsed["card_products"]) == 20
 

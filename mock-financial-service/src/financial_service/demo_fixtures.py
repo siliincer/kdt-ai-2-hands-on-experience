@@ -122,7 +122,7 @@ def load_into_db(engine) -> dict:
         n_cards = session.query(Card).count()
         n_products = session.query(CardProduct).count()
 
-        assert n_accounts == 5, f"Expected 5 Accounts after load, got {n_accounts}"
+        assert n_accounts == 7, f"Expected 7 Accounts after load, got {n_accounts}"
         assert 5 <= n_cards <= 10, f"Expected 5-10 Cards after load, got {n_cards}"
         assert n_products == 20, f"Expected 20 CardProducts after load, got {n_products}"
 

@@ -166,9 +166,9 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         n_products = session.query(CardProduct).count()
 
         # Count checks
-        assert n_accounts == 5, f"Expected 5 user Accounts, got {n_accounts}"
-        assert len(accounts) == 5 + 7 + 1, (
-            f"Expected 13 total Accounts (5 user + 7 biller + 1 external-source), got {len(accounts)}"
+        assert n_accounts == 7, f"Expected 7 user Accounts, got {n_accounts}"
+        assert len(accounts) == 7 + 7 + 1, (
+            f"Expected 15 total Accounts (7 user + 7 biller + 1 external-source), got {len(accounts)}"
         )
         assert 5 <= n_cards <= 10, f"Expected 5-10 Cards, got {n_cards}"
         assert n_products == 20, f"Expected 20 CardProducts, got {n_products}"

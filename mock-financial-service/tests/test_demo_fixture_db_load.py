@@ -58,7 +58,7 @@ def load_result(fresh_engine):
 
 def test_load_into_db_account_count(load_result):
     _, summary = load_result
-    assert summary["accounts"] == 5
+    assert summary["accounts"] == 7
 
 
 def test_load_into_db_card_count_in_range(load_result):
@@ -125,7 +125,7 @@ def test_json_fixture_parses_and_counts_match():
     from financial_service.demo_fixtures import to_json
 
     data = json.loads(to_json())
-    assert len(data["accounts"]) == 5
+    assert len(data["accounts"]) == 7
     assert 5 <= len(data["cards"]) <= 10
     assert len(data["card_products"]) == 20
 

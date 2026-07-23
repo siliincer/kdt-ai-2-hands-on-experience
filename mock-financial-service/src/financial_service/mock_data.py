@@ -1,7 +1,7 @@
 """Shared mock dataset — Accounts, Cards, CardProduct catalog, and 4 months of
 persona-driven transaction history.
 
-5 Accounts, 8 Cards (1-2 per Account, each FK-linked to a real Account).
+7 Accounts, 10 Cards (1-2 per Account, each FK-linked to a real Account).
 20 CardProduct rows (4 per each of 5 categories), standalone — no FK to Card.
 7 biller Accounts + 1 external-source Account (payroll/peer-transfer origin).
 ~100 Transactions / ~200 LedgerEntries / ~400 CardLedgerEntries spanning
@@ -27,7 +27,7 @@ from .models import (
 )
 
 # ── Accounts ──────────────────────────────────────────────────────────────────
-# 5 rows, fixed UUIDs
+# 7 rows, fixed UUIDs (5 persona mains + 김지훈 부계좌 2)
 
 MOCK_ACCOUNTS: list[dict] = [
     {
@@ -35,6 +35,24 @@ MOCK_ACCOUNTS: list[dict] = [
         "owner": "김지훈",
         "alias": "김지훈 생활비통장",
         "account_number": "110-001-000001",
+        "currency": "KRW",
+    },
+    # 김지훈 부계좌 2종 — 다계좌 선택(account_card_list) UX 및 seed_qa_personas 페르소나와
+    # 정합을 맞추기 위한 계좌. 거래 이력은 없어 잔액 0으로 시작한다(선택 UX 확인용).
+    {
+        "account_id": "acct-0001-0000-0000-000000000011",
+        "owner": "김지훈",
+        "alias": "김지훈 신한 부계좌",
+        "account_number": "110-001-000011",
+        "bank_name": "신한은행",
+        "currency": "KRW",
+    },
+    {
+        "account_id": "acct-0001-0000-0000-000000000012",
+        "owner": "김지훈",
+        "alias": "김지훈 하나 부계좌",
+        "account_number": "110-001-000012",
+        "bank_name": "하나은행",
         "currency": "KRW",
     },
     {
@@ -68,7 +86,7 @@ MOCK_ACCOUNTS: list[dict] = [
 ]
 
 # ── Cards ─────────────────────────────────────────────────────────────────────
-# 8 rows total, 1-2 per Account, each FK → MOCK_ACCOUNTS[*].account_id
+# 10 rows total, 1-2 per Account, each FK → MOCK_ACCOUNTS[*].account_id
 
 MOCK_CARDS: list[dict] = [
     # ACC-001: 2 cards
@@ -82,6 +100,19 @@ MOCK_CARDS: list[dict] = [
         "card_id": "card-0002-0000-0000-000000000002",
         "account_id": "acct-0001-0000-0000-000000000001",
         "limit": 500_000,
+        "currency": "KRW",
+    },
+    # ACC-001 부계좌: 각 1 card (계좌당 1-2장 불변식 충족)
+    {
+        "card_id": "card-0009-0000-0000-000000000009",
+        "account_id": "acct-0001-0000-0000-000000000011",
+        "limit": 300_000,
+        "currency": "KRW",
+    },
+    {
+        "card_id": "card-0010-0000-0000-000000000010",
+        "account_id": "acct-0001-0000-0000-000000000012",
+        "limit": 300_000,
         "currency": "KRW",
     },
     # ACC-002: 1 card
@@ -640,8 +671,8 @@ def validate_dataset() -> list[str]:
         errors.append("MOCK_CARD_PRODUCTS: duplicate card_product_id values found")
 
     # ── Count constraints ─────────────────────────────────────────────────────
-    if len(MOCK_ACCOUNTS) != 5:
-        errors.append(f"Expected 5 Accounts, got {len(MOCK_ACCOUNTS)}")
+    if len(MOCK_ACCOUNTS) != 7:
+        errors.append(f"Expected 7 Accounts, got {len(MOCK_ACCOUNTS)}")
 
     if not (5 <= len(MOCK_CARDS) <= 10):
         errors.append(f"Expected 5-10 Cards, got {len(MOCK_CARDS)}")
@@ -804,6 +835,11 @@ def _build_transaction_dataset() -> tuple[list[dict], list[dict], list[dict], di
     # 거래로 명시적으로 기록해 둔다(외부입금원 acct-b099 발신, SALARY/FRIEND와 동일 취급).
     for _acct, _opening_amount in _STARTING_BALANCE.items():
         add_transfer(date(2026, 3, 10), "OPENING", _acct, _opening_amount)
+
+    # 루프 소진 후의 1회성 특별소비(여행/경조사)가 마지막 반복의 rnd 를 재사용하므로,
+    # _MONTH_WINDOWS 가 비어도 미바인딩이 되지 않도록 미리 초기화한다(정상 데이터에선
+    # 첫 반복이 곧바로 덮어써서 생성 결과는 동일).
+    rnd = random.Random("mock-data-special")
 
     # ── 김지훈 (acct-0001) — 안정형 직장인, salary day 25 ─────────────────────
     for y, m, first, last in _MONTH_WINDOWS:
