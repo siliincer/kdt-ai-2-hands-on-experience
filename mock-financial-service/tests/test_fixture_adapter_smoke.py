@@ -15,7 +15,7 @@ import json
 
 
 def test_accounts_fixture_count(accounts):
-    assert len(accounts) == 5, f"Expected 5 accounts, got {len(accounts)}"
+    assert len(accounts) == 7, f"Expected 7 accounts, got {len(accounts)}"
 
 
 def test_accounts_fixture_required_fields(accounts):

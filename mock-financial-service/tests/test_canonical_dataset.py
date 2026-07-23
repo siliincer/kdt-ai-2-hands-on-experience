@@ -69,7 +69,7 @@ def test_card_products_have_no_account_id_or_card_id_field():
 def test_account_count_is_five():
     from financial_service.mock_data import MOCK_ACCOUNTS
 
-    assert len(MOCK_ACCOUNTS) == 5, f"Expected 5 Accounts, got {len(MOCK_ACCOUNTS)}"
+    assert len(MOCK_ACCOUNTS) == 7, f"Expected 7 Accounts, got {len(MOCK_ACCOUNTS)}"
 
 
 def test_card_count_in_range():
@@ -93,7 +93,7 @@ def test_make_account_rows_returns_account_orm():
     from financial_service.models import Account
 
     rows = make_account_rows()
-    assert len(rows) == 5
+    assert len(rows) == 7
     assert all(isinstance(r, Account) for r in rows)
 
 
