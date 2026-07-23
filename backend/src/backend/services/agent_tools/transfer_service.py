@@ -58,7 +58,6 @@ from .. import auth_context_service, confirmation_service, financial_audit_servi
 from ..financial import (
     FinancialServiceError,
     get_financial_client,
-    is_financial_http_mode,
 )
 from .balance_reader import read_available_balance
 from .bank_resolver import resolve_owned_account_bank
@@ -74,9 +73,7 @@ _OP_INTERNAL_PREPARE = "internal_transfer_prepare"
 _OP_INTERNAL_EXECUTE = "internal_transfer_execute"
 
 
-def _correction(
-    reason: str, targets: list[str], title: str
-) -> tuple[str, CorrectionView]:
+def _correction(reason: str, targets: list[str], title: str) -> tuple[str, CorrectionView]:
     return reason, CorrectionView(title=title, allowed_change_targets=targets)
 
 
@@ -93,30 +90,22 @@ def _invalid_account_id() -> AgentToolError:
     return AgentToolError.invalid_request("account_id 형식이 올바르지 않습니다.")
 
 
-async def _load_owned(
-    session: AsyncSession, context: ResolvedExecutionContext, account_id: str
-) -> Account:
-    account = await get_owned_account(
-        session, context.user_id, parse_uuid(account_id, _invalid_account_id)
-    )
+async def _load_owned(session: AsyncSession, context: ResolvedExecutionContext, account_id: str) -> Account:
+    account = await get_owned_account(session, context.user_id, parse_uuid(account_id, _invalid_account_id))
     if account is None:
         # 소유하지 않은 계좌는 존재 여부를 노출하지 않고 거부한다.
         raise AgentToolError.account_access_denied()
     return account
 
 
-async def _daily_transferred_amount(
-    session: AsyncSession, context: ResolvedExecutionContext
-) -> int:
+async def _daily_transferred_amount(session: AsyncSession, context: ResolvedExecutionContext) -> int:
     """사용자 타임존 기준 오늘 실행된 이체 금액 합계(일일 한도 산정).
 
     금액 원천은 EXECUTED Confirmation 의 `fixed_data.amount` 다.
     TODO(계정계): 계정계가 사용자 기준 일일 이체 합계를 제공하면 그쪽으로 위임한다.
     """
     tz = resolve_tz(context.timezone)
-    today_start_local = datetime.now(tz).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    today_start_local = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
     since = today_start_local.astimezone(timezone.utc)
     executed = await get_executed_transfers_since(session, context.user_id, since)
     return sum(int(c.fixed_data.get("amount", 0)) for c in executed)
@@ -149,9 +138,7 @@ async def _evaluate_internal_transfer(
             "다른 입금 계좌를 선택해 주세요.",
         )
     if amount > MAX_SINGLE_TRANSFER_KRW:
-        return _correction(
-            TransferReason.LIMIT_EXCEEDED, ["amount"], "1회 이체 한도를 초과했습니다."
-        )
+        return _correction(TransferReason.LIMIT_EXCEEDED, ["amount"], "1회 이체 한도를 초과했습니다.")
 
     total_debit = amount + TRANSFER_FEE_KRW
     available = await read_available_balance(from_account)
@@ -164,9 +151,7 @@ async def _evaluate_internal_transfer(
 
     already = await _daily_transferred_amount(session, context)
     if already + amount > MAX_DAILY_TRANSFER_KRW:
-        return _correction(
-            TransferReason.LIMIT_EXCEEDED, ["amount"], "일일 이체 한도를 초과했습니다."
-        )
+        return _correction(TransferReason.LIMIT_EXCEEDED, ["amount"], "일일 이체 한도를 초과했습니다.")
     return None
 
 
@@ -182,9 +167,7 @@ async def prepare_internal_transfer(
     from_account = await _load_owned(session, context, req.from_account_id)
     to_account = await _load_owned(session, context, req.to_account_id)
 
-    violation = await _evaluate_internal_transfer(
-        session, context, from_account, to_account, req.amount
-    )
+    violation = await _evaluate_internal_transfer(session, context, from_account, to_account, req.amount)
     if violation is not None:
         reason, correction_view = violation
         return InternalTransferPrepareData(
@@ -242,14 +225,12 @@ def _ledger_idempotency_key(confirmation: Confirmation) -> str:
     return f"internal_transfer_execute:{confirmation.id}"
 
 
-async def _move_ledger(
-    from_account: Account, to_account: Account, amount: int, idempotency_key: str
-) -> str:
-    """계정계 원장을 이동시키고 transaction_id 를 반환한다."""
-    if not is_financial_http_mode():
-        # 실제 원장은 계정계에만 있다. mock 모드에서는 이체를 시뮬레이션하지 않는다
-        # (잔액을 실제로 옮기지 않은 채 completed 로 보고하면 감사 기록이 거짓이 된다).
-        raise AgentToolError.backend_temporary_error()
+async def _move_ledger(from_account: Account, to_account: Account, amount: int, idempotency_key: str) -> str:
+    """계정계 원장을 이동시키고 transaction_id 를 반환한다.
+
+    실제 원장은 계정계에만 있으므로 반드시 계정계 송금 API 로 이동시킨다(mock 일원화,
+    작업 B). 잔액을 옮기지 않은 채 completed 로 보고하면 감사 기록이 거짓이 된다.
+    """
     try:
         result = await get_financial_client().transfer(
             sender_account_number=from_account.account_number,
@@ -273,9 +254,7 @@ async def execute_internal_transfer(
     confirmation = await confirmation_service.load_for_execute(
         session, context, req.confirmation_id, ConfirmationOperation.INTERNAL_TRANSFER
     )
-    auth_context = await auth_context_service.load_verified(
-        session, context, req.auth_context_id, confirmation
-    )
+    auth_context = await auth_context_service.load_verified(session, context, req.auth_context_id, confirmation)
     # Confirmation 은 유효하고 인증만 만료됨 → 재인증(계약 18.5).
     if auth_context is None:
         return TransferExecuteData(
@@ -285,12 +264,8 @@ async def execute_internal_transfer(
 
     fixed = confirmation.fixed_data
     amount = int(fixed["amount"])
-    from_account = await get_owned_account(
-        session, context.user_id, UUID(str(fixed["from_account_id"]))
-    )
-    to_account = await get_owned_account(
-        session, context.user_id, UUID(str(fixed["to_account_id"]))
-    )
+    from_account = await get_owned_account(session, context.user_id, UUID(str(fixed["from_account_id"])))
+    to_account = await get_owned_account(session, context.user_id, UUID(str(fixed["to_account_id"])))
     if from_account is None or to_account is None:
         await confirmation_service.invalidate(session, confirmation)
         await auth_context_service.invalidate(session, auth_context)
@@ -304,9 +279,7 @@ async def execute_internal_transfer(
         )
 
     # 승인 이후 잔액·한도·계좌 상태가 바뀌었을 수 있어 실행 직전에 다시 판정한다.
-    violation = await _evaluate_internal_transfer(
-        session, context, from_account, to_account, amount
-    )
+    violation = await _evaluate_internal_transfer(session, context, from_account, to_account, amount)
     if violation is not None:
         reason, correction_view = violation
         await confirmation_service.invalidate(session, confirmation)
@@ -319,9 +292,7 @@ async def execute_internal_transfer(
 
     # 원장 이동은 계정계 결정적 멱등키로 safe replay 된다. Confirmation 전이는 조건부
     # UPDATE 로 원자화(C2): 동시 실행에서 진 요청은 중복 Audit 을 남기지 않는다.
-    transaction_id = await _move_ledger(
-        from_account, to_account, amount, _ledger_idempotency_key(confirmation)
-    )
+    transaction_id = await _move_ledger(from_account, to_account, amount, _ledger_idempotency_key(confirmation))
     won = await confirmation_service.mark_executed(session, confirmation)
     completed_at = datetime.now(timezone.utc)
     if won:
@@ -364,9 +335,7 @@ async def _evaluate_withdrawal(
             "다른 출금 계좌를 선택해 주세요.",
         )
     if amount > MAX_SINGLE_TRANSFER_KRW:
-        return _correction(
-            TransferReason.LIMIT_EXCEEDED, ["amount"], "1회 이체 한도를 초과했습니다."
-        )
+        return _correction(TransferReason.LIMIT_EXCEEDED, ["amount"], "1회 이체 한도를 초과했습니다.")
     available = await read_available_balance(from_account)
     if available < amount + TRANSFER_FEE_KRW:
         return _correction(
@@ -376,9 +345,7 @@ async def _evaluate_withdrawal(
         )
     already = await _daily_transferred_amount(session, context)
     if already + amount > MAX_DAILY_TRANSFER_KRW:
-        return _correction(
-            TransferReason.LIMIT_EXCEEDED, ["amount"], "일일 이체 한도를 초과했습니다."
-        )
+        return _correction(TransferReason.LIMIT_EXCEEDED, ["amount"], "일일 이체 한도를 초과했습니다.")
     return None
 
 
@@ -400,9 +367,7 @@ async def _resolve_existing_recipient(
     `to_recipient_id` 는 본인의 실행 완료된 타인송금 이력에 등장한 계좌만 허용한다
     (임의 계좌 열거 차단). 이력에 없으면 `RECIPIENT_NOT_FOUND`(404).
     """
-    recipient_account_id = parse_uuid(
-        to_recipient_id, AgentToolError.recipient_not_found
-    )
+    recipient_account_id = parse_uuid(to_recipient_id, AgentToolError.recipient_not_found)
     executed = await get_executed_external_transfers(session, context.user_id)
     name: str | None = None
     for confirmation in executed:
@@ -424,9 +389,7 @@ async def _resolve_candidate_recipient(
     to_recipient_candidate_id: str,
 ) -> tuple[Account, str, object]:
     """신규 검증 수취인 후보를 검증한다(계약 14.3). 반환: (계좌, 이름, 후보행)."""
-    candidate_id = parse_uuid(
-        to_recipient_candidate_id, AgentToolError.recipient_not_found
-    )
+    candidate_id = parse_uuid(to_recipient_candidate_id, AgentToolError.recipient_not_found)
 
     candidate = await get_recipient_candidate_by_id(session, candidate_id)
     if candidate is None or candidate.user_id != context.user_id:
@@ -457,17 +420,13 @@ async def prepare_external_transfer(
 
     candidate = None
     if req.to_recipient_id is not None:
-        recipient_account, recipient_name = await _resolve_existing_recipient(
-            session, context, req.to_recipient_id
-        )
+        recipient_account, recipient_name = await _resolve_existing_recipient(session, context, req.to_recipient_id)
     else:
         (
             recipient_account,
             recipient_name,
             candidate,
-        ) = await _resolve_candidate_recipient(
-            session, context, str(req.to_recipient_candidate_id)
-        )
+        ) = await _resolve_candidate_recipient(session, context, str(req.to_recipient_candidate_id))
 
     # 수취 계좌가 비활성이거나 본인 소유면 수취인 재선택으로 유도한다.
     if not recipient_account.active or recipient_account.user_id == context.user_id:
@@ -528,9 +487,7 @@ async def prepare_external_transfer(
             recipient=RecipientRef(
                 name=mask_person_name(recipient_name),
                 bank_name=resolve_owned_account_bank(recipient_account),
-                masked_account_number=mask_account_number(
-                    recipient_account.account_number
-                ),
+                masked_account_number=mask_account_number(recipient_account.account_number),
             ),
             amount=req.amount,
             fee=TRANSFER_FEE_KRW,
@@ -562,9 +519,7 @@ async def execute_external_transfer(
     confirmation = await confirmation_service.load_for_execute(
         session, context, req.confirmation_id, ConfirmationOperation.EXTERNAL_TRANSFER
     )
-    auth_context = await auth_context_service.load_verified(
-        session, context, req.auth_context_id, confirmation
-    )
+    auth_context = await auth_context_service.load_verified(session, context, req.auth_context_id, confirmation)
     # Confirmation 은 유효하고 인증만 만료됨 → 재인증(계약 16.5).
     if auth_context is None:
         return TransferExecuteData(
@@ -574,12 +529,8 @@ async def execute_external_transfer(
 
     fixed = confirmation.fixed_data
     amount = int(fixed["amount"])
-    from_account = await get_owned_account(
-        session, context.user_id, UUID(str(fixed["from_account_id"]))
-    )
-    recipient_account = await get_account_by_id(
-        session, UUID(str(fixed["recipient_account_id"]))
-    )
+    from_account = await get_owned_account(session, context.user_id, UUID(str(fixed["from_account_id"])))
+    recipient_account = await get_account_by_id(session, UUID(str(fixed["recipient_account_id"])))
 
     async def _invalidate_pair() -> None:
         await confirmation_service.invalidate(session, confirmation)
@@ -596,11 +547,7 @@ async def execute_external_transfer(
             ),
         )
     # 승인 이후 수취인 상태가 바뀌었을 수 있다(계약 16.7 "수취인 현재 상태").
-    if (
-        recipient_account is None
-        or not recipient_account.active
-        or recipient_account.user_id == context.user_id
-    ):
+    if recipient_account is None or not recipient_account.active or recipient_account.user_id == context.user_id:
         await _invalidate_pair()
         reason, correction_view = _recipient_correction()
         return TransferExecuteData(
@@ -621,9 +568,7 @@ async def execute_external_transfer(
 
     # C2: 원장은 계정계 멱등키로, Confirmation 전이는 조건부 UPDATE 로 이중 실행 방지.
     ledger_key = f"{_OP_EXTERNAL_EXECUTE}:{confirmation.id}"
-    transaction_id = await _move_ledger(
-        from_account, recipient_account, amount, ledger_key
-    )
+    transaction_id = await _move_ledger(from_account, recipient_account, amount, ledger_key)
     won = await confirmation_service.mark_executed(session, confirmation)
     completed_at = datetime.now(timezone.utc)
     if won:

@@ -29,19 +29,13 @@ class ExecutionContextStatus(PyEnum):
 class ExecutionContext(Base):
     __tablename__ = "execution_contexts"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     chat_session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False, index=True
     )
     # LangGraph Checkpointer 키. Agent 실행 시작 응답으로 돌아오므로 발급 시점엔 없다.
-    agent_thread_id: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, index=True
-    )
+    agent_thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # 예: ["account:read", "transfer:request"]. 엔드포인트별 필요 스코프 검증에 사용.
     scopes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     status: Mapped[ExecutionContextStatus] = mapped_column(
@@ -50,15 +44,9 @@ class ExecutionContext(Base):
         default=ExecutionContextStatus.ACTIVE,
     )
     # 기간 합계 등에서 종료일 경계를 변환할 때 기준이 되는 타임존(계약 12장).
-    timezone: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="Asia/Seoul"
-    )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Seoul")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 서비스는 user_id/chat_session_id 컬럼만 쓰므로 관계를 자동 로딩하지 않는다(R4).
     # 매 Agent Tool 호출의 resolve_context 에서 불필요한 +2 SELECT 를 제거하고, 실수로

@@ -39,18 +39,14 @@ class ConfirmationOperation(PyEnum):
 class Confirmation(Base):
     __tablename__ = "confirmations"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     execution_context_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("execution_contexts.id"),
         nullable=False,
         index=True,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     operation: Mapped[ConfirmationOperation] = mapped_column(
         Enum(ConfirmationOperation, name="confirmation_operation"), nullable=False
     )
@@ -63,18 +59,10 @@ class Confirmation(Base):
     # Prepare 시점에 고정한 승인 대상 데이터. Execute 는 요청 본문이 아니라
     # 이 값을 신뢰해 실행한다(Agent 가 Execute 에 업무 값을 다시 보내지 않음).
     fixed_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    approved_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    executed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # 서비스는 컬럼(user_id 등)만 사용 → 자동 로딩 안 함(R4, silent N+1 방지).
     user: Mapped["User"] = relationship(lazy="raise")

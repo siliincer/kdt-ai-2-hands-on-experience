@@ -127,9 +127,7 @@ class WorkflowTestbed:
     async def state(self, agent_thread_id: str) -> dict[str, Any]:
         """Checkpoint에 저장된 현재 State를 복사해 반환한다."""
 
-        snapshot = await self.graph.aget_state(
-            {"configurable": {"thread_id": agent_thread_id}}
-        )
+        snapshot = await self.graph.aget_state({"configurable": {"thread_id": agent_thread_id}})
         return dict(snapshot.values)
 
     def request_timeline(
@@ -139,10 +137,7 @@ class WorkflowTestbed:
     ) -> list[dict[str, Any]]:
         """인증 Header를 제외한 Tool과 Webhook 호출 순서를 반환한다."""
 
-        return [
-            _request_summary(request, include_payload=include_payload)
-            for request in self.requests
-        ]
+        return [_request_summary(request, include_payload=include_payload) for request in self.requests]
 
     def webhook_events(self, *, include_payload: bool = False) -> list[dict[str, Any]]:
         """Webhook 호출만 안전한 요약 또는 전체 Payload로 반환한다."""

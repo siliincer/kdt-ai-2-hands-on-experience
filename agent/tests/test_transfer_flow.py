@@ -94,9 +94,7 @@ def test_insufficient_balance_reselects_account(graph):
     """잔액 부족 → 계좌 재선택 → 신규 수취인 경고 → 진행."""
     config = _config()
 
-    r = graph.invoke(
-        _new_state("생활비통장에서 이영희한테 50만원 보내줘", "user_001"), config
-    )
+    r = graph.invoke(_new_state("생활비통장에서 이영희한테 50만원 보내줘", "user_001"), config)
     # 생활비통장 430,000 < 500,000 → 재선택 요청
     assert "부족" in _prompt(r)
 

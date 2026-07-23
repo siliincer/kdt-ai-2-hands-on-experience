@@ -12,6 +12,7 @@ from uuid import UUID
 import redis.asyncio as aioredis
 
 from ..core.load_environment_var import settings
+from ..db.redis import stream_pool
 from ..schemas.sse import AgentStreamEvent, AgentStreamEventType
 
 AGENT_STREAM_KEY_PREFIX = "agent:stream:"
@@ -63,3 +64,24 @@ async def publish_agent_event(
     )
     await redis_stream.expire(key, settings.AGENT_STREAM_TTL_SECONDS)
     return str(message_id)
+
+
+async def publish_cancellation_done(
+    chat_session_id: UUID,
+    content: str = "요청을 취소했어요.",
+) -> str:
+    """취소 시 Backend 가 terminal `done` 을 스트림에 직접 발행해 SSE 를 닫는다.
+
+    Agent 는 취소(route_key=cancelled) 시 완료 `done` 을 보내지 않는 계약(의도된 설계,
+    `runtime.execution._report_completion`)이므로, **취소 종료는 Backend 책임**이다.
+    pending_input 소비/Confirmation 무효화로 재제출은 이미 차단되고, 이 done 으로 relay 가
+    `[DONE]` sentinel 을 보내 스트림을 닫는다.
+
+    이 경로는 요청 스코프(라우터 DI) 밖이라 `get_redis_stream` 주입을 못 받으므로 공유
+    `stream_pool` 에서 클라이언트를 빌린다. 커맨드마다 커넥션을 풀에서 빌렸다 반환하고,
+    `async with` 로 종료 시 클라이언트를 풀에 반납한다(소켓 정리는 앱 종료 시
+    `close_redis_pools()` 가 담당) — 커넥션 누수 없음.
+    """
+    event = AgentStreamEvent(event_type=AgentStreamEventType.DONE, content=content)
+    async with aioredis.Redis(connection_pool=stream_pool) as redis:
+        return await publish_agent_event(redis, chat_session_id, event)

@@ -37,8 +37,7 @@ class ContractToolRegistrationError(RuntimeError):
             for workflow_id, contract_ids in sorted(missing_by_workflow.items())
         }
         details = "; ".join(
-            f"{workflow_id}={','.join(contract_ids)}"
-            for workflow_id, contract_ids in normalized.items()
+            f"{workflow_id}={','.join(contract_ids)}" for workflow_id, contract_ids in normalized.items()
         )
         super().__init__("등록되지 않은 Agent Tool 계약이 있습니다: " + details)
         self.missing_by_workflow = normalized

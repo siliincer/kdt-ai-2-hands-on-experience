@@ -62,12 +62,8 @@ async def resolve_recipient(
             usable.append(account_id)
 
     if len(usable) == 1:
-        return RecipientResolveData(
-            outcome=ResolveOutcome.RESOLVED, to_recipient_id=usable[0]
-        )
+        return RecipientResolveData(outcome=ResolveOutcome.RESOLVED, to_recipient_id=usable[0])
     return RecipientResolveData(
         outcome=ResolveOutcome.SELECTION_REQUIRED,
-        selection_reason=(
-            SelectionReason.MULTIPLE_MATCHES if usable else SelectionReason.NO_MATCH
-        ),
+        selection_reason=(SelectionReason.MULTIPLE_MATCHES if usable else SelectionReason.NO_MATCH),
     )

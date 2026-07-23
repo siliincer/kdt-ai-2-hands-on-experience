@@ -71,11 +71,7 @@ def test_ollama_probe_opener_has_no_proxy_handler():
 def test_managed_agent_preserves_ipv6_loopback_target():
     root = Path(__file__).resolve().parents[1]
     config = load_config(root / "config.example.yaml")
-    config = config.model_copy(
-        update={
-            "target": config.target.model_copy(update={"base_url": "http://[::1]:8001"})
-        }
-    )
+    config = config.model_copy(update={"target": config.target.model_copy(update={"base_url": "http://[::1]:8001"})})
 
     assert managed._connection_target(config) == ("::1", 8001)
 
@@ -84,13 +80,7 @@ def test_managed_agent_preserves_ipv6_loopback_target():
 def test_managed_agent_accepts_full_ipv4_loopback_range(host):
     root = Path(__file__).resolve().parents[1]
     config = load_config(root / "config.example.yaml")
-    config = config.model_copy(
-        update={
-            "target": config.target.model_copy(
-                update={"base_url": f"http://{host}:8001"}
-            )
-        }
-    )
+    config = config.model_copy(update={"target": config.target.model_copy(update={"base_url": f"http://{host}:8001"})})
 
     assert managed._connection_target(config) == (host, 8001)
 
@@ -297,11 +287,7 @@ def test_ollama_preflight_requires_configured_model(monkeypatch):
         type(
             "MissingModelOpener",
             (),
-            {
-                "open": lambda *args, **kwargs: _OllamaResponse(
-                    b'{"models":[{"name":"another-model:latest"}]}'
-                )
-            },
+            {"open": lambda *args, **kwargs: _OllamaResponse(b'{"models":[{"name":"another-model:latest"}]}')},
         )(),
     )
 
@@ -313,11 +299,7 @@ def test_ollama_preflight_rejects_response_over_byte_limit(monkeypatch):
     root = Path(__file__).resolve().parents[1]
     config = load_config(root / "config.example.yaml")
     config = config.model_copy(
-        update={
-            "adaptive_attack": config.adaptive_attack.model_copy(
-                update={"max_response_bytes": 1024}
-            )
-        }
+        update={"adaptive_attack": config.adaptive_attack.model_copy(update={"max_response_bytes": 1024})}
     )
     monkeypatch.setattr(
         managed,
@@ -413,11 +395,7 @@ def test_ollama_preflight_requires_model_digest(monkeypatch):
         type(
             "MissingDigestOpener",
             (),
-            {
-                "open": lambda *args, **kwargs: _OllamaResponse(
-                    _models_payload(digest=None)
-                )
-            },
+            {"open": lambda *args, **kwargs: _OllamaResponse(_models_payload(digest=None))},
         )(),
     )
 
@@ -459,9 +437,7 @@ def test_ollama_preflight_rejects_non_object_probe(
     responses = iter(
         [
             _OllamaResponse(_models_payload()),
-            _OllamaResponse(
-                json.dumps({"response": json.dumps(structured_payload)}).encode("utf-8")
-            ),
+            _OllamaResponse(json.dumps({"response": json.dumps(structured_payload)}).encode("utf-8")),
         ]
     )
     monkeypatch.setattr(

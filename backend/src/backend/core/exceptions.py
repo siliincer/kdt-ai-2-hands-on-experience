@@ -56,9 +56,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
-async def request_validation_error_handler(
-    request: Request, exc: RequestValidationError
-):
+async def request_validation_error_handler(request: Request, exc: RequestValidationError):
     return error_response(
         status_code=422,
         code="REQUEST_VALIDATION_ERROR",
@@ -67,9 +65,7 @@ async def request_validation_error_handler(
     )
 
 
-async def response_validation_error_handler(
-    request: Request, exc: ResponseValidationError
-):
+async def response_validation_error_handler(request: Request, exc: ResponseValidationError):
     return error_response(
         status_code=500,
         code="RESPONSE_VALIDATION_ERROR",

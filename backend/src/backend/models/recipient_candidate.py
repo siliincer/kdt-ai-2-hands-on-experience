@@ -26,12 +26,8 @@ CANDIDATE_STATUS_CONSUMED = "consumed"
 class RecipientCandidate(Base):
     __tablename__ = "recipient_candidates"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     chat_session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False, index=True
     )
@@ -45,15 +41,9 @@ class RecipientCandidate(Base):
     bank_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
     masked_account_number: Mapped[str] = mapped_column(String(30), nullable=False)
     # verified(사용 가능) | consumed(Prepare 에서 소비됨)
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=CANDIDATE_STATUS_VERIFIED
-    )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=CANDIDATE_STATUS_VERIFIED)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # 서비스는 user_id 컬럼만 사용 → 자동 로딩 안 함(R4).
     user: Mapped["User"] = relationship(lazy="raise")

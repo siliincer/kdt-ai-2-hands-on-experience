@@ -32,13 +32,26 @@ def verify_agent_secret(x_agent_secret: str = Header(default="")) -> None:
         )
 
 
-def _parse_optional_uuid(raw: str | None) -> UUID | None:
-    if not raw:
-        return None
+def require_execution_context_id(
+    x_execution_context_id: str = Header(default=""),
+) -> UUID:
+    """X-Execution-Context-Id 를 필수로 검증한다(계약: 실 Agent 연동 시 필수 전환).
+
+    Agent Webhook 클라이언트는 모든 이벤트에 이 헤더를 붙이므로, 누락·형식오류는
+    잘못된 요청(400)으로 거절한다. need_input 의 pending_input 연결에도 이 값을 쓴다.
+    """
+    if not x_execution_context_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Execution-Context-Id 헤더가 필요합니다.",
+        )
     try:
-        return UUID(raw)
+        return UUID(x_execution_context_id)
     except ValueError:
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Execution-Context-Id 형식이 올바르지 않습니다.",
+        )
 
 
 @webhook_router.post(
@@ -51,7 +64,7 @@ async def receive_agent_webhook(
     payload: AgentWebhookPayload,
     redis_stream: aioredis.Redis = Depends(get_redis_stream),
     session: AsyncSession = Depends(get_db),
-    x_execution_context_id: str = Header(default=""),
+    execution_context_id: UUID = Depends(require_execution_context_id),
     # X-Request-Id: Agent 로그와 대조하기 위한 추적 id(중복 방지 용도가 아니다).
     request_id: str = Depends(bind_request_id),
 ):
@@ -67,7 +80,7 @@ async def receive_agent_webhook(
             session,
             chat_session_id=payload.chat_session_id,
             metadata=payload.metadata,
-            execution_context_id=_parse_optional_uuid(x_execution_context_id),
+            execution_context_id=execution_context_id,
         )
 
     event = AgentStreamEvent(
@@ -79,8 +92,7 @@ async def receive_agent_webhook(
     message_id = await publish_agent_event(redis_stream, payload.chat_session_id, event)
     # Agent 로그의 같은 request_id 로 어떤 Webhook 이벤트가 처리됐는지 대조한다.
     logger.info(
-        "agent webhook handled request_id=%s event_type=%s chat_session_id=%s "
-        "message_id=%s",
+        "agent webhook handled request_id=%s event_type=%s chat_session_id=%s message_id=%s",
         request_id,
         payload.event_type.value,
         payload.chat_session_id,

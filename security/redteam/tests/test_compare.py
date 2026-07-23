@@ -98,10 +98,7 @@ def test_comparison_runs_full_unique_matrix_and_writes_aggregate(
         and summary["review_required_rate"] == 1.0
         for summary in payload["combination_summaries"]
     )
-    summaries = {
-        (summary["role"], summary["model"]): summary
-        for summary in payload["model_summaries"]
-    }
+    summaries = {(summary["role"], summary["model"]): summary for summary in payload["model_summaries"]}
     target_summary = summaries[("target", "qwen3:4b")]
     assert target_summary["run_verdict_counts"] == {
         "ERROR": 0,

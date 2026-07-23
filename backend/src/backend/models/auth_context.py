@@ -37,15 +37,11 @@ class AuthContextStatus(PyEnum):
 class AuthContext(Base):
     __tablename__ = "auth_contexts"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     confirmation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmations.id"), nullable=False, index=True
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     status: Mapped[AuthContextStatus] = mapped_column(
         Enum(AuthContextStatus, name="auth_context_status"),
         nullable=False,
@@ -54,15 +50,9 @@ class AuthContext(Base):
     )
     # 예: ["biometric", "password"] — Frontend 인증 UI 가 제시할 수단.
     available_methods: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    verified_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # 서비스는 컬럼(user_id/confirmation_id)만 사용 → 자동 로딩 안 함(R4).
     user: Mapped["User"] = relationship(lazy="raise")

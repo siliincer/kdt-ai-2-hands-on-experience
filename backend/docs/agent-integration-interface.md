@@ -90,7 +90,7 @@ agent tool error request_id=req_execute_123 path=... code=CONFIRMATION_EXPIRED s
 | `status` | 진행 상태 문장 | `{step?}` |
 | `token` | assistant 텍스트 이어붙임 | — |
 | `tool_call` | Tool 진행 표시 | `{tool}` |
-| `component` | 읽기/결과 UI 렌더 | `{component, params}`(결과는 params 인라인, ADR C3) |
+| `component` | 읽기/결과 UI 렌더 | `{ui_contract_id, ui:{type,payload}}`(결과 데이터는 `ui.payload` 인라인, ADR C3) |
 | `need_input` | 일반 입력 대기 | `{input_request_id, ui_contract_id, ui:{type,payload}}` |
 | `need_approval` | 승인 대기 | top-level `approval_id`(=confirmation_id) + `{tool:"modal", args}` |
 | `authentication_required` | 추가 인증 대기 | `{auth_context_id, ui_contract_id, ui:{type,payload}}` |
@@ -101,6 +101,10 @@ agent tool error request_id=req_execute_123 path=... code=CONFIRMATION_EXPIRED s
 `pending_inputs` 행을 만든다(`register_pending_input_from_event`). Agent 는 `metadata.input_request_id`·
 `ui_contract_id`·`ui.type` 만 정확히 채우면 된다. `authentication_required` 의 `auth_context_id` 는
 Agent 가 `POST /agent-tools/auth-contexts`(아래 §3)로 먼저 발급받은 값을 넣는다.
+
+`component`(결과 카드)는 `need_input` 과 **같은 `ui:{type,payload}` 구조**를 쓴다(정본 = Agent 실제
+발행 형식). FE 는 `render_<ui.type>`(예: `ui.type="balance_result"` → `render_balance_result`)로 라우팅하고
+`ui.payload` 를 그대로 args 로 렌더한다(별도 fetch 없음, ADR C3). 과거 `{component, params}` 표기는 폐기.
 
 `done` 이후 같은 턴에 추가 이벤트를 보내지 않는다.
 

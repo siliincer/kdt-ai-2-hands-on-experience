@@ -32,13 +32,9 @@ PENDING_INPUT_STATUS_CANCELLED = "cancelled"
 class PendingInput(Base):
     __tablename__ = "pending_inputs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Agent 가 발급한 입력 요청 식별자. Resume 매칭 키다(계약 1.3).
-    input_request_id: Mapped[str] = mapped_column(
-        String(100), nullable=False, index=True
-    )
+    input_request_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     chat_session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False, index=True
     )
@@ -55,18 +51,10 @@ class PendingInput(Base):
     ui_contract_id: Mapped[str] = mapped_column(String(100), nullable=False)
     ui_type: Mapped[str] = mapped_column(String(50), nullable=False)
     # active(대기) | consumed(제출됨) | cancelled(새 대기로 대체·취소)
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=PENDING_INPUT_STATUS_ACTIVE, index=True
-    )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    consumed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=PENDING_INPUT_STATUS_ACTIVE, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # 서비스는 컬럼만 사용 → 자동 로딩 안 함(R4).
     chat_session: Mapped["ChatSession"] = relationship(lazy="raise")

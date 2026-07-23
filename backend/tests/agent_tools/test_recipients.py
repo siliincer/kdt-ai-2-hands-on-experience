@@ -83,9 +83,7 @@ async def test_name_is_normalized_before_match(monkeypatch):
     _patch_history(monkeypatch, [_executed(rcp, "홍 길동")])
     _patch_accounts(monkeypatch, {str(rcp): _active_account(rcp)})
 
-    data = await recipient_service.resolve_recipient(
-        _NO_SESSION, _ctx(), _req("홍길동 ")
-    )
+    data = await recipient_service.resolve_recipient(_NO_SESSION, _ctx(), _req("홍길동 "))
 
     assert data.outcome == "resolved"
 
@@ -155,9 +153,7 @@ async def test_inactive_recipient_excluded(monkeypatch):
         monkeypatch,
         [_executed(rcp_inactive, "홍길동"), _executed(rcp_missing, "홍길동")],
     )
-    _patch_accounts(
-        monkeypatch, {str(rcp_inactive): _active_account(rcp_inactive, active=False)}
-    )
+    _patch_accounts(monkeypatch, {str(rcp_inactive): _active_account(rcp_inactive, active=False)})
 
     data = await recipient_service.resolve_recipient(_NO_SESSION, _ctx(), _req())
 
@@ -169,9 +165,7 @@ async def test_inactive_recipient_excluded(monkeypatch):
 async def test_exclusion_leaves_exactly_one_resolves(monkeypatch):
     """2건 일치 중 1건이 비활성으로 제외되어 1건 남으면 resolved."""
     rcp_ok, rcp_bad = uuid4(), uuid4()
-    _patch_history(
-        monkeypatch, [_executed(rcp_ok, "홍길동"), _executed(rcp_bad, "홍길동")]
-    )
+    _patch_history(monkeypatch, [_executed(rcp_ok, "홍길동"), _executed(rcp_bad, "홍길동")])
     _patch_accounts(
         monkeypatch,
         {

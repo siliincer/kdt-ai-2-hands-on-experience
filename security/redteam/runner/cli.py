@@ -76,9 +76,7 @@ def _redacted_error_message(error: object, redact_fields: set[str]) -> str:
 
 def _scenario_name(value: str) -> str:
     if not re.fullmatch(r"[a-z0-9_]+", value):
-        raise argparse.ArgumentTypeError(
-            "scenario must contain lowercase letters and _"
-        )
+        raise argparse.ArgumentTypeError("scenario must contain lowercase letters and _")
     return value
 
 
@@ -112,18 +110,14 @@ def _with_model_overrides(
     seed: int | None = None,
 ) -> RedTeamConfig:
     if model is not None:
-        raise ValueError(
-            "--model is disabled; generator, Target, and judgment models must differ"
-        )
+        raise ValueError("--model is disabled; generator, Target, and judgment models must differ")
 
     adaptive_updates = {}
     if generator_model is not None:
         adaptive_updates["model"] = generator_model
     if seed is not None:
         adaptive_updates["seed"] = seed
-    safety_updates = (
-        {"required_ollama_model": target_model} if target_model is not None else {}
-    )
+    safety_updates = {"required_ollama_model": target_model} if target_model is not None else {}
     judgment_updates = {"model": judgment_model} if judgment_model is not None else {}
     raw = config.model_dump(mode="python")
     raw["adaptive_attack"].update(adaptive_updates)
@@ -234,12 +228,10 @@ def _execution_plan(config: RedTeamConfig, scenario: Scenario) -> dict[str, int]
     adaptive_cases = sum(attack.adaptive for attack in scenario.attacks)
     control_cases = len(scenario.attacks) - adaptive_cases
     case_executions = sum(
-        config.adaptive_attack.max_iterations_per_attack if attack.adaptive else 1
-        for attack in scenario.attacks
+        config.adaptive_attack.max_iterations_per_attack if attack.adaptive else 1 for attack in scenario.attacks
     )
     maximum_chat_turns = sum(
-        len(attack.expanded_turns())
-        * (config.adaptive_attack.max_iterations_per_attack if attack.adaptive else 1)
+        len(attack.expanded_turns()) * (config.adaptive_attack.max_iterations_per_attack if attack.adaptive else 1)
         for attack in scenario.attacks
     )
     return {
@@ -465,9 +457,7 @@ def main() -> int:
                 started_monotonic=scenario_started_monotonic,
                 output_dir=args.output_dir,
                 redact_fields=config.safety.redact_fields,
-                finalization_timeout_seconds=(
-                    config.execution.report_finalization_timeout_seconds
-                ),
+                finalization_timeout_seconds=(config.execution.report_finalization_timeout_seconds),
             )
             if paths is not None:
                 print(f"Error report: {paths[0]} {paths[1]}")

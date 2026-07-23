@@ -38,12 +38,8 @@ async def create_auth_context(
     Confirmation 이 승인 상태가 아니거나 만료면 Confirmation 계열 오류로 거부한다.
     설정 변경 Confirmation 은 추가 인증 대상이 아니라 불일치로 거부한다(계약 19.3).
     """
-    confirmation = await confirmation_service.load_for_auth(
-        session, context, req.confirmation_id
-    )
-    auth_context = await auth_context_service.create_for_confirmation(
-        session, context, confirmation
-    )
+    confirmation = await confirmation_service.load_for_auth(session, context, req.confirmation_id)
+    auth_context = await auth_context_service.create_for_confirmation(session, context, confirmation)
     await financial_audit_service.record(
         session,
         context,

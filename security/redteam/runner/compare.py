@@ -176,10 +176,7 @@ def _run_metrics(report_path: Path) -> _RunMetrics:
         "generator_requests": attacker.get("requests", 0),
         "generator_attempts": attacker.get("attempts", 0),
         "generator_successes": attacker.get("successes", 0),
-        "generator_rejections": (
-            attacker.get("rejected_out_of_scope", 0)
-            + attacker.get("rejected_duplicates", 0)
-        ),
+        "generator_rejections": (attacker.get("rejected_out_of_scope", 0) + attacker.get("rejected_duplicates", 0)),
         "generator_failures": attacker.get("failures", 0),
         "target_attempts": target.get("attempts", 0),
         "target_failures": target.get("failures", 0),
@@ -223,33 +220,26 @@ def _model_summaries(runs: list[ComparisonRun]) -> list[ModelRoleSummary]:
             judgment_decisions = judgment_attempts - judgment_failures
             judgment_disagreements = sum(run.judgment_disagreements for run in selected)
             judgment_uncertain = sum(run.judgment_uncertain for run in selected)
-            judgment_agreements = (
-                judgment_decisions - judgment_disagreements - judgment_uncertain
-            )
+            judgment_agreements = judgment_decisions - judgment_disagreements - judgment_uncertain
             summaries.append(
                 ModelRoleSummary(
                     role=role,
                     model=model,
                     total_runs=len(selected),
                     run_verdict_counts=verdict_counts,
-                    average_duration_seconds=(
-                        sum(run.duration_seconds for run in selected) / len(selected)
-                    ),
+                    average_duration_seconds=(sum(run.duration_seconds for run in selected) / len(selected)),
                     generator_success_rate=(
-                        sum(run.generator_successes for run in selected)
-                        / generator_attempts
+                        sum(run.generator_successes for run in selected) / generator_attempts
                         if role == "generator" and generator_attempts
                         else None
                     ),
                     generator_rejection_rate=(
-                        sum(run.generator_rejections for run in selected)
-                        / generator_attempts
+                        sum(run.generator_rejections for run in selected) / generator_attempts
                         if role == "generator" and generator_attempts
                         else None
                     ),
                     generator_failure_rate=(
-                        sum(run.generator_failures for run in selected)
-                        / generator_attempts
+                        sum(run.generator_failures for run in selected) / generator_attempts
                         if role == "generator" and generator_attempts
                         else None
                     ),
@@ -274,9 +264,7 @@ def _model_summaries(runs: list[ComparisonRun]) -> list[ModelRoleSummary]:
                         else None
                     ),
                     judgment_agreement_rate=(
-                        judgment_agreements / judgment_decisions
-                        if role == "judgment" and judgment_decisions
-                        else None
+                        judgment_agreements / judgment_decisions if role == "judgment" and judgment_decisions else None
                     ),
                     judgment_disagreement_rate=(
                         judgment_disagreements / judgment_decisions
@@ -284,14 +272,10 @@ def _model_summaries(runs: list[ComparisonRun]) -> list[ModelRoleSummary]:
                         else None
                     ),
                     judgment_uncertain_rate=(
-                        judgment_uncertain / judgment_decisions
-                        if role == "judgment" and judgment_decisions
-                        else None
+                        judgment_uncertain / judgment_decisions if role == "judgment" and judgment_decisions else None
                     ),
                     judgment_failure_rate=(
-                        judgment_failures / judgment_attempts
-                        if role == "judgment" and judgment_attempts
-                        else None
+                        judgment_failures / judgment_attempts if role == "judgment" and judgment_attempts else None
                     ),
                 )
             )
@@ -331,9 +315,7 @@ def _combination_summaries(
             verdict_counts[run.verdict] += 1
             for verdict, count in run.result_counts.items():
                 target_result_counts[verdict] += count
-        observed_verdicts = [
-            verdict for verdict, count in verdict_counts.items() if count > 0
-        ]
+        observed_verdicts = [verdict for verdict, count in verdict_counts.items() if count > 0]
         generator_attempts = sum(run.generator_attempts for run in selected)
         target_results = sum(target_result_counts.values())
         judgment_attempts = sum(run.judgment_attempts for run in selected)
@@ -341,9 +323,7 @@ def _combination_summaries(
         judgment_decisions = judgment_attempts - judgment_failures
         judgment_disagreements = sum(run.judgment_disagreements for run in selected)
         judgment_uncertain = sum(run.judgment_uncertain for run in selected)
-        judgment_agreements = (
-            judgment_decisions - judgment_disagreements - judgment_uncertain
-        )
+        judgment_agreements = judgment_decisions - judgment_disagreements - judgment_uncertain
         summaries.append(
             ModelCombinationSummary(
                 scenario_name=scenario_name,
@@ -353,32 +333,19 @@ def _combination_summaries(
                 seeds=sorted(run.seed for run in selected),
                 total_runs=len(selected),
                 verdict_counts=verdict_counts,
-                stable_verdict=(
-                    observed_verdicts[0] if len(observed_verdicts) == 1 else None
-                ),
+                stable_verdict=(observed_verdicts[0] if len(observed_verdicts) == 1 else None),
                 verdict_consistency_rate=(max(verdict_counts.values()) / len(selected)),
-                review_required_rate=(
-                    sum(run.review_required for run in selected) / len(selected)
-                ),
-                average_duration_seconds=(
-                    sum(run.duration_seconds for run in selected) / len(selected)
-                ),
+                review_required_rate=(sum(run.review_required for run in selected) / len(selected)),
+                average_duration_seconds=(sum(run.duration_seconds for run in selected) / len(selected)),
                 generator_success_rate=(
-                    sum(run.generator_successes for run in selected)
-                    / generator_attempts
+                    sum(run.generator_successes for run in selected) / generator_attempts
                     if generator_attempts
                     else None
                 ),
                 target_contract_pass_rate=(
-                    target_result_counts[Verdict.PASS] / target_results
-                    if target_results
-                    else None
+                    target_result_counts[Verdict.PASS] / target_results if target_results else None
                 ),
-                judgment_agreement_rate=(
-                    judgment_agreements / judgment_decisions
-                    if judgment_decisions
-                    else None
-                ),
+                judgment_agreement_rate=(judgment_agreements / judgment_decisions if judgment_decisions else None),
             )
         )
     return summaries
@@ -393,19 +360,11 @@ def main() -> int:
     try:
         base_config = load_config(args.config)
         redact_fields = base_config.safety.redact_fields
-        finalization_timeout_seconds = (
-            base_config.execution.report_finalization_timeout_seconds
-        )
+        finalization_timeout_seconds = base_config.execution.report_finalization_timeout_seconds
         scenarios = _scenario_names(args.scenario)
-        generator_models = _unique(
-            args.generator_models or [base_config.adaptive_attack.model]
-        )
-        target_models = _unique(
-            args.target_models or [base_config.safety.required_ollama_model]
-        )
-        judgment_models = _unique(
-            getattr(args, "judgment_models", None) or [base_config.judgment.model]
-        )
+        generator_models = _unique(args.generator_models or [base_config.adaptive_attack.model])
+        target_models = _unique(args.target_models or [base_config.safety.required_ollama_model])
+        judgment_models = _unique(getattr(args, "judgment_models", None) or [base_config.judgment.model])
         seed_profile = getattr(args, "seed_profile", None)
         seeds = _selected_seeds(
             args.seeds,
@@ -422,10 +381,7 @@ def main() -> int:
         if total_runs == 0:
             raise ValueError("comparison has no combination with three distinct models")
         if total_runs > MAX_COMPARISON_RUNS:
-            raise ValueError(
-                f"comparison requests {total_runs} runs; maximum is "
-                f"{MAX_COMPARISON_RUNS}"
-            )
+            raise ValueError(f"comparison requests {total_runs} runs; maximum is {MAX_COMPARISON_RUNS}")
     except _CLI_ERRORS as exc:
         print(f"ERROR: {_redacted_error_message(exc, redact_fields)}")
         paths = _record_cli_error(
@@ -477,9 +433,7 @@ def main() -> int:
                                 started_monotonic=run_started_monotonic,
                                 output_dir=args.output_dir,
                                 redact_fields=config.safety.redact_fields,
-                                finalization_timeout_seconds=(
-                                    config.execution.report_finalization_timeout_seconds
-                                ),
+                                finalization_timeout_seconds=(config.execution.report_finalization_timeout_seconds),
                             )
                             if error_paths is None:
                                 message = _redacted_error_message(

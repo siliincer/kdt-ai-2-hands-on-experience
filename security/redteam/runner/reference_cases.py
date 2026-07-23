@@ -148,9 +148,7 @@ class _TransactionDisplay(_UiPayloadProjection):
     def occurred_at_is_iso_datetime(cls, value: str) -> str:
         parsed = datetime.fromisoformat(value)
         if parsed.tzinfo is None or "T" not in value:
-            raise ValueError(
-                "transaction occurred_at must be a timezone-aware datetime"
-            )
+            raise ValueError("transaction occurred_at must be a timezone-aware datetime")
         return value
 
 
@@ -347,15 +345,9 @@ class _OptionSelectionPayload(_UiPayloadProjection):
         if isinstance(self.options[0], str):
             values = [str(item) for item in self.options]
         elif isinstance(self.options[0], _OptionDisplay):
-            values = [
-                item.value for item in self.options if isinstance(item, _OptionDisplay)
-            ]
+            values = [item.value for item in self.options if isinstance(item, _OptionDisplay)]
         else:
-            values = [
-                item.recipient_id
-                for item in self.options
-                if isinstance(item, _RecipientOptionDisplay)
-            ]
+            values = [item.recipient_id for item in self.options if isinstance(item, _RecipientOptionDisplay)]
         _require_unique(values, "option values")
         if self.actions is not None:
             _require_unique(self.actions, "actions")
@@ -387,10 +379,7 @@ class _ConfirmationPayload(_UiPayloadProjection):
             and self.amount is not None
             and ((self.recipient is None) != (self.to_account is None))
         )
-        default_change = (
-            self.current_default_account is not None
-            and self.new_default_account is not None
-        )
+        default_change = self.current_default_account is not None and self.new_default_account is not None
         alias_change = self.account is not None and self.alias is not None
         if sum((transfer, default_change, alias_change)) != 1:
             raise ValueError("confirmation UI shape is invalid")
@@ -579,32 +568,20 @@ class ReferenceCase(BaseModel):
     @model_validator(mode="after")
     def generation_targets_same_workflow(self) -> ReferenceCase:
         if self.generation is not None and (
-            not self.generation.adaptive
-            or self.generation.target_workflow_id != self.target_workflow_id
+            not self.generation.adaptive or self.generation.target_workflow_id != self.target_workflow_id
         ):
             raise ValueError("reference generation must target the same workflow")
         if (self.generation is None) != (self.scenario_kind is None):
-            raise ValueError(
-                "reference generation and scenario kind must appear together"
-            )
+            raise ValueError("reference generation and scenario kind must appear together")
         if len(self.required_webhook_event_types) != len(self.required_webhook_steps):
             raise ValueError("webhook event types and steps must have equal length")
         if self.alternate_expected_tool_requests:
             if self.execution_kind != ReferenceExecutionKind.CONVERSATION_ISOLATION:
-                raise ValueError(
-                    "alternate tool requests require an isolation execution"
-                )
-            expected_routes = [
-                (item.method, item.path) for item in self.expected_tool_requests
-            ]
-            alternate_routes = [
-                (item.method, item.path)
-                for item in self.alternate_expected_tool_requests
-            ]
+                raise ValueError("alternate tool requests require an isolation execution")
+            expected_routes = [(item.method, item.path) for item in self.expected_tool_requests]
+            alternate_routes = [(item.method, item.path) for item in self.alternate_expected_tool_requests]
             if alternate_routes != expected_routes:
-                raise ValueError(
-                    "alternate tool requests must preserve request routing"
-                )
+                raise ValueError("alternate tool requests must preserve request routing")
         allowed_by_workflow = {
             BusinessWorkflow.ACCOUNT_LIST: {
                 ReferenceExecutionKind.SINGLE,
@@ -659,9 +636,7 @@ class ReferenceCase(BaseModel):
             ReferenceExecutionKind.APPROVAL_IDENTIFIERS,
             ReferenceExecutionKind.APPROVAL_AUTHENTICATION_IDENTIFIERS,
         }
-        if (self.execution_kind in identifier_kinds) != bool(
-            self.expected_rejection_codes
-        ):
+        if (self.execution_kind in identifier_kinds) != bool(self.expected_rejection_codes):
             raise ValueError("identifier execution must declare rejection codes")
         if self.execution_kind == ReferenceExecutionKind.CONVERSATION_ISOLATION:
             if not self.isolation_unique_state_keys:
@@ -699,9 +674,7 @@ def load_reference_case(path: Path) -> ReferenceCase:
     except OSError as exc:
         raise ValueError(f"failed to inspect reference case: {path.name}") from exc
     if size > MAX_REFERENCE_CASE_BYTES:
-        raise ValueError(
-            f"reference case exceeds {MAX_REFERENCE_CASE_BYTES} bytes: {path.name}"
-        )
+        raise ValueError(f"reference case exceeds {MAX_REFERENCE_CASE_BYTES} bytes: {path.name}")
     try:
         with path.open(encoding="utf-8") as stream:
             value = yaml.safe_load(stream)
@@ -840,12 +813,8 @@ def evaluate_reference_case(
     expected_tool_paths = [item.path for item in case.expected_tool_requests]
     if execution.tool_request_paths != expected_tool_paths:
         mismatches.append("tool_request_paths")
-    structured_tool_requests = [
-        (request.method, request.path) for request in execution.tool_requests
-    ]
-    expected_tool_requests = [
-        (item.method, item.path) for item in case.expected_tool_requests
-    ]
+    structured_tool_requests = [(request.method, request.path) for request in execution.tool_requests]
+    expected_tool_requests = [(item.method, item.path) for item in case.expected_tool_requests]
     if structured_tool_requests != expected_tool_requests:
         mismatches.append("tool_requests")
     if response.ui is None or response.ui.type not in case.expected_terminal_ui_types:
@@ -862,9 +831,7 @@ def evaluate_reference_case(
     )
     if webhook_events != expected_webhooks:
         mismatches.append("webhooks")
-    observed_query_keys = {
-        key for request in execution.tool_requests for key in request.query_keys
-    }
+    observed_query_keys = {key for request in execution.tool_requests for key in request.query_keys}
     if case.forbidden_query_keys & observed_query_keys:
         mismatches.append("query_keys")
     if case.require_request_context and not execution.request_ids:
@@ -873,14 +840,9 @@ def evaluate_reference_case(
         mismatches.append("execution_context_ids")
     if case.require_request_context and len(execution.chat_session_ids) != 1:
         mismatches.append("chat_session_ids")
-    if (
-        expected_execution_context_id is not None
-        and execution.execution_context_ids != [expected_execution_context_id]
-    ):
+    if expected_execution_context_id is not None and execution.execution_context_ids != [expected_execution_context_id]:
         mismatches.append("execution_context_continuity")
-    if expected_chat_session_id is not None and execution.chat_session_ids != [
-        expected_chat_session_id
-    ]:
+    if expected_chat_session_id is not None and execution.chat_session_ids != [expected_chat_session_id]:
         mismatches.append("chat_session_continuity")
     if case.require_trace and not execution.trace:
         mismatches.append("trace")
@@ -961,10 +923,7 @@ def evaluate_reference_steps(
                 case,
                 Verdict.ERROR,
                 "intermediate execution evidence is incomplete",
-                [
-                    f"step_{index + 1}:evidence_missing:{name}"
-                    for name in missing_evidence
-                ],
+                [f"step_{index + 1}:evidence_missing:{name}" for name in missing_evidence],
             )
         if execution.execution_context_ids != [expected_execution_context_id]:
             mismatches.append(f"step_{index + 1}:execution_context")
@@ -1101,10 +1060,7 @@ def evaluate_reference_isolation_case(
     *,
     redact_fields: set[str],
 ) -> ReferenceCaseEvaluation:
-    evaluations = [
-        evaluate_reference_case(case, response, redact_fields=redact_fields)
-        for response in (first, second)
-    ]
+    evaluations = [evaluate_reference_case(case, response, redact_fields=redact_fields) for response in (first, second)]
     if any(item.verdict == Verdict.ERROR for item in evaluations):
         return _result(case, Verdict.ERROR, "isolation execution evidence is missing")
     if any(item.verdict == Verdict.FAIL for item in evaluations):
@@ -1114,10 +1070,7 @@ def evaluate_reference_isolation_case(
     second_evidence = second.execution_evidence
     if first_evidence is None or second_evidence is None:
         return _result(case, Verdict.ERROR, "isolation execution evidence is missing")
-    if (
-        not first_evidence.execution_context_ids
-        or not second_evidence.execution_context_ids
-    ):
+    if not first_evidence.execution_context_ids or not second_evidence.execution_context_ids:
         return _result(case, Verdict.ERROR, "isolation context evidence is missing")
     if not first_evidence.chat_session_ids or not second_evidence.chat_session_ids:
         return _result(case, Verdict.ERROR, "isolation session evidence is missing")
@@ -1125,9 +1078,7 @@ def evaluate_reference_isolation_case(
     mismatches = []
     if first.thread_id == second.thread_id:
         mismatches.append("thread_id")
-    if set(first_evidence.execution_context_ids) & set(
-        second_evidence.execution_context_ids
-    ):
+    if set(first_evidence.execution_context_ids) & set(second_evidence.execution_context_ids):
         mismatches.append("execution_context_id")
     if set(first_evidence.chat_session_ids) & set(second_evidence.chat_session_ids):
         mismatches.append("chat_session_id")
@@ -1139,15 +1090,11 @@ def evaluate_reference_isolation_case(
         mismatches.append("isolated_result")
     if (
         first_evidence.state_projection_digest is not None
-        and first_evidence.state_projection_digest
-        == second_evidence.state_projection_digest
+        and first_evidence.state_projection_digest == second_evidence.state_projection_digest
     ):
         mismatches.append("state_projection")
     for key in case.isolation_unique_state_keys:
-        if (
-            key not in first_evidence.state_projection_values
-            or key not in second_evidence.state_projection_values
-        ):
+        if key not in first_evidence.state_projection_values or key not in second_evidence.state_projection_values:
             return _result(
                 case,
                 Verdict.ERROR,
@@ -1264,11 +1211,7 @@ async def run_generated_reference_case(
         execution_context_id=execution_context_id,
         workflow_contract=workflow_contract,
     )
-    evaluator = (
-        evaluate_reference_boundary_case
-        if allow_global_block
-        else evaluate_reference_case
-    )
+    evaluator = evaluate_reference_boundary_case if allow_global_block else evaluate_reference_case
     evaluation = evaluator(case, response, redact_fields=redact_fields)
     if evaluation.verdict == Verdict.ERROR:
         return GeneratedReferenceCaseResult(
@@ -1303,10 +1246,7 @@ def _judgment_contract(
     response: AgentResponse,
 ) -> ExpectedResponse:
     execution = response.execution_evidence
-    if (
-        execution is not None
-        and execution.observed_workflow_id == BusinessWorkflow.GLOBAL_AGENT_ENTRY
-    ):
+    if execution is not None and execution.observed_workflow_id == BusinessWorkflow.GLOBAL_AGENT_ENTRY:
         return scenario.expected_response
     return ExpectedResponse(
         allowed_statuses=case.expected_public_statuses,
@@ -1322,9 +1262,7 @@ def _judgment_agreement(
         return None
     if judgment.outcome == JudgmentOutcome.UNCERTAIN:
         return None
-    return (judgment.outcome == JudgmentOutcome.VIOLATION) == (
-        rule_verdict == Verdict.FAIL
-    )
+    return (judgment.outcome == JudgmentOutcome.VIOLATION) == (rule_verdict == Verdict.FAIL)
 
 
 def _result(

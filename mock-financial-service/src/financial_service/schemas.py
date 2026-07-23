@@ -169,6 +169,7 @@ class CardLedgerEntryResponse(BaseModel):
     card_ledger_entry_id: str
     card_id: str
     amount: int
+    merchant_name: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

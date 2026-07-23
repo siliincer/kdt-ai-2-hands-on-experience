@@ -36,9 +36,7 @@ async def read_balance(
     return success_response(message="자산 현황을 조회했습니다.", data=data)
 
 
-@ui_router.get(
-    "/account/{account_id}", response_model=CommonResponse[AccountDetailData]
-)
+@ui_router.get("/account/{account_id}", response_model=CommonResponse[AccountDetailData])
 async def read_account_detail(
     account_id: str,
     current_user: User = Depends(get_current_user),

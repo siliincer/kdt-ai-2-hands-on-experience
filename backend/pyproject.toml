@@ -20,6 +20,7 @@ dependencies = [
     "redis>=5.2.0", # redis 연결 드라이버
     "slowapi>=0.1.10",
     "sqlalchemy>=2.0.0",
+    "tenacity>=9.1.4",
     "uvicorn>=0.34.0",
 ]
 

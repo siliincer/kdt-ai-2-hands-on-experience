@@ -45,9 +45,7 @@ def test_legacy_helper_updates_only_generator_model():
     updated = _with_model(config, "gemma3:4b")
 
     assert updated.adaptive_attack.model == "gemma3:4b"
-    assert updated.safety.required_ollama_model == (
-        "hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M"
-    )
+    assert updated.safety.required_ollama_model == ("hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M")
     assert updated.judgment.model == "llama3.2:3b"
     assert config.adaptive_attack.model == "exaone3.5:7.8b"
 
@@ -138,9 +136,7 @@ def test_scenario_profiles_resolve_to_existing_unique_files():
     assert _scenario_names("prompt_injection") == ("prompt_injection",)
     assert len(ALL_SCENARIOS) == len(set(ALL_SCENARIOS))
     assert set(REGRESSION_SCENARIOS) < set(ALL_SCENARIOS)
-    assert all(
-        (ROOT / "scenarios" / f"{name}.yaml").is_file() for name in ALL_SCENARIOS
-    )
+    assert all((ROOT / "scenarios" / f"{name}.yaml").is_file() for name in ALL_SCENARIOS)
 
 
 def test_cli_selects_one_attack_and_reports_multi_step_plan():
@@ -158,9 +154,7 @@ def test_cli_selects_one_attack_and_reports_multi_step_plan():
         scenario,
         "edited_amount_requires_fresh_confirmation",
     )
-    assert [attack.id for attack in selected.attacks] == [
-        "edited_amount_requires_fresh_confirmation"
-    ]
+    assert [attack.id for attack in selected.attacks] == ["edited_amount_requires_fresh_confirmation"]
     assert _execution_plan(config, selected)["case_executions"] == 3
 
 
@@ -357,9 +351,7 @@ def test_cli_redacts_custom_field_before_config_validation(
     assert "[REDACTED]" in stdout
 
 
-def test_batch_profile_runs_every_scenario_and_keeps_highest_exit_code(
-    monkeypatch, capsys
-):
+def test_batch_profile_runs_every_scenario_and_keeps_highest_exit_code(monkeypatch, capsys):
     config_path = ROOT / "config.example.yaml"
     args = SimpleNamespace(
         scenario="regression",

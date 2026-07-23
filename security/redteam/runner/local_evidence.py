@@ -39,11 +39,7 @@ def workflow_evidence(
     state_status = state.get("status")
     if workflow_id == BusinessWorkflow.GLOBAL_AGENT_ENTRY and not trace:
         terminal_step = state.get("current_step_id")
-        allowed_steps = (
-            _GLOBAL_TERMINAL_STEPS.get(state_status, set())
-            if isinstance(state_status, str)
-            else set()
-        )
+        allowed_steps = _GLOBAL_TERMINAL_STEPS.get(state_status, set()) if isinstance(state_status, str) else set()
         if isinstance(terminal_step, str) and terminal_step in allowed_steps:
             route_key = state.get("route_key")
             if not isinstance(route_key, str) or not 1 <= len(route_key) <= 200:
@@ -53,9 +49,7 @@ def workflow_evidence(
         "observed_workflow_id": workflow_id,
         "runtime_status": public_status,
         "state_status": (
-            state_status
-            if isinstance(state_status, str) and 1 <= len(state_status) <= 100
-            else public_status
+            state_status if isinstance(state_status, str) and 1 <= len(state_status) <= 100 else public_status
         ),
         "trace": trace,
     }

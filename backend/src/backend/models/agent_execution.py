@@ -27,12 +27,8 @@ class AgentExecutionStatus(PyEnum):
 class AgentExecution(Base):
     __tablename__ = "agent_executions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    session_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False)
     intent: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tool_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     risk_score: Mapped[int | None] = mapped_column(nullable=True)
@@ -42,9 +38,7 @@ class AgentExecution(Base):
         nullable=False,
         default=AgentExecutionStatus.CREATED,
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     session: Mapped["ChatSession"] = relationship(
         back_populates="executions",

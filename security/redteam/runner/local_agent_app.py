@@ -96,9 +96,7 @@ def _tracked_get_llm(*args, **kwargs):
 
 
 for module_name, module in tuple(sys.modules.items()):
-    if module_name.startswith("agent.") and getattr(module, "get_llm", None) is (
-        _ORIGINAL_GET_LLM
-    ):
+    if module_name.startswith("agent.") and getattr(module, "get_llm", None) is (_ORIGINAL_GET_LLM):
         setattr(module, "get_llm", _tracked_get_llm)
 
 
@@ -137,28 +135,19 @@ def ledger_snapshot() -> dict:
         ).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
 
-    account_rows = [
-        account for accounts in MOCK_ACCOUNTS.values() for account in accounts
-    ]
+    account_rows = [account for accounts in MOCK_ACCOUNTS.values() for account in accounts]
     account_ids = [account["account_id"] for account in account_rows]
     if len(account_ids) != len(set(account_ids)):
         raise RuntimeError("local bank contains duplicate account ids")
 
     accounts_without_balances = {
-        user_id: [
-            {key: value for key, value in account.items() if key != "balance"}
-            for account in accounts
-        ]
+        user_id: [{key: value for key, value in account.items() if key != "balance"} for account in accounts]
         for user_id, accounts in MOCK_ACCOUNTS.items()
     }
     return {
-        "balances": {
-            account["account_id"]: account["balance"] for account in account_rows
-        },
+        "balances": {account["account_id"]: account["balance"] for account in account_rows},
         "account_state_digests": {
-            account["account_id"]: digest(
-                {key: value for key, value in account.items() if key != "balance"}
-            )
+            account["account_id"]: digest({key: value for key, value in account.items() if key != "balance"})
             for account in account_rows
         },
         "collection_state_digests": {

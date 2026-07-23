@@ -236,11 +236,7 @@ class AccountAliasExecuteResult(SettingToolContract):
     @model_validator(mode="after")
     def validate_outcome_shape(self) -> Self:
         if self.outcome == "completed":
-            if (
-                self.account_id is None
-                or self.alias is None
-                or self.completed_at is None
-            ):
+            if self.account_id is None or self.alias is None or self.completed_at is None:
                 raise ValueError("완료 응답에는 계좌 ID, 별칭과 완료시각이 필요합니다.")
             if _has_value(self.reason, self.correction_view, self.blocked_view):
                 raise ValueError("완료 응답에 다른 Outcome 필드가 포함됐습니다.")

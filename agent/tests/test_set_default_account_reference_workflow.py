@@ -57,9 +57,7 @@ def _confirmation_view() -> dict[str, object]:
 
 
 @pytest.mark.asyncio
-async def test_set_default_account_reference_workflow_completes_full_happy_path() -> (
-    None
-):
+async def test_set_default_account_reference_workflow_completes_full_happy_path() -> None:
     backend = MockBackend()
     backend.add_success(
         "GET",
@@ -79,9 +77,7 @@ async def test_set_default_account_reference_workflow_completes_full_happy_path(
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/default-account",
@@ -127,9 +123,7 @@ async def test_set_default_account_reference_workflow_completes_full_happy_path(
     assert completed.status == "completed"
     assert state["data"]["account_id"] == "acc_002"
 
-    result_event = json.loads(
-        backend.requests_to("POST", "/api/v1/webhooks/agent")[-1].content
-    )
+    result_event = json.loads(backend.requests_to("POST", "/api/v1/webhooks/agent")[-1].content)
     assert result_event["metadata"]["step_id"] == "emit_default_account_result"
     assert result_event["metadata"]["ui"]["payload"]["outcome"] == "completed"
     backend.assert_all_responses_used()
@@ -159,9 +153,7 @@ async def test_set_default_account_selection_required_then_selected() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/default-account",
@@ -306,9 +298,7 @@ async def test_set_default_account_unchanged() -> None:
         "/api/v1/agent-tools/settings/default-account:prepare",
         {"outcome": "unchanged", "account_id": "acc_001"},
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_unchanged"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_unchanged"})
 
     async with create_default_account_change_mock_testbed(
         backend, _config(), thread_id="thread_default_unchanged"
@@ -370,9 +360,7 @@ async def test_set_default_account_correction_required_at_prepare() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
 
     async with create_default_account_change_mock_testbed(
         backend, _config(), thread_id="thread_default_correction"
@@ -413,9 +401,7 @@ async def test_set_default_account_change_requested_at_approval() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"})
     backend.add_success(
         "GET",
         "/api/v1/agent-tools/accounts",
@@ -434,9 +420,7 @@ async def test_set_default_account_change_requested_at_approval() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/default-account",
@@ -519,9 +503,7 @@ async def test_set_default_account_cancel_at_approval() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
 
     async with create_default_account_change_mock_testbed(
         backend, _config(), thread_id="thread_default_cancel_approval"
@@ -580,9 +562,7 @@ async def test_set_default_account_correction_required_at_execute() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_1"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/default-account",
@@ -610,9 +590,7 @@ async def test_set_default_account_correction_required_at_execute() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval_2"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/default-account",
@@ -743,9 +721,7 @@ async def test_set_default_account_state_has_no_sensitive_data() -> None:
             "confirmation_view": _confirmation_view(),
         },
     )
-    backend.add_success(
-        "POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"}
-    )
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "msg_approval"})
     backend.add_success(
         "POST",
         "/api/v1/agent-tools/settings/default-account",
@@ -806,11 +782,7 @@ async def test_set_default_account_state_has_no_sensitive_data() -> None:
                 _collect_masked_numbers(item)
 
     _collect_masked_numbers(state)
-    assert masked_numbers, (
-        "검증 대상 계좌번호가 State에 하나도 없으면 이 테스트는 의미가 없다."
-    )
+    assert masked_numbers, "검증 대상 계좌번호가 State에 하나도 없으면 이 테스트는 의미가 없다."
     for number in masked_numbers:
         assert "*" in number, f"마스킹되지 않은 계좌번호가 State에 남아있다: {number}"
-    assert not re.search(r"\d{9,}", state_json), (
-        "마스킹 없는 긴 숫자열(원문 계좌번호로 추정)이 State에 있다."
-    )
+    assert not re.search(r"\d{9,}", state_json), "마스킹 없는 긴 숫자열(원문 계좌번호로 추정)이 State에 있다."

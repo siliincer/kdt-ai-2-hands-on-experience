@@ -1,9 +1,8 @@
-"""HITL(need_input·결과) 목 픽스처 (mock 분리 원칙, FE_coding).
+"""[DEPRECATED — 참고용 보존] HITL(need_input·결과) 목 픽스처.
 
-wf_balance_inquiry 등 UI-HITL 워크플로우를 실 Agent 없이 재현하기 위한 계좌·잔액 목이다.
-스키마는 agent-ui-hitl-contract.md 3.3(account_card_list)·4.2(balance_result)를 따른다.
-
-TODO(BE): 실 Agent 연동 시 이 파일과 mock 시퀀스를 제거한다(agent-tools API로 대체).
+실 Agent 연동으로 대체되어 `mock_agent_driver` 만 참조한다(런타임 미사용). UI-HITL 워크플로우의
+UI payload 형태(account_card_list·balance_result 등) 예시로 남겨 둔다. 스키마 정본은
+agent-ui-hitl-contract.md 3.3(account_card_list)·4.2(balance_result).
 """
 
 # UI 계약 식별자(계약 5.3).
@@ -195,9 +194,7 @@ def build_external_transfer_confirm_view(fixed_data: dict) -> dict:
     }
 
 
-def build_transfer_result(
-    fixed_data: dict, transaction_id: str, completed_at: str
-) -> dict:
+def build_transfer_result(fixed_data: dict, transaction_id: str, completed_at: str) -> dict:
     """타인송금 transfer_result payload(계약 4.5)."""
     recipient = fixed_data.get("recipient", {})
     return {
@@ -374,9 +371,7 @@ def build_internal_transfer_confirm_view(fixed_data: dict) -> dict:
     }
 
 
-def build_internal_transfer_result(
-    fixed_data: dict, transaction_id: str, completed_at: str
-) -> dict:
+def build_internal_transfer_result(fixed_data: dict, transaction_id: str, completed_at: str) -> dict:
     """본인송금 transfer_result payload(계약 4.5). recipient 대신 입금 계좌 표시."""
     to_account = _account_display(fixed_data.get("to_account_id", ""))
     return {

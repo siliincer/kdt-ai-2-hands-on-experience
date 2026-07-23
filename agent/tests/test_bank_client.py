@@ -82,16 +82,12 @@ def _capture_client(responder) -> tuple[HttpBankClient, list[httpx.Request]]:
         captured.append(request)
         return responder(request)
 
-    client = HttpBankClient(
-        base_url="http://bank.test", transport=httpx.MockTransport(handler)
-    )
+    client = HttpBankClient(base_url="http://bank.test", transport=httpx.MockTransport(handler))
     return client, captured
 
 
 def test_http_get_accounts_contract():
-    client, captured = _capture_client(
-        lambda req: httpx.Response(200, json={"accounts": [{"account_id": "a"}]})
-    )
+    client, captured = _capture_client(lambda req: httpx.Response(200, json={"accounts": [{"account_id": "a"}]}))
     accounts = client.get_accounts("user_001", account_id="acc_001")
 
     request = captured[0]
@@ -113,9 +109,7 @@ def test_http_get_accounts_500_raises():
 
 
 def test_http_get_recipients_contract():
-    client, captured = _capture_client(
-        lambda req: httpx.Response(200, json={"recipient_candidates": []})
-    )
+    client, captured = _capture_client(lambda req: httpx.Response(200, json={"recipient_candidates": []}))
     client.get_recipients("user_001", recipient_name="김철수")
 
     request = captured[0]
@@ -126,9 +120,7 @@ def test_http_get_recipients_contract():
 
 def test_http_transfer_contract():
     client, captured = _capture_client(
-        lambda req: httpx.Response(
-            200, json={"transaction_id": "txn_abc", "status": "completed"}
-        )
+        lambda req: httpx.Response(200, json={"transaction_id": "txn_abc", "status": "completed"})
     )
     result = client.transfer("user_001", "acc_001", "rec_001", 50_000, memo="점심")
 
@@ -154,9 +146,7 @@ def test_http_transfer_409_raises():
 
 def test_http_transfer_internal_contract():
     client, captured = _capture_client(
-        lambda req: httpx.Response(
-            200, json={"transaction_id": "txn_itx", "status": "completed"}
-        )
+        lambda req: httpx.Response(200, json={"transaction_id": "txn_itx", "status": "completed"})
     )
     result = client.transfer_internal("user_001", "acc_001", "acc_002", 50_000)
 
@@ -180,9 +170,7 @@ def test_http_transfer_internal_409_raises():
 
 
 def test_http_post_audit_log_contract():
-    client, captured = _capture_client(
-        lambda req: httpx.Response(200, json={"log_id": "srv_log_0001"})
-    )
+    client, captured = _capture_client(lambda req: httpx.Response(200, json={"log_id": "srv_log_0001"}))
     result = client.post_audit_log("workflow_completed", "wf_x", "tool_x", {})
 
     request = captured[0]
@@ -195,9 +183,7 @@ def test_http_connection_error_raises():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("연결 거부")
 
-    client = HttpBankClient(
-        base_url="http://bank.test", transport=httpx.MockTransport(handler)
-    )
+    client = HttpBankClient(base_url="http://bank.test", transport=httpx.MockTransport(handler))
     with pytest.raises(BankClientError):
         client.get_accounts("user_001")
 

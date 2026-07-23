@@ -126,8 +126,7 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         existing_accounts = session.query(Account).count()
         if existing_accounts > 0:
             print(
-                f"[seed] DB already seeded ({existing_accounts} accounts found). "
-                "Skipping insert.",
+                f"[seed] DB already seeded ({existing_accounts} accounts found). Skipping insert.",
                 file=sys.stderr,
             )
         else:
@@ -167,10 +166,9 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         n_products = session.query(CardProduct).count()
 
         # Count checks
-        assert n_accounts == 5, f"Expected 5 user Accounts, got {n_accounts}"
-        assert len(accounts) == 5 + 7 + 1, (
-            "Expected 13 total Accounts (5 user + 7 biller + 1 external-source), "
-            f"got {len(accounts)}"
+        assert n_accounts == 7, f"Expected 7 user Accounts, got {n_accounts}"
+        assert len(accounts) == 7 + 7 + 1, (
+            f"Expected 15 total Accounts (7 user + 7 biller + 1 external-source), got {len(accounts)}"
         )
         assert 5 <= n_cards <= 10, f"Expected 5-10 Cards, got {n_cards}"
         assert n_products == 20, f"Expected 20 CardProducts, got {n_products}"
@@ -184,18 +182,14 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         valid_ids = {a.account_id for a in accounts}
         cards = session.query(Card).all()
         for card in cards:
-            assert card.account_id in valid_ids, (
-                f"Card {card.card_id} references unknown account_id {card.account_id}"
-            )
+            assert card.account_id in valid_ids, f"Card {card.card_id} references unknown account_id {card.account_id}"
 
         # CardProduct category distribution: 4 per each of 5 categories
         products = session.query(CardProduct).all()
         cat_counts = Counter(p.category for p in products)
         expected_cats = {"외식", "쇼핑", "여행", "웹구독", "마트/편의점"}
         for cat in expected_cats:
-            assert cat_counts[cat] == 4, (
-                f"Category '{cat}' has {cat_counts[cat]} products; expected 4"
-            )
+            assert cat_counts[cat] == 4, f"Category '{cat}' has {cat_counts[cat]} products; expected 4"
 
         # card_products has no FK to cards (verified structurally via mock_data)
         # (enforced by model design; no card_id column on CardProduct)
@@ -212,8 +206,7 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
             f"Expected {len(MOCK_LEDGER_ENTRIES)} LedgerEntries, got {n_ledger_entries}"
         )
         assert n_card_ledger_entries == len(MOCK_CARD_LEDGER_ENTRIES), (
-            f"Expected {len(MOCK_CARD_LEDGER_ENTRIES)} CardLedgerEntries, "
-            f"got {n_card_ledger_entries}"
+            f"Expected {len(MOCK_CARD_LEDGER_ENTRIES)} CardLedgerEntries, got {n_card_ledger_entries}"
         )
 
         # Double-entry: every success Transaction has exactly one DEBIT + one CREDIT
@@ -226,20 +219,13 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         for txn in all_transactions:
             pair = entries_by_txn.get(txn.transaction_id, [])
             if txn.status == "failure":
-                assert not pair, (
-                    f"Transaction {txn.transaction_id} is a failure "
-                    "but has ledger entries"
-                )
+                assert not pair, f"Transaction {txn.transaction_id} is a failure but has ledger entries"
                 continue
-            assert len(pair) == 2, (
-                f"Transaction {txn.transaction_id} expected 2 ledger entries, "
-                f"got {len(pair)}"
-            )
+            assert len(pair) == 2, f"Transaction {txn.transaction_id} expected 2 ledger entries, got {len(pair)}"
             debit = [e for e in pair if e.entry_type == "DEBIT"]
             credit = [e for e in pair if e.entry_type == "CREDIT"]
             assert len(debit) == 1 and len(credit) == 1, (
-                f"Transaction {txn.transaction_id} must have exactly "
-                "one DEBIT and one CREDIT"
+                f"Transaction {txn.transaction_id} must have exactly one DEBIT and one CREDIT"
             )
             assert debit[0].amount == credit[0].amount == txn.amount, (
                 f"Transaction {txn.transaction_id} DEBIT/CREDIT/amount mismatch"
@@ -249,8 +235,7 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
         valid_card_ids = {c.card_id for c in cards}
         for entry in session.query(CardLedgerEntry).all():
             assert entry.card_id in valid_card_ids, (
-                f"CardLedgerEntry {entry.card_ledger_entry_id} references "
-                f"unknown card_id {entry.card_id}"
+                f"CardLedgerEntry {entry.card_ledger_entry_id} references unknown card_id {entry.card_id}"
             )
 
         summary = {
@@ -267,9 +252,7 @@ def seed(db_url: str = _DEFAULT_URL, *, reset: bool = False) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Seed dev DB with canonical mock data."
-    )
+    parser = argparse.ArgumentParser(description="Seed dev DB with canonical mock data.")
     parser.add_argument(
         "db_url",
         nargs="?",

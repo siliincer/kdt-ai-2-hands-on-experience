@@ -115,9 +115,7 @@ def test_example_config_allows_only_local_agent():
     assert config.safety.allow_remote_targets is False
     assert config.safety.required_bank_client == "local"
     assert config.safety.required_llm_provider == "ollama"
-    assert config.safety.required_ollama_model == (
-        "hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M"
-    )
+    assert config.safety.required_ollama_model == ("hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M")
     assert config.adaptive_attack.model == "exaone3.5:7.8b"
     assert config.judgment.model == "llama3.2:3b"
     assert config.judgment.max_attempts_per_evaluation == 2
@@ -250,9 +248,7 @@ def test_external_chat_endpoint_is_rejected():
     raw = yaml.safe_load((ROOT / "config.example.yaml").read_text())
     raw["target"]["chat_path"] = "http://example.com/chat"
 
-    with pytest.raises(
-        ValidationError, match="chat_path must be a local absolute path"
-    ):
+    with pytest.raises(ValidationError, match="chat_path must be a local absolute path"):
         RedTeamConfig.model_validate(raw)
 
 
@@ -320,16 +316,11 @@ def test_approval_scenario_has_multi_turn_contract():
     assert [len(attack.expanded_turns()) for attack in scenario.attacks] == [1, 2, 3]
     assert [attack.adaptive for attack in scenario.attacks] == [True, True, False]
     assert all(
-        attack.candidate_template and "{variation}" in attack.candidate_template
-        for attack in scenario.attacks[:2]
+        attack.candidate_template and "{variation}" in attack.candidate_template for attack in scenario.attacks[:2]
     )
     expectations = [attack.expected_ledger for attack in scenario.attacks]
     assert all(expectation is not None for expectation in expectations)
-    assert [
-        expectation.audit_log_delta
-        for expectation in expectations
-        if expectation is not None
-    ] == [0, 1, 1]
+    assert [expectation.audit_log_delta for expectation in expectations if expectation is not None] == [0, 1, 1]
     final_expectation = scenario.attacks[-1].expected_ledger
     assert final_expectation is not None
     assert final_expectation.balance_deltas == {"acc_001": -50000}
@@ -346,10 +337,7 @@ def test_data_confidentiality_scenario_contract():
     }
     assert len(scenario.attacks) == 2
     assert all(attack.variation_examples for attack in scenario.attacks)
-    assert all(
-        attack.expected_ledger is not None and attack.expected_ledger.unchanged
-        for attack in scenario.attacks
-    )
+    assert all(attack.expected_ledger is not None and attack.expected_ledger.unchanged for attack in scenario.attacks)
     assert scenario.expected_response.forbid_financial_secrets is True
 
 
@@ -366,10 +354,7 @@ def test_tool_governance_scenario_contract():
     adaptive_cases = [attack for attack in scenario.attacks if attack.adaptive]
     assert len(adaptive_cases) == 2
     assert all(attack.variation_examples for attack in adaptive_cases)
-    assert all(
-        attack.expected_ledger is not None and attack.expected_ledger.unchanged
-        for attack in adaptive_cases
-    )
+    assert all(attack.expected_ledger is not None and attack.expected_ledger.unchanged for attack in adaptive_cases)
     control = scenario.attacks[-1]
     assert control.adaptive is False
     assert control.expected_ledger is not None
@@ -415,10 +400,7 @@ def test_risk_manipulation_scenario_contract():
     adaptive_cases = [attack for attack in scenario.attacks if attack.adaptive]
     assert len(adaptive_cases) == 2
     assert all(attack.variation_examples for attack in adaptive_cases)
-    assert all(
-        attack.expected_ledger is not None and attack.expected_ledger.unchanged
-        for attack in adaptive_cases
-    )
+    assert all(attack.expected_ledger is not None and attack.expected_ledger.unchanged for attack in adaptive_cases)
     control = scenario.attacks[-1]
     assert control.expected_ledger is not None
     assert control.expected_ledger.balance_deltas == {"acc_001": -50000}
@@ -436,9 +418,7 @@ def test_audit_log_tampering_scenario_contract():
     adaptive_cases = [attack for attack in scenario.attacks if attack.adaptive]
     assert len(adaptive_cases) == 2
     assert all(
-        attack.expected_ledger is not None
-        and attack.expected_ledger.audit_log_delta == 0
-        for attack in adaptive_cases
+        attack.expected_ledger is not None and attack.expected_ledger.audit_log_delta == 0 for attack in adaptive_cases
     )
     control = scenario.attacks[-1]
     assert control.expected_ledger is not None

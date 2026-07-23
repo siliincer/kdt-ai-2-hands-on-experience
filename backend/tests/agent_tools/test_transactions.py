@@ -70,14 +70,16 @@ def _patch(monkeypatch, owned, rows):
     async def _fake_rows(owned_arg):
         return rows
 
+    async def _fake_card_rows(owned_arg):
+        return []
+
     async def _fake_create_ctx(session, **kwargs):
         return SimpleNamespace(id=uuid4())
 
     monkeypatch.setattr(transaction_service, "get_owned_accounts_by_ids", _fake_owned)
     monkeypatch.setattr(transaction_service, "_load_ledger_rows", _fake_rows)
-    monkeypatch.setattr(
-        transaction_service, "create_transaction_query_context", _fake_create_ctx
-    )
+    monkeypatch.setattr(transaction_service, "_load_card_rows", _fake_card_rows)
+    monkeypatch.setattr(transaction_service, "create_transaction_query_context", _fake_create_ctx)
 
 
 def _query_req(account, **overrides) -> TransactionQueryRequest:
@@ -102,9 +104,7 @@ async def test_query_filters_by_period(monkeypatch):
     ]
     _patch(monkeypatch, [acc], rows)
 
-    data = await transaction_service.query_transactions(
-        _NO_SESSION, _ctx(), _query_req(acc)
-    )
+    data = await transaction_service.query_transactions(_NO_SESSION, _ctx(), _query_req(acc))
 
     assert [r.amount for r in data.transaction_results] == [15000]
     assert data.transaction_query_id  # 저장된 Query Context id
@@ -137,9 +137,7 @@ async def test_query_sorts_desc_and_paginates(monkeypatch):
     ]
     _patch(monkeypatch, [acc], rows)
 
-    data = await transaction_service.query_transactions(
-        _NO_SESSION, _ctx(), _query_req(acc, limit=2)
-    )
+    data = await transaction_service.query_transactions(_NO_SESSION, _ctx(), _query_req(acc, limit=2))
 
     # 최신순(07-10, 07-07) 2건, 다음 커서 존재
     assert [r.transaction_id for r in data.transaction_results] == ["b", "c"]
@@ -151,9 +149,7 @@ async def test_query_empty_returns_no_cursor(monkeypatch):
     acc = _acct()
     _patch(monkeypatch, [acc], [])
 
-    data = await transaction_service.query_transactions(
-        _NO_SESSION, _ctx(), _query_req(acc)
-    )
+    data = await transaction_service.query_transactions(_NO_SESSION, _ctx(), _query_req(acc))
 
     assert data.transaction_results == []
     assert data.next_cursor is None
@@ -166,9 +162,7 @@ async def test_query_preserves_instant_and_maps_fields(monkeypatch):
     when = _utc(2026, 7, 10)
     _patch(monkeypatch, [acc], [_row(acc, "DEBIT", 15000, when, txn_id="t1")])
 
-    data = await transaction_service.query_transactions(
-        _NO_SESSION, _ctx(), _query_req(acc)
-    )
+    data = await transaction_service.query_transactions(_NO_SESSION, _ctx(), _query_req(acc))
 
     item = data.transaction_results[0]
     assert item.transaction_id == "t1"
@@ -176,7 +170,7 @@ async def test_query_preserves_instant_and_maps_fields(monkeypatch):
     assert item.account_alias == "비상금"
     assert item.transaction_type == "withdrawal"
     assert item.occurred_at == when  # 같은 순간(표현만 KST 로 변환)
-    assert item.transaction_title is None  # 원장에 없음
+    assert item.transaction_title == "출금"  # 상호명 없는 송금류 폴백
     assert item.category is None
 
 
@@ -246,9 +240,7 @@ async def test_summary_income_sums_credit(monkeypatch):
     ]
     _patch(monkeypatch, [acc], rows)
 
-    data = await transaction_service.summarize_transactions(
-        _NO_SESSION, _ctx(), _summary_req(acc, SummaryType.INCOME)
-    )
+    data = await transaction_service.summarize_transactions(_NO_SESSION, _ctx(), _summary_req(acc, SummaryType.INCOME))
 
     assert data.summary_result.total_amount == 3_200_000
     assert data.summary_result.transaction_count == 1

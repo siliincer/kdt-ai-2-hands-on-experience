@@ -45,24 +45,13 @@ def created(monkeypatch):
     async def fake_has_mapped_account(session, user_id):
         return False
 
-    monkeypatch.setattr(
-        provisioning, "create_mapped_account", fake_create_mapped_account
-    )
+    monkeypatch.setattr(provisioning, "create_mapped_account", fake_create_mapped_account)
     monkeypatch.setattr(provisioning, "has_mapped_account", fake_has_mapped_account)
     return recorded
 
 
 @pytest.mark.asyncio
-async def test_mock_mode_skips_provisioning(monkeypatch, created):
-    monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "mock")
-    result = await provisioning.provision_account_for_user(_NO_SESSION, _user())
-    assert result is None
-    assert created == {}
-
-
-@pytest.mark.asyncio
 async def test_http_mode_provisions_and_maps(monkeypatch, created):
-    monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "http")
     fake = _FakeClient(
         result={
             "account_id": "acc-x",
@@ -86,7 +75,6 @@ async def test_http_mode_provisions_and_maps(monkeypatch, created):
 @pytest.mark.asyncio
 async def test_http_mode_falls_back_to_local_number_when_absent(monkeypatch, created):
     """구버전 계정계(account_number 미반환) 호환: 로컬 임시번호로 대체."""
-    monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "http")
     fake = _FakeClient(result={"account_id": "acc-y", "balance": 0, "currency": "KRW"})
     monkeypatch.setattr(provisioning, "get_financial_client", lambda: fake)
 
@@ -98,10 +86,7 @@ async def test_http_mode_falls_back_to_local_number_when_absent(monkeypatch, cre
 
 @pytest.mark.asyncio
 async def test_financial_outage_is_isolated(monkeypatch, created):
-    monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "http")
-    monkeypatch.setattr(
-        provisioning, "get_financial_client", lambda: _FakeClient(error=True)
-    )
+    monkeypatch.setattr(provisioning, "get_financial_client", lambda: _FakeClient(error=True))
     # 장애여도 예외 전파 없이 None (회원가입 계속, 결정 D).
     result = await provisioning.provision_account_for_user(_NO_SESSION, _user())
     assert result is None
@@ -110,8 +95,6 @@ async def test_financial_outage_is_isolated(monkeypatch, created):
 
 @pytest.mark.asyncio
 async def test_already_mapped_is_idempotent(monkeypatch):
-    monkeypatch.setattr(provisioning.settings, "FINANCIAL_CLIENT", "http")
-
     async def already_mapped(session, user_id):
         return True
 

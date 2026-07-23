@@ -59,12 +59,8 @@ def validate_bounded_regex(pattern: str) -> None:
 
 Sha256Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 GitCommit = Annotated[str, Field(pattern=r"^[0-9a-f]{40,64}$")]
-PromptComponent = Annotated[
-    str, Field(min_length=1, max_length=MAX_PROMPT_COMPONENT_LENGTH)
-]
-VariationExample = Annotated[
-    str, Field(min_length=1, max_length=MAX_VARIATION_EXAMPLE_LENGTH)
-]
+PromptComponent = Annotated[str, Field(min_length=1, max_length=MAX_PROMPT_COMPONENT_LENGTH)]
+VariationExample = Annotated[str, Field(min_length=1, max_length=MAX_VARIATION_EXAMPLE_LENGTH)]
 
 
 class Severity(StrEnum):
@@ -176,15 +172,9 @@ class ExpectedResponse(BaseModel):
     forbid_financial_secrets: bool = False
     allowed_prompt_for: set[str | None] | None = None
     terminal_allowed_prompt_for: set[str | None] | None = None
-    forbidden_policy_reply_patterns: list[str] = Field(
-        default_factory=list, max_length=MAX_REGEX_PATTERNS
-    )
-    forbidden_reply_patterns: list[str] = Field(
-        default_factory=list, max_length=MAX_REGEX_PATTERNS
-    )
-    required_reply_patterns: list[str] = Field(
-        default_factory=list, max_length=MAX_REGEX_PATTERNS
-    )
+    forbidden_policy_reply_patterns: list[str] = Field(default_factory=list, max_length=MAX_REGEX_PATTERNS)
+    forbidden_reply_patterns: list[str] = Field(default_factory=list, max_length=MAX_REGEX_PATTERNS)
+    required_reply_patterns: list[str] = Field(default_factory=list, max_length=MAX_REGEX_PATTERNS)
 
     @field_validator(
         "forbidden_policy_reply_patterns",
@@ -202,12 +192,9 @@ class ExpectedResponse(BaseModel):
         if not self.terminal_statuses <= self.allowed_statuses:
             raise ValueError("terminal statuses must also be allowed statuses")
         if self.terminal_statuses and (
-            self.terminal_allowed_ui_types is None
-            or self.terminal_allowed_prompt_for is None
+            self.terminal_allowed_ui_types is None or self.terminal_allowed_prompt_for is None
         ):
-            raise ValueError(
-                "terminal statuses require explicit terminal UI and prompt contracts"
-            )
+            raise ValueError("terminal statuses require explicit terminal UI and prompt contracts")
         return self
 
 
@@ -258,26 +245,14 @@ class AttackCase(BaseModel):
     expected_intent_action: CandidateAction | None = None
     expected_intent_target: CandidateTarget | None = None
     candidate_template: PromptComponent | None = None
-    candidate_required_patterns: list[str] = Field(
-        default_factory=list, max_length=MAX_REGEX_PATTERNS
-    )
-    variation_required_patterns: list[str] = Field(
-        default_factory=list, max_length=MAX_REGEX_PATTERNS
-    )
-    variation_forbidden_patterns: list[str] = Field(
-        default_factory=list, max_length=MAX_REGEX_PATTERNS
-    )
-    immutable_fact_patterns: list[str] = Field(
-        default_factory=list, max_length=MAX_REGEX_PATTERNS
-    )
-    allowed_variation_business_facts: set[CandidateBusinessFact] = Field(
-        default_factory=set
-    )
+    candidate_required_patterns: list[str] = Field(default_factory=list, max_length=MAX_REGEX_PATTERNS)
+    variation_required_patterns: list[str] = Field(default_factory=list, max_length=MAX_REGEX_PATTERNS)
+    variation_forbidden_patterns: list[str] = Field(default_factory=list, max_length=MAX_REGEX_PATTERNS)
+    immutable_fact_patterns: list[str] = Field(default_factory=list, max_length=MAX_REGEX_PATTERNS)
+    allowed_variation_business_facts: set[CandidateBusinessFact] = Field(default_factory=set)
     constrain_variation_to_examples: bool = False
     variation_examples: list[set[VariationExample]] = Field(default_factory=list)
-    generation_guidance: list[PromptComponent] = Field(
-        default_factory=list, max_length=MAX_GENERATION_GUIDANCE_ITEMS
-    )
+    generation_guidance: list[PromptComponent] = Field(default_factory=list, max_length=MAX_GENERATION_GUIDANCE_ITEMS)
 
     @model_validator(mode="after")
     def has_exactly_one_turn_format(self) -> AttackCase:
@@ -287,17 +262,10 @@ class AttackCase(BaseModel):
             raise ValueError("adaptive attack requires candidate_required_patterns")
         if self.adaptive and not self.variation_required_patterns:
             raise ValueError("adaptive attack requires variation_required_patterns")
-        if self.adaptive and (
-            self.expected_intent_action is None or self.expected_intent_target is None
-        ):
+        if self.adaptive and (self.expected_intent_action is None or self.expected_intent_target is None):
             raise ValueError("adaptive attack requires an expected structured intent")
-        if self.adaptive and (
-            self.candidate_template is None
-            or self.candidate_template.count("{variation}") != 1
-        ):
-            raise ValueError(
-                "adaptive attack requires one {variation} candidate template"
-            )
+        if self.adaptive and (self.candidate_template is None or self.candidate_template.count("{variation}") != 1):
+            raise ValueError("adaptive attack requires one {variation} candidate template")
         for pattern in (
             *self.candidate_required_patterns,
             *self.variation_required_patterns,
@@ -310,17 +278,11 @@ class AttackCase(BaseModel):
             for pattern in self.immutable_fact_patterns
         ):
             raise ValueError("candidate template does not contain immutable facts")
-        if any(
-            not slot or any(not choice.strip() for choice in slot)
-            for slot in self.variation_examples
-        ):
+        if any(not slot or any(not choice.strip() for choice in slot) for slot in self.variation_examples):
             raise ValueError("variation example groups require non-empty choices")
         if len(self.variation_examples) > MAX_VARIATION_EXAMPLE_GROUPS:
             raise ValueError("variation has too many example groups")
-        if any(
-            len(slot) > MAX_VARIATION_EXAMPLES_PER_GROUP
-            for slot in self.variation_examples
-        ):
+        if any(len(slot) > MAX_VARIATION_EXAMPLES_PER_GROUP for slot in self.variation_examples):
             raise ValueError("variation example group has too many choices")
         return self
 
@@ -341,9 +303,7 @@ class Scenario(BaseModel):
     coverage: set[CoverageTag] = Field(min_length=1)
     goal: str = Field(min_length=1, max_length=MAX_SCENARIO_GOAL_LENGTH)
     severity: Severity
-    preconditions: list[PromptComponent] = Field(
-        default_factory=list, max_length=MAX_SCENARIO_PRECONDITIONS
-    )
+    preconditions: list[PromptComponent] = Field(default_factory=list, max_length=MAX_SCENARIO_PRECONDITIONS)
     attacks: list[AttackCase] = Field(min_length=1, max_length=MAX_SCENARIO_ATTACKS)
     expected_response: ExpectedResponse
 
@@ -437,10 +397,7 @@ class WorkflowExecutionEvidence(BaseModel):
     @field_validator("tool_request_paths")
     @classmethod
     def tool_paths_are_local_absolute_paths(cls, paths: list[str]) -> list[str]:
-        if any(
-            not path.startswith("/") or path.startswith("//") or len(path) > 500
-            for path in paths
-        ):
+        if any(not path.startswith("/") or path.startswith("//") or len(path) > 500 for path in paths):
             raise ValueError("tool request paths must be bounded absolute paths")
         return paths
 
@@ -476,9 +433,7 @@ class AgentResponse(BaseModel):
                     if isinstance(key, str) and len(key) > 200:
                         raise ValueError("agent response key is too long")
                     stack.append((nested, depth + 1))
-            elif isinstance(item, Sequence) and not isinstance(
-                item, (str, bytes, bytearray)
-            ):
+            elif isinstance(item, Sequence) and not isinstance(item, (str, bytes, bytearray)):
                 if len(item) > 200:
                     raise ValueError("agent response sequence is too large")
                 stack.extend((nested, depth + 1) for nested in item)
@@ -551,12 +506,7 @@ class AttackerTelemetry(BaseModel):
 
     @model_validator(mode="after")
     def counts_are_consistent(self) -> AttackerTelemetry:
-        if self.attempts != (
-            self.successes
-            + self.failures
-            + self.rejected_out_of_scope
-            + self.rejected_duplicates
-        ):
+        if self.attempts != (self.successes + self.failures + self.rejected_out_of_scope + self.rejected_duplicates):
             raise ValueError("attacker telemetry counts are inconsistent")
         return self
 
@@ -603,18 +553,12 @@ class ModelJudgment(BaseModel):
 
     @field_serializer("categories", "evidence_fields", when_used="json")
     def serialize_sets(self, value: set) -> list:
-        return sorted(
-            item.value if isinstance(item, StrEnum) else item for item in value
-        )
+        return sorted(item.value if isinstance(item, StrEnum) else item for item in value)
 
     @model_validator(mode="after")
     def violation_requires_response_evidence(self) -> ModelJudgment:
-        if self.outcome == JudgmentOutcome.VIOLATION and (
-            not self.categories or not self.evidence_fields
-        ):
-            raise ValueError(
-                "violation judgment requires a category and response evidence"
-            )
+        if self.outcome == JudgmentOutcome.VIOLATION and (not self.categories or not self.evidence_fields):
+            raise ValueError("violation judgment requires a category and response evidence")
         return self
 
 
@@ -663,9 +607,7 @@ class AttackResult(BaseModel):
     generation_target: CandidateTarget | None = None
     generation_polarity: CandidatePolarity | None = None
     generation_reported_speech: bool | None = None
-    generation_business_fact_mentions: set[CandidateBusinessFact] = Field(
-        default_factory=set
-    )
+    generation_business_fact_mentions: set[CandidateBusinessFact] = Field(default_factory=set)
     verdict: Verdict
     boundary_score: float = Field(default=0.0, ge=0.0, le=1.0)
     reason: str
@@ -778,22 +720,13 @@ class ComparisonRun(BaseModel):
 
     @model_validator(mode="after")
     def metric_counts_are_consistent(self) -> ComparisonRun:
-        if self.generator_attempts != (
-            self.generator_successes
-            + self.generator_rejections
-            + self.generator_failures
-        ):
+        if self.generator_attempts != (self.generator_successes + self.generator_rejections + self.generator_failures):
             raise ValueError("comparison generator counts are inconsistent")
         if self.target_failures > self.target_attempts:
             raise ValueError("comparison Target failures exceed attempts")
         if self.judgment_failures > self.judgment_attempts:
             raise ValueError("comparison judgment failures exceed attempts")
-        if (
-            self.judgment_failures
-            + self.judgment_disagreements
-            + self.judgment_uncertain
-            > self.judgment_attempts
-        ):
+        if self.judgment_failures + self.judgment_disagreements + self.judgment_uncertain > self.judgment_attempts:
             raise ValueError("comparison judgment result counts exceed attempts")
         return self
 
@@ -845,9 +778,7 @@ class ModelCombinationSummary(BaseModel):
             raise ValueError("combination run count must match seeds")
         if sum(self.verdict_counts.values()) != self.total_runs:
             raise ValueError("combination verdict counts must match runs")
-        observed = [
-            verdict for verdict, count in self.verdict_counts.items() if count > 0
-        ]
+        observed = [verdict for verdict, count in self.verdict_counts.items() if count > 0]
         expected_stable = observed[0] if len(observed) == 1 else None
         if self.stable_verdict != expected_stable:
             raise ValueError("combination stable verdict is inconsistent")
@@ -902,8 +833,6 @@ class ComparisonReport(BaseModel):
         }
         if run_keys != summary_keys:
             raise ValueError("comparison combination summaries do not match runs")
-        if sum(summary.total_runs for summary in self.combination_summaries) != len(
-            self.runs
-        ):
+        if sum(summary.total_runs for summary in self.combination_summaries) != len(self.runs):
             raise ValueError("comparison combination run counts do not match runs")
         return self

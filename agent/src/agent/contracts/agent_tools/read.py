@@ -53,9 +53,7 @@ class AccountListRequest(ReadToolContract):
     account_capability: AccountCapability | None = None
     resolve_selection: bool = False
     all_accounts_requested: bool = False
-    exclude_account_ids: Annotated[list[NonEmptyString], Field(max_length=20)] = Field(
-        default_factory=list
-    )
+    exclude_account_ids: Annotated[list[NonEmptyString], Field(max_length=20)] = Field(default_factory=list)
     limit: int = Field(default=20, ge=1, le=100)
 
     @field_validator("exclude_account_ids")
@@ -66,9 +64,7 @@ class AccountListRequest(ReadToolContract):
     @model_validator(mode="after")
     def validate_resolution_options(self) -> Self:
         if self.all_accounts_requested and not self.resolve_selection:
-            raise ValueError(
-                "all_accounts_requested는 resolve_selection=true에서만 사용합니다."
-            )
+            raise ValueError("all_accounts_requested는 resolve_selection=true에서만 사용합니다.")
         return self
 
 
@@ -88,10 +84,7 @@ class AccountListResult(ReadToolContract):
             raise ValueError("resolved 응답에는 account_ids가 필요합니다.")
         if self.account_resolution_outcome in {"selection_required", "no_accounts"}:
             if self.account_ids:
-                raise ValueError(
-                    f"{self.account_resolution_outcome} 응답의 "
-                    "account_ids는 비어야 합니다."
-                )
+                raise ValueError(f"{self.account_resolution_outcome} 응답의 account_ids는 비어야 합니다.")
         if self.account_resolution_outcome == "no_accounts" and self.accounts:
             raise ValueError("no_accounts 응답의 accounts는 비어야 합니다.")
         return self
@@ -212,7 +205,5 @@ class RecipientResolveResult(ReadToolContract):
             if self.to_recipient_id is None or self.selection_reason is not None:
                 raise ValueError("resolved 응답에는 to_recipient_id만 포함해야 합니다.")
         elif self.to_recipient_id is not None or self.selection_reason is None:
-            raise ValueError(
-                "selection_required 응답에는 selection_reason만 포함해야 합니다."
-            )
+            raise ValueError("selection_required 응답에는 selection_reason만 포함해야 합니다.")
         return self

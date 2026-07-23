@@ -7,9 +7,7 @@ from ..models.chat_message import ChatMessage
 from ..models.chat_session import ChatSession
 
 
-async def get_chat_session(
-    session: AsyncSession, chat_session_id: UUID, user_id: UUID
-) -> ChatSession | None:
+async def get_chat_session(session: AsyncSession, chat_session_id: UUID, user_id: UUID) -> ChatSession | None:
     stmt = select(ChatSession).where(
         ChatSession.id == chat_session_id,
         ChatSession.user_id == user_id,
@@ -26,9 +24,7 @@ async def create_chat_session(session: AsyncSession, user_id: UUID) -> ChatSessi
     return chat_session
 
 
-async def add_chat_message(
-    session: AsyncSession, session_id: UUID, role: str, message: str
-) -> ChatMessage:
+async def add_chat_message(session: AsyncSession, session_id: UUID, role: str, message: str) -> ChatMessage:
     chat_message = ChatMessage(session_id=session_id, role=role, message=message)
     session.add(chat_message)
     await session.commit()

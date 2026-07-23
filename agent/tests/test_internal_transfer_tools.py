@@ -98,9 +98,7 @@ def test_extract_no_match_returns_extracted_without_slots():
 
 
 def test_verify_to_account_excludes_from_account():
-    from_account = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장"
-    )
+    from_account = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장")
     result = verify_to_account(_state(**{"itx.from_account": from_account}))
     assert result["route_key"] == "verified"
     assert result["itx.to_account"]["account_name"] == "생활비통장"
@@ -129,9 +127,7 @@ def test_pre_execution_guardrail_blocks_when_balance_insufficient():
 
 
 def test_pre_execution_guardrail_allows_when_balance_sufficient():
-    account = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장"
-    )
+    account = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장")
     result = run_itx_pre_execution_guardrail(
         _state(
             **{
@@ -144,12 +140,8 @@ def test_pre_execution_guardrail_allows_when_balance_sufficient():
 
 
 def test_execute_moves_balance_between_accounts():
-    from_account = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장"
-    )
-    to_account = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "생활비통장"
-    )
+    from_account = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장")
+    to_account = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "생활비통장")
     before_from, before_to = from_account["balance"], to_account["balance"]
 
     result = execute_internal_transfer(

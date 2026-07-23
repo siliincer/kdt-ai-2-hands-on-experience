@@ -48,9 +48,7 @@ from agent.workflows.workflow_support import tool_call as _tool_call
 from agent.workflows.workflow_support import valid_iso_date as _valid_date
 
 WORKFLOW_ID = "wf_transaction_history"
-_tool_error_update = build_tool_error_update(
-    "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
-)
+_tool_error_update = build_tool_error_update("거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 
 def _default_now() -> datetime:
@@ -74,16 +72,10 @@ class TransactionHistoryDependencies:
     webhook_client: BackendWebhookClient
     interaction_runtime: InteractionPauseRuntime
     webhook_builder: InteractionWebhookBuilder
-    input_request_id_factory: Callable[[], str] = field(
-        default=_default_input_request_id
-    )
-    tool_request_id_factory: Callable[[str, str], str] = field(
-        default=_default_tool_request_id
-    )
+    input_request_id_factory: Callable[[], str] = field(default=_default_input_request_id)
+    tool_request_id_factory: Callable[[str, str], str] = field(default=_default_tool_request_id)
     now_factory: Callable[[], datetime] = field(default=_default_now)
-    slot_extractor: DatedSlotExtractor = field(
-        default=extract_transaction_slots_llm_first
-    )
+    slot_extractor: DatedSlotExtractor = field(default=extract_transaction_slots_llm_first)
 
 
 def build_transaction_history_graph(
@@ -107,9 +99,7 @@ def build_transaction_history_graph(
             "route_key": "extracted",
             "data": {
                 "account_hint": extracted.get("account_hint"),
-                "all_accounts_requested": bool(
-                    extracted.get("all_accounts_requested", False)
-                ),
+                "all_accounts_requested": bool(extracted.get("all_accounts_requested", False)),
                 "start_date": extracted.get("start_date"),
                 "end_date": extracted.get("end_date"),
                 "keyword": extracted.get("keyword"),
@@ -133,9 +123,7 @@ def build_transaction_history_graph(
                         "account_hint": data.get("account_hint"),
                         "account_capability": "inquiry",
                         "resolve_selection": True,
-                        "all_accounts_requested": bool(
-                            data.get("all_accounts_requested", False)
-                        ),
+                        "all_accounts_requested": bool(data.get("all_accounts_requested", False)),
                     },
                 ),
             )
@@ -179,6 +167,7 @@ def build_transaction_history_graph(
                 "title": "계좌를 선택해 주세요.",
                 "accounts": account_options(data.get("accounts")),
                 "actions": ["select", "cancel"],
+                "multiple": True,
             },
         )
         resumed_data = _resume_data(state, dependencies.interaction_runtime, event)
@@ -206,6 +195,7 @@ def build_transaction_history_graph(
                 "title": "조회 가능한 계좌가 없습니다.",
                 "accounts": [],
                 "actions": [],
+                "multiple": True,
             },
         )
         await _publish(dependencies, event, config)
@@ -235,9 +225,7 @@ def build_transaction_history_graph(
                     "input_request_id": dependencies.input_request_id_factory(),
                 },
             }
-        default_start, default_end = default_recent_month(
-            reference_date(data, fallback=dependencies.now_factory())
-        )
+        default_start, default_end = default_recent_month(reference_date(data, fallback=dependencies.now_factory()))
         return {
             "current_step_id": "check_transaction_period",
             "route_key": "normalized",
@@ -343,8 +331,7 @@ def build_transaction_history_graph(
         config: RunnableConfig,
     ) -> dict[str, Any]:
         message = str(
-            _data(state).get("safe_error_message")
-            or "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            _data(state).get("safe_error_message") or "거래내역을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
         )
         event = dependencies.webhook_builder.error(
             chat_session_id=_config_context(config, "chat_session_id"),

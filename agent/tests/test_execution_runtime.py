@@ -276,8 +276,7 @@ async def test_start_resume_maps_state_and_publishes_interrupt_once() -> None:
     assert webhook_requests[0].headers["x-execution-context-id"] == "exec_123"
     assert webhook_requests[1].headers["x-request-id"] == "req_resume_123"
     assert webhook_requests[1].read() == (
-        b'{"chat_session_id":"chat_123","event_type":"done","content":"",'
-        b'"confirmation_id":null,"metadata":{}}'
+        b'{"chat_session_id":"chat_123","event_type":"done","content":"","confirmation_id":null,"metadata":{}}'
     )
 
 
@@ -302,9 +301,7 @@ async def test_initial_completion_publishes_done_once() -> None:
                 ExecutionGraph,
                 builder.compile(checkpointer=MemorySaver()),
             ),
-            interaction_runtime=InteractionPauseRuntime(
-                BackendWebhookClient(_client_config(), client=http_client)
-            ),
+            interaction_runtime=InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client)),
             resume_mapper=ResumeStateMapper(WorkflowContractStore()),
             completion_reporter=reporter,
             thread_id_factory=lambda: "thread_123",
@@ -347,9 +344,7 @@ async def test_cancelled_completion_does_not_publish_duplicate_done() -> None:
                 ExecutionGraph,
                 builder.compile(checkpointer=MemorySaver()),
             ),
-            interaction_runtime=InteractionPauseRuntime(
-                BackendWebhookClient(_client_config(), client=http_client)
-            ),
+            interaction_runtime=InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client)),
             resume_mapper=ResumeStateMapper(WorkflowContractStore()),
             completion_reporter=reporter,
             thread_id_factory=lambda: "thread_123",
@@ -383,9 +378,7 @@ async def test_blocked_completion_does_not_publish_duplicate_done() -> None:
                 ExecutionGraph,
                 builder.compile(checkpointer=MemorySaver()),
             ),
-            interaction_runtime=InteractionPauseRuntime(
-                BackendWebhookClient(_client_config(), client=http_client)
-            ),
+            interaction_runtime=InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client)),
             resume_mapper=ResumeStateMapper(WorkflowContractStore()),
             completion_reporter=reporter,
             thread_id_factory=lambda: "thread_123",
@@ -423,9 +416,7 @@ async def test_workflow_failure_does_not_publish_duplicate_terminal_event() -> N
                 ExecutionGraph,
                 builder.compile(checkpointer=MemorySaver()),
             ),
-            interaction_runtime=InteractionPauseRuntime(
-                BackendWebhookClient(_client_config(), client=http_client)
-            ),
+            interaction_runtime=InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client)),
             resume_mapper=ResumeStateMapper(WorkflowContractStore()),
             failure_reporter=failure_reporter,
             completion_reporter=completion_reporter,
@@ -464,9 +455,7 @@ async def test_completion_reporter_error_does_not_change_business_completion() -
                 ExecutionGraph,
                 builder.compile(checkpointer=MemorySaver()),
             ),
-            interaction_runtime=InteractionPauseRuntime(
-                BackendWebhookClient(_client_config(), client=http_client)
-            ),
+            interaction_runtime=InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client)),
             resume_mapper=ResumeStateMapper(WorkflowContractStore()),
             completion_reporter=reporter,
             thread_id_factory=lambda: "thread_123",
@@ -491,9 +480,7 @@ async def test_duplicate_start_reuses_thread_without_running_graph_again() -> No
         base_url="http://backend.test",
         transport=httpx.MockTransport(handler),
     ) as http_client:
-        interaction_runtime = InteractionPauseRuntime(
-            BackendWebhookClient(_client_config(), client=http_client)
-        )
+        interaction_runtime = InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client))
         event = InteractionWebhookBuilder(WorkflowContractStore()).need_input(
             chat_session_id="chat_123",
             workflow_id="wf_external_transfer",
@@ -548,9 +535,7 @@ async def test_start_failure_marks_failed_and_reports_once() -> None:
         base_url="http://backend.test",
         transport=httpx.MockTransport(handler),
     ) as http_client:
-        interaction_runtime = InteractionPauseRuntime(
-            BackendWebhookClient(_client_config(), client=http_client)
-        )
+        interaction_runtime = InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client))
         runtime = ExecutionRuntime(
             graph=cast(ExecutionGraph, FailingExecutionGraph()),
             interaction_runtime=interaction_runtime,
@@ -652,9 +637,7 @@ async def test_failure_reporter_error_does_not_hide_workflow_error() -> None:
     ) as http_client:
         runtime = ExecutionRuntime(
             graph=cast(ExecutionGraph, FailingExecutionGraph()),
-            interaction_runtime=InteractionPauseRuntime(
-                BackendWebhookClient(_client_config(), client=http_client)
-            ),
+            interaction_runtime=InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client)),
             resume_mapper=ResumeStateMapper(WorkflowContractStore()),
             failure_reporter=reporter,
             thread_id_factory=lambda: "thread_123",
@@ -674,9 +657,7 @@ async def test_runtime_rejects_conflicting_start_and_stale_resume() -> None:
         base_url="http://backend.test",
         transport=httpx.MockTransport(handler),
     ) as http_client:
-        interaction_runtime = InteractionPauseRuntime(
-            BackendWebhookClient(_client_config(), client=http_client)
-        )
+        interaction_runtime = InteractionPauseRuntime(BackendWebhookClient(_client_config(), client=http_client))
         event = InteractionWebhookBuilder(WorkflowContractStore()).need_input(
             chat_session_id="chat_123",
             workflow_id="wf_external_transfer",

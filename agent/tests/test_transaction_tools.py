@@ -90,21 +90,15 @@ def test_resolve_account_scope_single_match():
 
 
 def test_fetch_transactions_all_accounts_this_month():
-    period = normalize_period(_state(TXN, **{"txn.period_expr": "이번달"}))[
-        "txn.period"
-    ]
+    period = normalize_period(_state(TXN, **{"txn.period_expr": "이번달"}))["txn.period"]
     result = fetch_transactions(_state(TXN, **{"txn.period": period}))
     assert result["route_key"] == "success"
     assert len(result["txn.results"]) == 4  # 이번달 4건 (mock 데이터 기준)
 
 
 def test_fetch_transactions_filters_by_keyword():
-    period = normalize_period(_state(TXN, **{"txn.period_expr": "이번달"}))[
-        "txn.period"
-    ]
-    result = fetch_transactions(
-        _state(TXN, **{"txn.period": period, "txn.keyword": "스타벅스"})
-    )
+    period = normalize_period(_state(TXN, **{"txn.period_expr": "이번달"}))["txn.period"]
+    result = fetch_transactions(_state(TXN, **{"txn.period": period, "txn.keyword": "스타벅스"}))
     assert result["route_key"] == "success"
     assert all(t["merchant"] == "스타벅스" for t in result["txn.results"])
 
@@ -119,11 +113,7 @@ def test_generate_transaction_response_lists_entries():
     result = generate_transaction_response(
         _state(
             TXN,
-            **{
-                "txn.results": [
-                    {"date": "2026-07-01", "merchant": "스타벅스", "amount": 5000}
-                ]
-            },
+            **{"txn.results": [{"date": "2026-07-01", "merchant": "스타벅스", "amount": 5000}]},
         )
     )
     assert result["route_key"] == "success"
@@ -136,17 +126,13 @@ def test_sum_transactions_spending_only():
         {"type": "spending", "amount": 32000},
         {"type": "income", "amount": 2_500_000},
     ]
-    result = sum_transactions(
-        _state(SUM, **{"sum.results": results, "sum.txn_type": "spending"})
-    )
+    result = sum_transactions(_state(SUM, **{"sum.results": results, "sum.txn_type": "spending"}))
     assert result["sum.total"] == 37000
     assert result["route_key"] == "done"
 
 
 def test_generate_amount_summary_response_mentions_total():
-    result = generate_amount_summary_response(
-        _state(SUM, **{"sum.total": 49000, "sum.txn_type": "spending"})
-    )
+    result = generate_amount_summary_response(_state(SUM, **{"sum.total": 49000, "sum.txn_type": "spending"}))
     assert result["route_key"] == "success"
     assert "49,000" in result["final_response"]
     assert "지출" in result["final_response"]

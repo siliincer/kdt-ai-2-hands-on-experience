@@ -1,3 +1,5 @@
+import logging
+
 from dotenv import find_dotenv
 from pydantic import AnyUrl, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,7 +8,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # App Configuration
     APP_ENV: str = Field(default="local", description="애플리케이션 실행 환경")
-    LOG_LEVEL: str = Field(default="INFO", description="로그 출력 레벨")
+    LOG_LEVEL: str = Field(default="INFO", description="로그 출력 레벨(운영 기본)")
+
+    # Logging (운영: 콘솔 끄고 파일 로테이션 / 개발: 콘솔 DEBUG)
+    LOG_DIR: str = Field(
+        default="./backend_logs",
+        description="로그 파일 디렉터리(운영 모드 app.log 위치)",
+    )
+    LOG_ROTATE_MAX_BYTES: int = Field(
+        default=20 * 1024 * 1024,
+        description="RotatingFileHandler 회전 크기(바이트). 기본 20MB.",
+    )
+    LOG_BACKUP_COUNT: int = Field(
+        default=20,
+        description="로테이션 백업 파일 개수(~7일치 보존 근사).",
+    )
 
     # Database Configuration
     POSTGRES_DB: str = Field(default="financial_agent")
@@ -22,14 +38,12 @@ class Settings(BaseSettings):
     REDIS_STREAM_URL: AnyUrl = AnyUrl("redis://redis:6380/0")
     # redis://[호스트이름]:[포트번호]/[데이터베이스_번호]
 
-    # mock-financial-service(계정계/정보계) 연동 Configuration
-    FINANCIAL_CLIENT: str = Field(
-        default="mock",
-        description="계정계 데이터 소스: mock(내장 픽스처) | http(실서비스 호출)",
-    )
+    # mock-financial-service(계정계/정보계) 연동 Configuration.
+    # 계정계는 항상 http(실서비스)로 연동한다(mock 일원화, 작업 B). 과거의
+    # FINANCIAL_CLIENT(mock|http) 스위치는 제거됐다.
     MOCK_FINANCIAL_SERVICE_URL: str = Field(
         default="http://localhost:8002",
-        description="mock-financial-service base URL (FINANCIAL_CLIENT=http일 때 사용)",
+        description="mock-financial-service(계정계/정보계) base URL",
     )
     FINANCIAL_ANALYTICS_KEY: SecretStr = Field(
         default=SecretStr("analytics-demo-key"),
@@ -72,6 +86,21 @@ class Settings(BaseSettings):
             "Bearer 토큰. Webhook Secret과 반드시 분리한다(서비스 간 인증 전용)."
         ),
     )
+    AGENT_SERVICE_URL: str = Field(
+        default="http://localhost:8001",
+        description=(
+            "Backend → Agent 내부 실행 API(/internal/v1/executions*) base URL. "
+            "실 Agent 연동(agent_client) 시 실행 시작·재개 요청에 사용한다."
+        ),
+    )
+    BACKEND_SERVICE_TOKEN: SecretStr = Field(
+        default=SecretStr("change-me-backend-service-token"),
+        description=(
+            "Backend → Agent 내부 실행 API 호출 시 서비스 인증 Bearer 토큰. "
+            "Agent 가 os.getenv('BACKEND_SERVICE_TOKEN') 로 검증하므로 값을 공유한다. "
+            "방향이 반대인 AGENT_SERVICE_TOKEN(Agent→BE)과 반드시 분리한다."
+        ),
+    )
     EXECUTION_CONTEXT_TTL_SECONDS: int = Field(
         default=1800,
         description="Execution Context 발급 시 기본 유효시간(초). 만료 후 재발급 필요.",
@@ -101,4 +130,6 @@ class Settings(BaseSettings):
 # 전역 설정 객체 생성
 settings = Settings()
 
-print("환경 변수 로드 완료")  # TODO(BE): loguru 로거로 교체
+# 설정 로드는 setup_logging() 이전에 일어날 수 있어(모듈 import 시점) 표준 로거로만 남긴다.
+# 로깅 설정이 적용되기 전이면 핸들러가 없어 조용히 지나가고, 이후엔 파일/콘솔로 남는다.
+logging.getLogger(__name__).debug("환경 변수 로드 완료")

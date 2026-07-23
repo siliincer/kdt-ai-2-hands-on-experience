@@ -21,12 +21,8 @@ if TYPE_CHECKING:
 class Account(Base):
     __tablename__ = "accounts"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     # account_number 는 계정계가 부여한 실제 계좌번호를 저장한다(예: "271-069-693651").
     # 송금은 이 번호 + bank_name 기반이므로 매핑에 함께 보관한다.
     account_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
@@ -39,17 +35,13 @@ class Account(Base):
     # mock-financial-service(계정계) 원장의 account_id 매핑. 잔액/원장의 권위는
     # 계정계로 이관되므로 이 컬럼이 로컬 User <-> 외부 계좌를 잇는다.
     # nullable: 프로비저닝(Phase 2) 전 기존 행 호환.
-    external_account_id: Mapped[str | None] = mapped_column(
-        String(64), unique=True, nullable=True
-    )
+    external_account_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     # 계좌 별칭(예: "생활비 통장"). 계정계 write 가 없어 로컬을 정본으로 둔다(D4).
     alias: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # 계좌 유형(예: "checking", "savings"). 계약 ACCOUNT-LIST 응답용. 미분류면 None.
     account_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # 기본 출금 계좌 여부. 사용자당 하나만 true(부분 유니크 인덱스로 강제).
-    is_default: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=false(), default=False
-    )
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)
 
     user: Mapped["User"] = relationship(
         back_populates="accounts",

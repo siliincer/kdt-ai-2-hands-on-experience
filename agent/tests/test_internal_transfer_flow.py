@@ -44,12 +44,8 @@ def _trace_steps(result: dict) -> list[str]:
 
 
 def _accounts():
-    checking = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장"
-    )
-    living = next(
-        a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "생활비통장"
-    )
+    checking = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "입출금통장")
+    living = next(a for a in MOCK_ACCOUNTS["user_001"] if a["account_name"] == "생활비통장")
     return checking, living
 
 
@@ -59,9 +55,7 @@ def test_happy_path_full_info(graph):
     before_checking, before_living = checking["balance"], living["balance"]
     config = _config()
 
-    r = graph.invoke(
-        _new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config
-    )
+    r = graph.invoke(_new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config)
     card = _prompt(r)
     assert "입출금통장" in card and "생활비통장" in card and "50,000" in card
 
@@ -85,9 +79,7 @@ def test_cancel_at_approval_keeps_balance(graph):
     before_checking, before_living = checking["balance"], living["balance"]
     config = _config()
 
-    r = graph.invoke(
-        _new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config
-    )
+    r = graph.invoke(_new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config)
     r = graph.invoke(Command(resume="취소"), config)
 
     assert "취소" in r["final_response"]
@@ -102,9 +94,7 @@ def test_unknown_reply_at_approval_cancels(graph):
     (_parse_itx_approval_reply 기본값)
     """
     config = _config()
-    graph.invoke(
-        _new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config
-    )
+    graph.invoke(_new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config)
     r = graph.invoke(Command(resume="음... 글쎄요"), config)
     assert "취소" in r["final_response"]
 
@@ -134,9 +124,7 @@ def test_edit_amount_loop_revalidates(graph):
     before_checking, before_living = checking["balance"], living["balance"]
     config = _config()
 
-    r = graph.invoke(
-        _new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config
-    )
+    r = graph.invoke(_new_state("입출금통장에서 생활비통장으로 5만원 옮겨줘", "user_001"), config)
     assert "50,000" in _prompt(r)
 
     r = graph.invoke(Command(resume="금액 수정"), config)

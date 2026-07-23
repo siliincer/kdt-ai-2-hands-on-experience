@@ -44,9 +44,7 @@ def _login(page: Page, user: dict) -> None:
     expect(page.get_by_role("button", name="로그아웃")).to_be_visible(timeout=10_000)
 
 
-def test_signup_then_login_shows_chat_screen(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_signup_then_login_shows_chat_screen(page: Page, api_request_context: APIRequestContext):
     user = _signup(api_request_context)
 
     page.goto("/")
@@ -58,9 +56,7 @@ def test_signup_then_login_shows_chat_screen(
     expect(page.get_by_placeholder("example@email.com")).not_to_be_visible()
 
 
-def test_login_wrong_password_shows_error(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_login_wrong_password_shows_error(page: Page, api_request_context: APIRequestContext):
     user = _signup(api_request_context)
 
     page.goto("/")
@@ -68,15 +64,11 @@ def test_login_wrong_password_shows_error(
     page.get_by_placeholder("비밀번호를 입력하세요").fill("wrong-password-1")
     page.get_by_role("button", name="로그인").click()
 
-    expect(page.get_by_text("이메일 또는 비밀번호가 잘못되었습니다.")).to_be_visible(
-        timeout=10_000
-    )
+    expect(page.get_by_text("이메일 또는 비밀번호가 잘못되었습니다.")).to_be_visible(timeout=10_000)
     expect(page.get_by_placeholder("example@email.com")).to_be_visible()
 
 
-def test_balance_inquiry_shows_provisioned_account(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_balance_inquiry_shows_provisioned_account(page: Page, api_request_context: APIRequestContext):
     user = _signup(api_request_context)
 
     page.goto("/")
@@ -91,9 +83,7 @@ def test_balance_inquiry_shows_provisioned_account(
     expect(page.get_by_text("내 자산 현황")).to_be_visible(timeout=20_000)
 
 
-def test_transfer_confirm_card_appears_with_real_agent_flow(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_transfer_confirm_card_appears_with_real_agent_flow(page: Page, api_request_context: APIRequestContext):
     user = _signup(api_request_context)
 
     page.goto("/")
@@ -106,14 +96,10 @@ def test_transfer_confirm_card_appears_with_real_agent_flow(
     # 정보를 되묻거나(수취인/금액) 확인 카드를 띄운다. 최소한 자연어 응답이나
     # 확인 카드 중 하나는 대화창에 나타나야 한다.
     page.get_by_role("button", name="송금하기").click()
-    expect(page.get_by_text("송금").or_(page.get_by_text("누구"))).to_be_visible(
-        timeout=20_000
-    )
+    expect(page.get_by_text("송금").or_(page.get_by_text("누구"))).to_be_visible(timeout=20_000)
 
 
-def test_transfer_completes_after_confirmation(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_transfer_completes_after_confirmation(page: Page, api_request_context: APIRequestContext):
     """송금 확인 카드까지가 아니라 승인 버튼까지 눌러서 완료 응답을 받는다.
 
     주의: .env에 FINANCIAL_DEMO_RECEIVER_BANK_NAME/ACCOUNT_NUMBER가 비어있으면
@@ -131,9 +117,7 @@ def test_transfer_completes_after_confirmation(
     expect(page.get_by_text("보냈어요")).to_be_visible(timeout=20_000)
 
 
-def test_logout_returns_to_login_screen(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_logout_returns_to_login_screen(page: Page, api_request_context: APIRequestContext):
     user = _signup(api_request_context)
     _login(page, user)
 
@@ -148,9 +132,7 @@ def test_logout_returns_to_login_screen(
     assert logged_in is None
 
 
-def test_expired_session_redirects_to_login(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_expired_session_redirects_to_login(page: Page, api_request_context: APIRequestContext):
     """진짜 세션 만료(유효하지 않은 토큰) → 자동 로그아웃 + 로그인 화면 복귀.
 
     주의(발견한 버그, 이 테스트가 검증하는 범위 밖): "세션이 만료되었습니다.
@@ -167,18 +149,14 @@ def test_expired_session_redirects_to_login(
 
     # 로그인 이후 토큰을 깨뜨려서 인증이 필요한 다음 요청이 실제 401을 받게 만든다
     # (backend/src/backend/security/jwt.py verify_token()이 JWTError → 401).
-    page.evaluate(
-        "() => sessionStorage.setItem('rf_access_token', 'garbage-invalid-token')"
-    )
+    page.evaluate("() => sessionStorage.setItem('rf_access_token', 'garbage-invalid-token')")
 
     page.get_by_role("button", name="잔액 확인").click()
 
     expect(page.get_by_placeholder("example@email.com")).to_be_visible(timeout=10_000)
 
 
-def test_signup_duplicate_email_shows_error(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_signup_duplicate_email_shows_error(page: Page, api_request_context: APIRequestContext):
     user = _signup(api_request_context)  # 이메일 하나 선점
 
     page.goto("/")
@@ -189,14 +167,10 @@ def test_signup_duplicate_email_shows_error(
     page.get_by_placeholder("비밀번호를 다시 입력하세요").fill("another-password-1")
     page.get_by_role("button", name="회원가입").click()
 
-    expect(page.get_by_text("이미 사용 중인 이메일입니다.")).to_be_visible(
-        timeout=10_000
-    )
+    expect(page.get_by_text("이미 사용 중인 이메일입니다.")).to_be_visible(timeout=10_000)
 
 
-def test_session_persists_after_reload(
-    page: Page, api_request_context: APIRequestContext
-):
+def test_session_persists_after_reload(page: Page, api_request_context: APIRequestContext):
     user = _signup(api_request_context)
     _login(page, user)
 

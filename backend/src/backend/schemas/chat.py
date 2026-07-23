@@ -57,9 +57,7 @@ class AgentInputRequest(BaseModel):
     """
 
     chat_session_id: UUID
-    input_request_id: str = Field(
-        min_length=1, description="Agent 가 발급한 입력 요청 id"
-    )
+    input_request_id: str = Field(min_length=1, description="Agent 가 발급한 입력 요청 id")
     value: dict = Field(description="UI 계약별 제출값(outcome 필드 포함)")
 
 

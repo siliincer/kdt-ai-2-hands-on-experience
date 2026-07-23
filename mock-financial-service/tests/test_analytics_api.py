@@ -19,9 +19,7 @@ WRONG_KEY = "wrong-key"
 
 
 def _make_account(client, owner: str, initial_balance: int = 0) -> dict:
-    r = client.post(
-        "/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance}
-    )
+    r = client.post("/api/v1/accounts", json={"owner": owner, "initial_balance": initial_balance})
     assert r.status_code == 201, r.text
     return r.json()
 

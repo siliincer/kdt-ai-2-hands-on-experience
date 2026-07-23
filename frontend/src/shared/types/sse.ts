@@ -9,7 +9,8 @@ export type AgentStreamEventType =
   | 'need_approval'
   | 'authentication_required' // 추가 인증 대기. metadata.auth_context_id
   | 'done'
-  | 'error';
+  | 'error'
+  | 'blocked'; // 업무 차단 종료(workflow_failed). done/error 와 함께 terminal.
 
 export interface AgentStreamEvent {
   event_type: AgentStreamEventType;

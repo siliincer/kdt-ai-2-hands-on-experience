@@ -68,8 +68,7 @@ def _valid_global_boundary(
     ):
         return False
     return all(
-        webhook.step_id in allowed_steps
-        and webhook.event_type in {"blocked", "component"}
+        webhook.step_id in allowed_steps and webhook.event_type in {"blocked", "component"}
         for webhook in evidence.webhooks
     )
 
@@ -85,15 +84,10 @@ def _error_result(
 ) -> AttackResult:
     preserved_turns = list(turns or [])
     has_failure = any(turn.verdict == Verdict.FAIL for turn in preserved_turns)
-    failure_reasons = list(
-        dict.fromkeys(
-            turn.reason for turn in preserved_turns if turn.verdict == Verdict.FAIL
-        )
-    )
+    failure_reasons = list(dict.fromkeys(turn.reason for turn in preserved_turns if turn.verdict == Verdict.FAIL))
     execution_reason = f"{stage} failed: {type(error).__name__}"
     reason = (
-        f"security expectation mismatch: {'; '.join(failure_reasons)}; "
-        f"{execution_reason}"
+        f"security expectation mismatch: {'; '.join(failure_reasons)}; {execution_reason}"
         if failure_reasons
         else execution_reason
     )
@@ -104,9 +98,7 @@ def _error_result(
         verdict=Verdict.FAIL if has_failure else Verdict.ERROR,
         reason=reason,
         execution_error=f"{stage}:{type(error).__name__}",
-        boundary_score=max(
-            (turn.boundary_score for turn in preserved_turns), default=0.0
-        ),
+        boundary_score=max((turn.boundary_score for turn in preserved_turns), default=0.0),
         evidence=[
             *(item for turn in preserved_turns for item in turn.evidence),
             *(extra_evidence or []),
@@ -129,10 +121,7 @@ def _aggregate_workflow_verdicts(
     grouped = {}
     for result in results:
         grouped.setdefault(result.target_workflow_id, []).append(result)
-    return {
-        workflow_id: _aggregate_verdict(workflow_results)
-        for workflow_id, workflow_results in grouped.items()
-    }
+    return {workflow_id: _aggregate_verdict(workflow_results) for workflow_id, workflow_results in grouped.items()}
 
 
 def validate_runtime(config: RedTeamConfig, user_id: str) -> None:
@@ -180,9 +169,7 @@ def _execute_attack(
         ]
 
     try:
-        before_ledger = (
-            client.ledger_snapshot() if attack.expected_ledger is not None else None
-        )
+        before_ledger = client.ledger_snapshot() if attack.expected_ledger is not None else None
     except _BOUNDED_EXECUTION_ERRORS as exc:
         return _error_result(attack, iteration, "ledger snapshot", exc)
     thread_id = None
@@ -217,10 +204,7 @@ def _execute_attack(
             redact_fields,
         )
         execution_evidence = response.execution_evidence
-        if (
-            execution_evidence is None
-            and attack.target_workflow_id != BusinessWorkflow.GLOBAL_AGENT_ENTRY
-        ):
+        if execution_evidence is None and attack.target_workflow_id != BusinessWorkflow.GLOBAL_AGENT_ENTRY:
             evidence_error = ValueError("target workflow execution evidence is missing")
             turn_result = turn_result.model_copy(
                 update={
@@ -287,10 +271,7 @@ def _execute_attack(
             agreement = (
                 None
                 if judgment.outcome == JudgmentOutcome.UNCERTAIN
-                else (
-                    (judgment.outcome == JudgmentOutcome.VIOLATION)
-                    == (turn_result.verdict == Verdict.FAIL)
-                )
+                else ((judgment.outcome == JudgmentOutcome.VIOLATION) == (turn_result.verdict == Verdict.FAIL))
             )
             turn_result = turn_result.model_copy(
                 update={
@@ -298,14 +279,8 @@ def _execute_attack(
                     "judgment_agrees_with_rules": agreement,
                 }
             )
-        if (
-            requested_thread_id is not None
-            and response.thread_id != requested_thread_id
-        ):
-            drift_reason = (
-                f"thread continuity mismatch: expected {requested_thread_id}, "
-                f"got {response.thread_id}"
-            )
+        if requested_thread_id is not None and response.thread_id != requested_thread_id:
+            drift_reason = f"thread continuity mismatch: expected {requested_thread_id}, got {response.thread_id}"
             turn_result = turn_result.model_copy(
                 update={
                     "verdict": Verdict.FAIL,
@@ -328,23 +303,14 @@ def _execute_attack(
                 exc,
                 turns=turn_results,
             )
-        if (
-            requested_thread_id is not None
-            and response.thread_id != requested_thread_id
-        ):
+        if requested_thread_id is not None and response.thread_id != requested_thread_id:
             break
         thread_id = response.thread_id
         if response.status in expected.terminal_statuses:
             break
 
-    attack_verdict = (
-        Verdict.FAIL
-        if any(result.verdict == Verdict.FAIL for result in turn_results)
-        else Verdict.PASS
-    )
-    boundary_score = max(
-        (result.boundary_score for result in turn_results), default=0.0
-    )
+    attack_verdict = Verdict.FAIL if any(result.verdict == Verdict.FAIL for result in turn_results) else Verdict.PASS
+    boundary_score = max((result.boundary_score for result in turn_results), default=0.0)
     evidence = [item for result in turn_results for item in result.evidence]
     ledger_reason = None
     if attack.expected_ledger is not None and before_ledger is not None:
@@ -420,24 +386,19 @@ def run_scenario(
     run_started_monotonic: float | None = None,
 ) -> ScenarioResult:
     started_at = run_started_at or datetime.now(UTC)
-    started_monotonic = (
-        run_started_monotonic if run_started_monotonic is not None else time.monotonic()
-    )
+    started_monotonic = run_started_monotonic if run_started_monotonic is not None else time.monotonic()
     validate_runtime(config, user_id)
     client.check_deadline()
     if any(attack.adaptive for attack in scenario.attacks) and attacker is None:
         raise SafetyPolicyError("adaptive LLM execution requires an input generator")
-    attempt_counts = [
-        _adaptive_attempts(config, attack, attacker) for attack in scenario.attacks
-    ]
+    attempt_counts = [_adaptive_attempts(config, attack, attacker) for attack in scenario.attacks]
     turn_count = sum(
         len(attack.expanded_turns()) * attempts
         for attack, attempts in zip(scenario.attacks, attempt_counts, strict=True)
     )
     if turn_count > config.execution.max_turns_per_scenario:
         raise SafetyPolicyError(
-            f"scenario can use {turn_count} turns but turn limit is "
-            f"{config.execution.max_turns_per_scenario}"
+            f"scenario can use {turn_count} turns but turn limit is {config.execution.max_turns_per_scenario}"
         )
     ledger_checks = sum(
         2 * attempts
@@ -454,14 +415,8 @@ def run_scenario(
         for attack, attempts in zip(scenario.attacks, attempt_counts, strict=True)
         if attack.adaptive
     )
-    judgment_requests = (
-        turn_count * config.judgment.max_attempts_per_evaluation
-        if judge is not None
-        else 0
-    )
-    required_requests = (
-        2 + turn_count + ledger_checks + generation_requests + judgment_requests
-    )
+    judgment_requests = turn_count * config.judgment.max_attempts_per_evaluation if judge is not None else 0
+    required_requests = 2 + turn_count + ledger_checks + generation_requests + judgment_requests
     if client.remaining_requests < required_requests:
         raise SafetyPolicyError(
             f"scenario needs up to {required_requests} HTTP requests including health, "
@@ -503,27 +458,15 @@ def run_scenario(
                 user_id,
                 config.safety.redact_fields,
                 first_message=generated.message if generated is not None else None,
-                generation_variation=(
-                    generated.variation if generated is not None else None
-                ),
-                generation_strategy=(
-                    generated.strategy if generated is not None else None
-                ),
+                generation_variation=(generated.variation if generated is not None else None),
+                generation_strategy=(generated.strategy if generated is not None else None),
                 generation_style=generated.style if generated is not None else None,
                 generation_seed=generated.seed if generated is not None else None,
-                generation_requested_action=(
-                    generated.requested_action if generated is not None else None
-                ),
+                generation_requested_action=(generated.requested_action if generated is not None else None),
                 generation_target=generated.target if generated is not None else None,
-                generation_polarity=(
-                    generated.polarity if generated is not None else None
-                ),
-                generation_reported_speech=(
-                    generated.reported_speech if generated is not None else None
-                ),
-                generation_business_fact_mentions=(
-                    generated.business_fact_mentions if generated is not None else None
-                ),
+                generation_polarity=(generated.polarity if generated is not None else None),
+                generation_reported_speech=(generated.reported_speech if generated is not None else None),
+                generation_business_fact_mentions=(generated.business_fact_mentions if generated is not None else None),
                 iteration=loop.next_iteration,
                 judge=judge,
             )
@@ -539,16 +482,12 @@ def run_scenario(
                         "generation_target": generated.target,
                         "generation_polarity": generated.polarity,
                         "generation_reported_speech": generated.reported_speech,
-                        "generation_business_fact_mentions": (
-                            generated.business_fact_mentions
-                        ),
+                        "generation_business_fact_mentions": (generated.business_fact_mentions),
                     }
                 )
             results.append(result)
             loop.record(result)
-            if result.execution_error and result.execution_error.endswith(
-                ":RequestBudgetError"
-            ):
+            if result.execution_error and result.execution_error.endswith(":RequestBudgetError"):
                 run_deadline_exhausted = True
                 break
             integrity_markers = {
@@ -591,10 +530,7 @@ def run_scenario(
         judgment_telemetry_error = exc
         if verdict != Verdict.FAIL:
             verdict = Verdict.ERROR
-    review_required = bool(
-        judgment_telemetry
-        and (judgment_telemetry.disagreements or judgment_telemetry.uncertain)
-    )
+    review_required = bool(judgment_telemetry and (judgment_telemetry.disagreements or judgment_telemetry.uncertain))
     adaptive_enabled = any(attack.adaptive for attack in scenario.attacks)
     if adaptive_enabled:
         if state_integrity_failure == "ledger_state:unexpected_mutation":
@@ -609,10 +545,7 @@ def run_scenario(
             execution_reason = "independent judgment telemetry collection failed"
         elif telemetry_error is not None:
             execution_reason = "target LLM telemetry collection failed"
-        elif (
-            llm_telemetry is not None
-            and llm_telemetry.policy_marker_injections != llm_telemetry.attempts
-        ):
+        elif llm_telemetry is not None and llm_telemetry.policy_marker_injections != llm_telemetry.attempts:
             if verdict != Verdict.FAIL:
                 verdict = Verdict.ERROR
             execution_reason = "target LLM policy marker coverage is incomplete"
@@ -633,10 +566,7 @@ def run_scenario(
     else:
         if telemetry_error is not None:
             execution_reason = "target LLM telemetry collection failed"
-        elif (
-            llm_telemetry is not None
-            and llm_telemetry.policy_marker_injections != llm_telemetry.attempts
-        ):
+        elif llm_telemetry is not None and llm_telemetry.policy_marker_injections != llm_telemetry.attempts:
             if verdict != Verdict.FAIL:
                 verdict = Verdict.ERROR
             execution_reason = "target LLM policy marker coverage is incomplete"

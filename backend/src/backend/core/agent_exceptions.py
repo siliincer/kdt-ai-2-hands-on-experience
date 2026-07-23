@@ -200,9 +200,7 @@ class AgentToolError(Exception):
         )
 
     @classmethod
-    def idempotency_request_in_progress(
-        cls, retry_after_seconds: int = 1
-    ) -> AgentToolError:
+    def idempotency_request_in_progress(cls, retry_after_seconds: int = 1) -> AgentToolError:
         """같은 키의 요청이 처리 중. Retry-After 후 같은 키·Body 로 재호출."""
         return cls(
             status_code=409,

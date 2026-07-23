@@ -45,9 +45,7 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_set_account_alias"
-_tool_error_update = build_tool_error_update(
-    "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
-)
+_tool_error_update = build_tool_error_update("설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 # 승인·정정 화면의 수정 대상 2종 — prepare_account_alias_change,
 # request_account_alias_approval, execute_account_alias_change가 공유한다.
@@ -67,10 +65,7 @@ def _correction_route_key(prefix: str, correction_view: Any) -> str | None:
     """수정 대상이 정확히 하나일 때만 route_key를 만들고, 아니면 None(계약 오류)."""
 
     targets = list(
-        (correction_view if isinstance(correction_view, Mapping) else {}).get(
-            "allowed_change_targets"
-        )
-        or []
+        (correction_view if isinstance(correction_view, Mapping) else {}).get("allowed_change_targets") or []
     )
     valid_targets = [target for target in targets if target in _RESET_STEP_BY_TARGET]
     if len(valid_targets) != 1 or len(valid_targets) != len(targets):
@@ -86,15 +81,9 @@ class AccountAliasChangeDependencies:
     webhook_client: BackendWebhookClient
     interaction_runtime: InteractionPauseRuntime
     webhook_builder: InteractionWebhookBuilder
-    input_request_id_factory: Callable[[], str] = field(
-        default=_default_input_request_id
-    )
-    tool_request_id_factory: Callable[[str, str], str] = field(
-        default=_default_tool_request_id
-    )
-    slot_extractor: SettingSlotExtractor = field(
-        default=extract_account_alias_slots_llm_first
-    )
+    input_request_id_factory: Callable[[], str] = field(default=_default_input_request_id)
+    tool_request_id_factory: Callable[[str, str], str] = field(default=_default_tool_request_id)
+    slot_extractor: SettingSlotExtractor = field(default=extract_account_alias_slots_llm_first)
 
 
 def build_set_account_alias_graph(
@@ -117,9 +106,7 @@ def build_set_account_alias_graph(
             },
         }
 
-    async def resolve_account_alias_target(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def resolve_account_alias_target(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -164,9 +151,7 @@ def build_set_account_alias_graph(
             "data": update,
         }
 
-    async def request_account_alias_selection(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_account_alias_selection(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = data.get("input_request_id")
         if not isinstance(input_request_id, str) or not input_request_id:
@@ -186,6 +171,7 @@ def build_set_account_alias_graph(
                 "title": "별칭을 변경할 계좌를 선택해 주세요.",
                 "accounts": _account_options(data.get("accounts")),
                 "actions": ["select", "cancel"],
+                "multiple": False,
             },
         )
         resumed = _resume_data(state, dependencies.interaction_runtime, event)
@@ -214,9 +200,7 @@ def build_set_account_alias_graph(
             ValueError("계좌 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def emit_account_alias_selection_empty(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_account_alias_selection_empty(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
@@ -228,6 +212,7 @@ def build_set_account_alias_graph(
                 "title": "별칭을 변경할 수 있는 계좌가 없습니다.",
                 "accounts": [],
                 "actions": [],
+                "multiple": False,
             },
         )
         await _publish(dependencies, event, config)
@@ -241,9 +226,7 @@ def build_set_account_alias_graph(
             "route_key": "present" if valid else "missing",
         }
 
-    async def request_account_alias_input(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_account_alias_input(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         input_request_id = dependencies.input_request_id_factory()
         event = dependencies.webhook_builder.need_input(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -295,14 +278,10 @@ def build_set_account_alias_graph(
             "data": {"prepare_attempt": attempt, "correction_view": None},
         }
 
-    async def prepare_account_alias_change(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def prepare_account_alias_change(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         idempotency_key = (
-            f"account_alias_prepare:"
-            f"{_config_context(config, 'execution_context_id')}:"
-            f"{data.get('prepare_attempt')}"
+            f"account_alias_prepare:{_config_context(config, 'execution_context_id')}:{data.get('prepare_attempt')}"
         )
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -338,9 +317,7 @@ def build_set_account_alias_graph(
                 "data": {},
             }
         if outcome == "correction_required":
-            route_key = _correction_route_key(
-                "correction_required", result.get("correction_view")
-            )
+            route_key = _correction_route_key("correction_required", result.get("correction_view"))
             if route_key is None:
                 return _tool_error_update(
                     "prepare_account_alias_change",
@@ -362,9 +339,7 @@ def build_set_account_alias_graph(
             ValueError("Prepare 응답 outcome이 계약과 일치하지 않습니다."),
         )
 
-    async def emit_account_alias_unchanged(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_account_alias_unchanged(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -383,9 +358,7 @@ def build_set_account_alias_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_account_alias_unchanged")
 
-    async def emit_account_alias_blocked(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_account_alias_blocked(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         view = _data(state).get("blocked_view") or {}
         event = dependencies.webhook_builder.blocked(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -398,9 +371,7 @@ def build_set_account_alias_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_account_alias_blocked", status="blocked")
 
-    async def request_account_alias_approval(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_account_alias_approval(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         confirmation_id = data.get("confirmation_id")
         if not isinstance(confirmation_id, str) or not confirmation_id:
@@ -492,9 +463,7 @@ def build_set_account_alias_graph(
         clears=("alias",),
     )
 
-    async def execute_account_alias_change(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def execute_account_alias_change(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         idempotency_key = f"account_alias_execute:{data.get('confirmation_id')}"
         try:
@@ -523,9 +492,7 @@ def build_set_account_alias_graph(
                 },
             }
         if outcome == "correction_required":
-            route_key = _correction_route_key(
-                "correction_required", result.get("correction_view")
-            )
+            route_key = _correction_route_key("correction_required", result.get("correction_view"))
             if route_key is None:
                 return _tool_error_update(
                     "execute_account_alias_change",
@@ -550,9 +517,7 @@ def build_set_account_alias_graph(
             ValueError("Execute 응답 outcome이 계약과 일치하지 않습니다."),
         )
 
-    async def emit_account_alias_result(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_account_alias_result(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         view = data.get("confirmation_view") or {}
         event = dependencies.webhook_builder.component(
@@ -565,8 +530,7 @@ def build_set_account_alias_graph(
             payload={
                 "purpose": "account_alias",
                 "outcome": "completed",
-                "account": view.get("account")
-                or {"account_id": data.get("account_id")},
+                "account": view.get("account") or {"account_id": data.get("account_id")},
                 "alias": data.get("alias"),
                 "completed_at": data.get("completed_at"),
             },
@@ -574,12 +538,9 @@ def build_set_account_alias_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_account_alias_result")
 
-    async def emit_account_alias_error(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_account_alias_error(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         message = str(
-            _data(state).get("safe_error_message")
-            or "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            _data(state).get("safe_error_message") or "설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."
         )
         event = dependencies.webhook_builder.error(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -596,9 +557,7 @@ def build_set_account_alias_graph(
     graph.add_node("extract_account_alias_slots", extract_account_alias_slots)
     graph.add_node("resolve_account_alias_target", resolve_account_alias_target)
     graph.add_node("request_account_alias_selection", request_account_alias_selection)
-    graph.add_node(
-        "emit_account_alias_selection_empty", emit_account_alias_selection_empty
-    )
+    graph.add_node("emit_account_alias_selection_empty", emit_account_alias_selection_empty)
     graph.add_node("check_account_alias_value", check_account_alias_value)
     graph.add_node("request_account_alias_input", request_account_alias_input)
     graph.add_node("start_account_alias_prepare", start_account_alias_prepare)
@@ -704,6 +663,9 @@ def build_set_account_alias_graph(
 def _confirmation_payload(raw_view: Any) -> dict[str, Any]:
     view = raw_view if isinstance(raw_view, Mapping) else {}
     return {
+        # FE ConfirmModalUI가 이 값으로 표시 분기 + 승인 시 backend component를 정한다
+        # (backend _CONFIRMATION_COMPONENTS와 문자열 일치 필수).
+        "purpose": "account_alias",
         "account": view.get("account"),
         "alias": view.get("alias"),
         "expires_at": view.get("expires_at"),

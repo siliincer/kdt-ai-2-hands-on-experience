@@ -24,15 +24,9 @@ from agent.workflows.slot_extraction_support import (
 
 SettingSlotExtractor: TypeAlias = Callable[[str], Awaitable[Mapping[str, Any]]]
 
-_ACCOUNT_HINT = re.compile(
-    r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))"
-)
-_ALIAS_QUOTED = re.compile(
-    r"[\"'“”‘’『』「」]([^\"'“”‘’『』「」]{1,30})[\"'“”‘’『』「」]"
-)
-_ALIAS_AFTER_KEYWORD = re.compile(
-    r"별[칭명](?:을|를)?\s*([^,.\n]{1,30}?)\s*(?:으로|로)\s*(?:바꿔|바꾸|변경|수정|설정)"
-)
+_ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))")
+_ALIAS_QUOTED = re.compile(r"[\"'“”‘’『』「」]([^\"'“”‘’『』「」]{1,30})[\"'“”‘’『』「」]")
+_ALIAS_AFTER_KEYWORD = re.compile(r"별[칭명](?:을|를)?\s*([^,.\n]{1,30}?)\s*(?:으로|로)\s*(?:바꿔|바꾸|변경|수정|설정)")
 _ALIAS_BEFORE_KEYWORD = re.compile(
     r"([^,.\n]{1,30}?)\s*(?:으로|로)\s*별[칭명](?:을|를)?\s*(?:바꿔|바꾸|변경|수정|설정)"
 )
@@ -123,10 +117,7 @@ async def extract_default_account_slots_llm_first(
         return fallback
 
     return {
-        "account_hint": (
-            _grounded_phrase(extracted.account_hint, message)
-            or fallback.get("account_hint")
-        ),
+        "account_hint": (_grounded_phrase(extracted.account_hint, message) or fallback.get("account_hint")),
     }
 
 
@@ -147,10 +138,7 @@ async def extract_account_alias_slots_llm_first(
         return fallback
 
     return {
-        "account_hint": (
-            _grounded_phrase(extracted.account_hint, message)
-            or fallback.get("account_hint")
-        ),
+        "account_hint": (_grounded_phrase(extracted.account_hint, message) or fallback.get("account_hint")),
         "alias": (_grounded_phrase(extracted.alias, message) or fallback.get("alias")),
     }
 

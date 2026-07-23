@@ -88,11 +88,7 @@ def main() -> int:
     baseline = _load_baseline(baseline_path)
     payload = _run_pyright(root)
     current = _collect_errors(payload, root)
-    regressions = {
-        key: (count, baseline.get(key, 0))
-        for key, count in current.items()
-        if count > baseline.get(key, 0)
-    }
+    regressions = {key: (count, baseline.get(key, 0)) for key, count in current.items() if count > baseline.get(key, 0)}
 
     summary = payload.get("summary", {})
     print(
@@ -111,9 +107,7 @@ def main() -> int:
             )
         return 1
 
-    reductions = sum(
-        max(allowed - current.get(key, 0), 0) for key, allowed in baseline.items()
-    )
+    reductions = sum(max(allowed - current.get(key, 0), 0) for key, allowed in baseline.items())
     if reductions:
         print(f"Pyright baseline debt was reduced by {reductions} error(s).")
     print("No new Pyright errors were introduced.")

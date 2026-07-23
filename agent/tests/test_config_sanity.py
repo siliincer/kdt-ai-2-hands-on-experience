@@ -26,8 +26,7 @@ def test_balance_output_keys_are_namespaced_or_system():
     for step in workflows["wf_balance_inquiry"]["steps"]:
         key = step.get("output_data_key") or ""
         assert not key or "." in key or key in SYSTEM_KEYS, (
-            f"스텝 '{step['step_id']}'의 output_data_key '{key}'가 "
-            "flat 업무 키로 남아 있음 (sync 매핑 누락)"
+            f"스텝 '{step['step_id']}'의 output_data_key '{key}'가 flat 업무 키로 남아 있음 (sync 매핑 누락)"
         )
 
 
@@ -56,14 +55,8 @@ def test_input_steps_have_output_keys():
     for wf_id in ("wf_balance_inquiry", "wf_external_transfer"):
         for step in workflows[wf_id]["steps"]:
             if step["step_type"] == "input":
-                assert step.get("output_data_key"), (
-                    f"[{wf_id}] input 스텝 '{step['step_id']}'에 output_data_key가 없음"
-                )
-    ask = next(
-        s
-        for s in workflows["wf_external_transfer"]["steps"]
-        if s["step_id"] == "ask_recipient"
-    )
+                assert step.get("output_data_key"), f"[{wf_id}] input 스텝 '{step['step_id']}'에 output_data_key가 없음"
+    ask = next(s for s in workflows["wf_external_transfer"]["steps"] if s["step_id"] == "ask_recipient")
     assert ask["output_data_key"] == "transfer.recipient"
 
 

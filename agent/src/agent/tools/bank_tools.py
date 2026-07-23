@@ -141,9 +141,7 @@ def extract_balance_slots(state: dict) -> dict:
 
     try:
         llm = get_llm().with_structured_output(_BalanceSlots)
-        result = llm.invoke(
-            f"다음 사용자 발화에서 조회하려는 계좌 힌트를 추출해라.\n발화: {user_input}"
-        )
+        result = llm.invoke(f"다음 사용자 발화에서 조회하려는 계좌 힌트를 추출해라.\n발화: {user_input}")
         account_hint = result.account_hint or None
     except Exception:
         account_hint = None
@@ -177,11 +175,7 @@ def verify_account(state: dict) -> dict:
         # 공백 무시 매칭 — LLM이 '생활비 통장'처럼 공백을 넣어도 '생활비통장'에 매칭
         hint = (_data(state).get("balance.account_hint") or "").replace(" ", "")
         if hint:
-            candidates = [
-                a
-                for a in accounts
-                if hint in a.get("account_name", "").replace(" ", "")
-            ]
+            candidates = [a for a in accounts if hint in a.get("account_name", "").replace(" ", "")]
         else:
             candidates = accounts
 
@@ -199,9 +193,7 @@ def verify_account(state: dict) -> dict:
                 "route_key": "confirmed",
             }
         # 여러 개 → 되물어 선택받는다. 선택지 메시지(목록 포함)를 만들어 담는다.
-        options = "\n".join(
-            f"  {i}. {a['account_name']}" for i, a in enumerate(candidates, 1)
-        )
+        options = "\n".join(f"  {i}. {a['account_name']}" for i, a in enumerate(candidates, 1))
         prompt = f"조회할 계좌를 선택해 주세요 (여러 개 가능):\n{options}"
         return {
             "balance.selected_accounts": [],
@@ -225,10 +217,7 @@ def generate_balance_response(state: dict) -> dict:
         return {"route_key": "failed"}
 
     # 코드가 만든 확정 응답 — LLM 실패 시 폴백으로도 사용
-    fallback = (
-        ", ".join(f"{r['account_name']} {r['balance']:,}원" for r in results)
-        + "입니다."
-    )
+    fallback = ", ".join(f"{r['account_name']} {r['balance']:,}원" for r in results) + "입니다."
 
     try:
         info = "\n".join(f"- {r['account_name']}: {r['balance']:,}원" for r in results)
@@ -252,8 +241,7 @@ class _AccountSelection(BaseModel):
     selected_numbers: list[int] = Field(
         default_factory=list,
         description=(
-            "사용자가 선택한 계좌의 1-기반 번호 목록. "
-            "예: '1번이랑 3번' → [1, 3], '둘 다'/'전부' → 모든 번호."
+            "사용자가 선택한 계좌의 1-기반 번호 목록. 예: '1번이랑 3번' → [1, 3], '둘 다'/'전부' → 모든 번호."
         ),
     )
 
@@ -286,9 +274,7 @@ def apply_account_selection(state: dict) -> dict:
         return {"route_key": "invalid"}
 
     try:
-        menu = "\n".join(
-            f"{i + 1}. {a['account_name']}" for i, a in enumerate(candidates)
-        )
+        menu = "\n".join(f"{i + 1}. {a['account_name']}" for i, a in enumerate(candidates))
         llm = get_llm().with_structured_output(_AccountSelection)
         result = llm.invoke(
             "사용자가 아래 계좌 목록 중에서 조회할 계좌를 선택했다. "
@@ -422,9 +408,7 @@ def _resolve_recipient(user_id: str, raw) -> tuple[dict | None, list[dict]]:
         return None, []
     normalized = text.replace("-", "").replace(" ", "")
     if normalized.isdigit():
-        matches = [
-            r for r in recipients if r["account_number"].replace("-", "") == normalized
-        ]
+        matches = [r for r in recipients if r["account_number"].replace("-", "") == normalized]
     else:
         matches = [r for r in recipients if text in r["name"] or r["name"] in text]
     if len(matches) == 1:
@@ -464,8 +448,7 @@ def _resolve_from_account(user_id: str, raw) -> tuple[dict | None, list[dict]]:
         matches = [
             a
             for a in accounts
-            if compact in a["account_name"].replace(" ", "")
-            or a["account_name"].replace(" ", "") in compact
+            if compact in a["account_name"].replace(" ", "") or a["account_name"].replace(" ", "") in compact
         ]
         if len(matches) == 1:
             return matches[0], accounts
@@ -520,16 +503,12 @@ def _parse_warning_reply(reply: str) -> str:
 
 
 def _account_options(accounts: list[dict]) -> str:
-    return "\n".join(
-        f"  {i}. {a['account_name']} (잔액 {a['balance']:,}원)"
-        for i, a in enumerate(accounts, 1)
-    )
+    return "\n".join(f"  {i}. {a['account_name']} (잔액 {a['balance']:,}원)" for i, a in enumerate(accounts, 1))
 
 
 def _recipient_catalog(user_id: str) -> str:
     return "\n".join(
-        f"  {i}. {r['name']} ({r['bank']} {r['account_number']})"
-        for i, r in enumerate(_recipients(user_id), 1)
+        f"  {i}. {r['name']} ({r['bank']} {r['account_number']})" for i, r in enumerate(_recipients(user_id), 1)
     )
 
 
@@ -573,9 +552,7 @@ def _recipient_select_ui(user_id: str) -> dict:
         ]
     except BankClientError:
         options = []
-    return SearchSelectUi(type="search_select", options=options).model_dump(
-        exclude_none=True
-    )
+    return SearchSelectUi(type="search_select", options=options).model_dump(exclude_none=True)
 
 
 def _number_input_ui() -> dict:
@@ -591,10 +568,7 @@ class _TransferSlots(BaseModel):
 
     recipient: str | None = Field(
         None,
-        description=(
-            "수취인 이름 또는 계좌번호. 조사(에게/한테)는 빼라 "
-            "(예: '김철수'). 발화에 없으면 null."
-        ),
+        description=("수취인 이름 또는 계좌번호. 조사(에게/한테)는 빼라 (예: '김철수'). 발화에 없으면 null."),
     )
     amount: int | None = Field(
         None,
@@ -606,10 +580,7 @@ class _TransferSlots(BaseModel):
     )
     from_account_hint: str | None = Field(
         None,
-        description=(
-            "출금할 계좌를 가리키는 단어 (예: '생활비', '입출금'). "
-            "특정 계좌를 지칭하지 않으면 null."
-        ),
+        description=("출금할 계좌를 가리키는 단어 (예: '생활비', '입출금'). 특정 계좌를 지칭하지 않으면 null."),
     )
 
 
@@ -656,9 +627,7 @@ def extract_transfer_slots(state: dict) -> dict:
     recipient = amount = from_hint = None
     try:
         llm = get_llm().with_structured_output(_TransferSlots)
-        result = llm.invoke(
-            f"다음 사용자 발화에서 송금에 필요한 슬롯을 추출해라.\n발화: {user_input}"
-        )
+        result = llm.invoke(f"다음 사용자 발화에서 송금에 필요한 슬롯을 추출해라.\n발화: {user_input}")
         recipient = result.recipient or None
         # 0 이하는 무의미한 값이므로 미추출로 취급
         amount = result.amount if result.amount and result.amount > 0 else None
@@ -671,9 +640,7 @@ def extract_transfer_slots(state: dict) -> dict:
         fallback = _extract_transfer_slots_by_rule(user_input)
         recipient = recipient if recipient is not None else fallback["recipient"]
         amount = amount if amount is not None else fallback["amount"]
-        from_hint = (
-            from_hint if from_hint is not None else fallback["from_account_hint"]
-        )
+        from_hint = from_hint if from_hint is not None else fallback["from_account_hint"]
 
     return {
         "transfer.recipient": recipient,
@@ -708,9 +675,7 @@ def resolve_recipient_input(state: dict) -> dict:
     return {
         "route_key": "failed",
         "prompt_message": (
-            "수취인을 하나로 확정하지 못했어요. "
-            "이름 또는 계좌번호를 다시 입력해주세요.\n"
-            f"등록된 수취인:\n{catalog}"
+            f"수취인을 하나로 확정하지 못했어요. 이름 또는 계좌번호를 다시 입력해주세요.\n등록된 수취인:\n{catalog}"
         ),
         "prompt_ui": _recipient_select_ui(user_id),
     }
@@ -733,10 +698,7 @@ def verify_recipient_account(state: dict) -> dict:
         catalog = "(수취인 목록을 불러오지 못했습니다)"
     return {
         "route_key": "not_verified",
-        "prompt_message": (
-            "수취인 계좌를 확인할 수 없어요. 다시 입력해주세요.\n"
-            f"등록된 수취인:\n{catalog}"
-        ),
+        "prompt_message": (f"수취인 계좌를 확인할 수 없어요. 다시 입력해주세요.\n등록된 수취인:\n{catalog}"),
         "prompt_ui": _recipient_select_ui(user_id),
     }
 
@@ -760,9 +722,7 @@ def verify_amount(state: dict) -> dict:
     if amount is None or amount <= 0:
         return {
             "route_key": "invalid",
-            "prompt_message": (
-                "금액을 확인하지 못했어요. 다시 입력해주세요 (예: 5만원)."
-            ),
+            "prompt_message": ("금액을 확인하지 못했어요. 다시 입력해주세요 (예: 5만원)."),
             "prompt_ui": _number_input_ui(),
         }
     if amount > _TRANSFER_LIMIT:
@@ -770,8 +730,7 @@ def verify_amount(state: dict) -> dict:
             amt_key: amount,
             "route_key": "limit_exceeded",
             "final_response": (
-                f"1회 송금 한도({_TRANSFER_LIMIT:,}원)를 초과해 진행할 수 "
-                f"없습니다. 요청 금액: {amount:,}원"
+                f"1회 송금 한도({_TRANSFER_LIMIT:,}원)를 초과해 진행할 수 없습니다. 요청 금액: {amount:,}원"
             ),
         }
     return {amt_key: amount, "route_key": "valid"}
@@ -793,9 +752,7 @@ def verify_from_account(state: dict) -> dict:
             }
         return {
             "route_key": "needs_selection",
-            "prompt_message": (
-                f"어느 계좌에서 송금할까요?\n{_account_options(candidates)}"
-            ),
+            "prompt_message": (f"어느 계좌에서 송금할까요?\n{_account_options(candidates)}"),
             "prompt_ui": _account_card_ui(candidates),
         }
     except Exception:
@@ -879,16 +836,12 @@ def run_transfer_guardrail(state: dict) -> dict:
                 "reason": decision.get("rule_name"),
             },
             "route_key": "blocked",
-            "final_response": (
-                f"{decision.get('user_message')} (요청 금액: {amount:,}원)"
-            ),
+            "final_response": (f"{decision.get('user_message')} (요청 금액: {amount:,}원)"),
         }
 
     # require_additional_auth / warn → 경고 확인 라우트
     # (확인 후 승인·인증 스텝이 이어지므로 추가 인증 요구가 충족된다)
-    notices = "\n".join(
-        f"- {r['user_message']}" for r in triggered if r.get("user_message")
-    )
+    notices = "\n".join(f"- {r['user_message']}" for r in triggered if r.get("user_message"))
     return {
         "transfer.risk": {
             "risk_level": risk_level,
@@ -935,9 +888,7 @@ def run_pre_execution_guardrail(state: dict) -> dict:
         if "approval_required_for_execution" in by_id:
             return {
                 "route_key": "blocked",
-                "final_response": (
-                    "승인한 내용과 실행 내용이 일치하지 않아 송금을 차단했습니다."
-                ),
+                "final_response": ("승인한 내용과 실행 내용이 일치하지 않아 송금을 차단했습니다."),
             }
         if not live:
             return {
@@ -949,8 +900,7 @@ def run_pre_execution_guardrail(state: dict) -> dict:
             return {
                 "route_key": "insufficient_balance",
                 "prompt_message": (
-                    "승인 이후 잔액이 부족해졌어요. 다른 계좌를 선택해주세요.\n"
-                    f"{_account_options(candidates)}"
+                    f"승인 이후 잔액이 부족해졌어요. 다른 계좌를 선택해주세요.\n{_account_options(candidates)}"
                 ),
                 "prompt_ui": _account_card_ui(candidates),
             }
@@ -1081,10 +1031,7 @@ def authenticate_user(state: dict) -> dict:
     """송금 실행 전 본인 인증을 요청한다 (interrupt, mock 인증)."""
     reply = interrupt(
         {
-            "prompt": (
-                "본인 인증을 진행해주세요 (지문 / Face ID / 비밀번호). "
-                "완료 후 '인증완료'를 입력해주세요."
-            ),
+            "prompt": ("본인 인증을 진행해주세요 (지문 / Face ID / 비밀번호). 완료 후 '인증완료'를 입력해주세요."),
             "prompt_for": "transfer.auth_result",
             # auth_request는 시트 UI Spec에 없는 타입 — 시트 추가 요청 대상
             "ui": AuthRequestUi(
@@ -1097,9 +1044,7 @@ def authenticate_user(state: dict) -> dict:
     route = _parse_auth_reply(str(reply))
     updates: dict = {"route_key": route, "prompt_message": None, "prompt_ui": None}
     if route == "not_authenticated":
-        updates["final_response"] = (
-            "본인 인증이 완료되지 않아 송금을 진행할 수 없습니다."
-        )
+        updates["final_response"] = "본인 인증이 완료되지 않아 송금을 진행할 수 없습니다."
     return updates
 
 
@@ -1219,11 +1164,7 @@ def verify_target_account(state: dict) -> dict:
         accounts = _accounts(state.get("user_id"))
         acc_key = f"{_ns(state)}.account"
         hint = (_dget(state, "account_hint") or "").replace(" ", "")
-        candidates = (
-            [a for a in accounts if hint in a.get("account_name", "").replace(" ", "")]
-            if hint
-            else accounts
-        )
+        candidates = [a for a in accounts if hint in a.get("account_name", "").replace(" ", "")] if hint else accounts
         if not candidates:
             return {
                 "route_key": "not_found",
@@ -1233,9 +1174,7 @@ def verify_target_account(state: dict) -> dict:
             return {acc_key: candidates[0], "route_key": "confirmed"}
         return {
             "route_key": "select_needed",
-            "prompt_message": (
-                f"어느 계좌로 설정할까요?\n{_account_options(candidates)}"
-            ),
+            "prompt_message": (f"어느 계좌로 설정할까요?\n{_account_options(candidates)}"),
             "prompt_ui": _account_card_ui(candidates),
         }
     except Exception:
@@ -1374,20 +1313,14 @@ def verify_to_account(state: dict) -> dict:
         user_id = state.get("user_id")
         accounts = _accounts(user_id)
         from_account = _dget(state, "from_account") or {}
-        pool = [
-            a for a in accounts if a.get("account_id") != from_account.get("account_id")
-        ]
+        pool = [a for a in accounts if a.get("account_id") != from_account.get("account_id")]
         if not pool:
             return {
                 "route_key": "invalid",
                 "final_response": "입금할 다른 계좌가 없습니다.",
             }
         hint = (_dget(state, "to_hint") or "").replace(" ", "")
-        candidates = (
-            [a for a in pool if hint in a.get("account_name", "").replace(" ", "")]
-            if hint
-            else pool
-        )
+        candidates = [a for a in pool if hint in a.get("account_name", "").replace(" ", "")] if hint else pool
         if len(candidates) == 1:
             return {"itx.to_account": candidates[0], "route_key": "verified"}
         options = candidates or pool
@@ -1523,15 +1456,11 @@ def run_itx_pre_execution_guardrail(state: dict) -> dict:
         if not live or not isinstance(amount, int) or live["balance"] < amount:
             return {
                 "route_key": "blocked",
-                "final_response": (
-                    "잔액이 부족하거나 계좌 확인에 실패해 이체를 차단했습니다."
-                ),
+                "final_response": ("잔액이 부족하거나 계좌 확인에 실패해 이체를 차단했습니다."),
             }
 
         context = {"amount": amount, "balance": live["balance"]}
-        triggered = GuardrailEngine.check(
-            "tool", context, target_id="execute_internal_transfer"
-        )
+        triggered = GuardrailEngine.check("tool", context, target_id="execute_internal_transfer")
         blocked = [r for r in triggered if r.get("action") == "block"]
         if blocked:
             decision = GuardrailEngine.pick_decision(blocked)
@@ -1780,9 +1709,7 @@ def resolve_account_scope(state: dict) -> dict:
         if not hint or hint in ("전체", "모두", "모든계좌", "전계좌"):
             return {"route_key": "all_accounts"}
         accounts = _accounts(state.get("user_id"))
-        candidates = [
-            a for a in accounts if hint in a.get("account_name", "").replace(" ", "")
-        ]
+        candidates = [a for a in accounts if hint in a.get("account_name", "").replace(" ", "")]
         if not candidates:
             return {
                 "route_key": "not_found",
@@ -1792,9 +1719,7 @@ def resolve_account_scope(state: dict) -> dict:
             return {f"{_ns(state)}.account": candidates[0], "route_key": "resolved"}
         return {
             "route_key": "select_needed",
-            "prompt_message": (
-                f"어느 계좌를 조회할까요?\n{_account_options(candidates)}"
-            ),
+            "prompt_message": (f"어느 계좌를 조회할까요?\n{_account_options(candidates)}"),
             "prompt_ui": _account_card_ui(candidates),
         }
     except Exception:
@@ -1826,9 +1751,7 @@ def fetch_transactions(state: dict) -> dict:
         except BankClientError:
             accounts = []
         compact = account_raw.replace(" ", "")
-        matches = [
-            a for a in accounts if compact in a.get("account_name", "").replace(" ", "")
-        ]
+        matches = [a for a in accounts if compact in a.get("account_name", "").replace(" ", "")]
         if len(matches) == 1:
             account_id = matches[0]["account_id"]
 

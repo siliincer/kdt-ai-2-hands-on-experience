@@ -58,6 +58,8 @@ export interface ChatState {
   startTurn: (userText: string) => void;
   /** SSE 이벤트들을 running assistant 메시지에 접어 넣는다 */
   foldIntoRunning: (events: AgentStreamEvent[]) => void;
+  /** 전송/재개 실패 시 running assistant 를 에러 메시지로 마감하고 runningId 를 푼다 */
+  failRunning: (text: string) => void;
   reset: () => void;
 }
 
@@ -88,4 +90,13 @@ export interface ChatRuntime {
    * 비밀번호는 Backend 까지만 전달되고 후속은 SSE 로 흘러온다. 반환값은 검증 상태.
    */
   authenticate: (authContextId: string, password: string) => Promise<string>;
+  /**
+   * recipient_select UI 의 신규 계좌 입력 시 호출(계약 부록 29.2).
+   * 은행·계좌번호 원문을 Backend 로 검증해 recipient_candidate_id 를 받는다.
+   * 이후 submitInput 은 이 참조만 제출한다(원문은 Agent State 를 통과하지 않는다).
+   */
+  verifyRecipient: (
+    accountNumber: string,
+    bankName?: string | null,
+  ) => Promise<string>;
 }

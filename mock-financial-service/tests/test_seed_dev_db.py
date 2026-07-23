@@ -64,7 +64,7 @@ def _seed_with_engine(db_url: str) -> dict:
 
 def test_seed_returns_correct_account_count(mem_url):
     summary = _seed_with_engine(mem_url)
-    assert summary["accounts"] == 5
+    assert summary["accounts"] == 7
 
 
 def test_seed_returns_correct_card_count(mem_url):
@@ -90,7 +90,7 @@ def test_seed_idempotent(tmp_path):
     s1 = seed(db_url, reset=False)
     s2 = seed(db_url, reset=False)
 
-    assert s1["accounts"] == s2["accounts"] == 5
+    assert s1["accounts"] == s2["accounts"] == 7
     assert s1["cards"] == s2["cards"]
     assert s1["card_products"] == s2["card_products"] == 20
 
@@ -102,7 +102,7 @@ def test_seed_fk_integrity_passes(mem_url):
     """seed() raises no AssertionError — FK checks are embedded in seed()."""
     # If FK integrity fails, seed() raises AssertionError → test fails
     summary = _seed_with_engine(mem_url)
-    assert summary["accounts"] == 5
+    assert summary["accounts"] == 7
     assert summary["cards"] >= 5
 
 
@@ -119,9 +119,7 @@ def test_card_products_no_fk_to_cards(mem_url):
     inspector = inspect(engine)
     fks = inspector.get_foreign_keys("card_products")
     for fk in fks:
-        assert fk.get("referred_table") != "cards", (
-            "card_products must not have a FK to cards"
-        )
+        assert fk.get("referred_table") != "cards", "card_products must not have a FK to cards"
     engine.dispose()
 
 
@@ -135,9 +133,10 @@ def test_seed_category_distribution(tmp_path):
     db_path = tmp_path / "cat_test.db"
     db_url = f"sqlite:///{db_path}"
 
-    from scripts.seed_dev_db import seed  # noqa: PLC0415
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
+
+    from scripts.seed_dev_db import seed  # noqa: PLC0415
 
     seed(db_url, reset=True)
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { BANKS } from '@/shared/constants/banks';
 
+import { useVerifyRecipient } from '../model/recipientVerifyContext';
 import { useSubmitInput } from '../model/submitInputContext';
 
 import { OutcomeChip } from './OutcomeChip';
@@ -23,14 +24,14 @@ const BANK_OPTIONS = BANKS.filter((bank) => bank.length > 2);
  * need_input(recipient_select) 툴 파트 렌더러 (HITL, 계약 3.2).
  * 최근 수취인을 선택하거나 은행+계좌번호로 신규 수취인을 입력한다.
  * - 최근 선택: to_recipient_id 로 제출
- * - 신규 입력: 은행+계좌번호를 Backend 검증 후 to_recipient_candidate_id 로 제출
+ * - 신규 입력: 은행+계좌번호를 /recipient-candidates:verify 로 검증해 받은
+ *   to_recipient_candidate_id 로 제출한다. 계좌번호 원문은 검증 API 까지만 도달한다.
  *
  * 이름 검색은 제공하지 않는다(계약 3.2). 전체 계좌번호는 Agent State 를 통과하지 않는다.
- * TODO(FE): 신규 입력은 /recipient-candidates:verify 로 검증해 실제 candidate_id 를 받도록
- * 연결한다(현재 mock 은 검증 없이 후보 참조를 제출).
  */
 export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
   const submitInput = useSubmitInput();
+  const verifyRecipient = useVerifyRecipient();
   const a = (args ?? {}) as RecipientSelectArgs;
   const inputRequestId = a.inputRequestId;
   const recent = a.recent_recipients ?? [];
@@ -39,6 +40,8 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
   const [bankCode, setBankCode] = useState('');
   const [account, setAccount] = useState('');
   const [outcome, setOutcome] = useState<'selected' | 'cancelled' | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const selectRecent = (recipient: RecentRecipient) => {
     if (!inputRequestId || outcome) return;
@@ -50,14 +53,28 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
     });
   };
 
-  const submitManual = () => {
-    if (!inputRequestId || outcome || !bankCode || !account) return;
-    setOutcome('selected');
-    void submitInput(inputRequestId, {
-      recipient_selection_outcome: 'selected',
-      to_recipient_id: null,
-      to_recipient_candidate_id: `rcp_candidate_${bankCode}_${account.slice(-4)}`,
-    });
+  const submitManual = async () => {
+    if (!inputRequestId || outcome || verifying || !bankCode || !account)
+      return;
+    setError(null);
+    setVerifying(true);
+    try {
+      // 계좌번호 원문은 검증 API 까지만 전달하고, 이후 제출은 참조 id 만 쓴다.
+      const candidateId = await verifyRecipient(account, bankCode);
+      setOutcome('selected');
+      void submitInput(inputRequestId, {
+        recipient_selection_outcome: 'selected',
+        to_recipient_id: null,
+        to_recipient_candidate_id: candidateId,
+      });
+    } catch {
+      // 검증 실패 시 같은 입력 UI 에 머무르며 재시도를 허용한다(계좌번호 재확인).
+      setError(
+        '계좌를 확인할 수 없어요. 은행과 계좌번호를 다시 확인해 주세요.',
+      );
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const cancel = () => {
@@ -149,22 +166,24 @@ export const RecipientSelectUI: ToolCallMessagePartComponent = ({ args }) => {
               placeholder="계좌번호 입력"
               className={HITL_INPUT}
             />
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
           </div>
           <div className="mt-3 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => setMode('initial')}
+              disabled={verifying}
               className={HITL_BTN_SECONDARY}
             >
               뒤로
             </button>
             <button
               type="button"
-              onClick={submitManual}
-              disabled={!bankCode || !account}
+              onClick={() => void submitManual()}
+              disabled={!bankCode || !account || verifying}
               className={HITL_BTN_PRIMARY}
             >
-              확인
+              {verifying ? '확인 중…' : '확인'}
             </button>
           </div>
         </>

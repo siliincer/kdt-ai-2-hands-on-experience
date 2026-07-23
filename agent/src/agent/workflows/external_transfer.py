@@ -44,9 +44,11 @@ from agent.workflows.workflow_support import terminal_update as _terminal_update
 from agent.workflows.workflow_support import tool_call as _tool_call
 
 WORKFLOW_ID = "wf_external_transfer"
-_tool_error_update = build_tool_error_update(
-    "송금을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
-)
+_tool_error_update = build_tool_error_update("송금을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+
+# 관리시트 route_key=limit_exceeded(1회 송금 한도) 스펙 — Prepare 호출 전에 먼저 걸러
+# 백엔드까지 안 보내고 바로 차단한다.
+_TRANSFER_LIMIT = 50_000_000
 
 # 승인·수정 화면의 정정 대상 3종 — route_external_transfer_correction,
 # request_external_transfer_approval, request_external_transfer_correction이 공유한다.
@@ -71,15 +73,9 @@ class ExternalTransferDependencies:
     webhook_client: BackendWebhookClient
     interaction_runtime: InteractionPauseRuntime
     webhook_builder: InteractionWebhookBuilder
-    input_request_id_factory: Callable[[], str] = field(
-        default=_default_input_request_id
-    )
-    tool_request_id_factory: Callable[[str, str], str] = field(
-        default=_default_tool_request_id
-    )
-    slot_extractor: TransferSlotExtractor = field(
-        default=extract_external_transfer_slots_llm_first
-    )
+    input_request_id_factory: Callable[[], str] = field(default=_default_input_request_id)
+    tool_request_id_factory: Callable[[str, str], str] = field(default=_default_tool_request_id)
+    slot_extractor: TransferSlotExtractor = field(default=extract_external_transfer_slots_llm_first)
 
 
 def build_external_transfer_graph(
@@ -96,9 +92,7 @@ def build_external_transfer_graph(
         return {
             "workflow_id": WORKFLOW_ID,
             "current_step_id": "extract_external_transfer_slots",
-            "route_key": "has_recipient_hint"
-            if recipient_name_hint
-            else "no_recipient_hint",
+            "route_key": "has_recipient_hint" if recipient_name_hint else "no_recipient_hint",
             "data": {
                 "recipient_name_hint": recipient_name_hint,
                 "from_account_hint": extracted.get("from_account_hint"),
@@ -106,9 +100,7 @@ def build_external_transfer_graph(
             },
         }
 
-    async def resolve_recipient_hint(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def resolve_recipient_hint(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -153,9 +145,7 @@ def build_external_transfer_graph(
             ValueError("수취인 확정 결과가 계약과 일치하지 않습니다."),
         )
 
-    async def request_recipient_selection(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_recipient_selection(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = dependencies.input_request_id_factory()
         reason = data.get("recipient_selection_reason") or "no_match"
@@ -206,9 +196,7 @@ def build_external_transfer_graph(
             ValueError("수취인 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def resolve_external_from_account(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def resolve_external_from_account(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
@@ -253,9 +241,7 @@ def build_external_transfer_graph(
             "data": update,
         }
 
-    async def request_external_from_account_selection(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_external_from_account_selection(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = data.get("input_request_id")
         if not isinstance(input_request_id, str) or not input_request_id:
@@ -275,6 +261,7 @@ def build_external_transfer_graph(
                 "title": "출금할 계좌를 선택해 주세요.",
                 "accounts": _account_options(data.get("accounts")),
                 "actions": ["select", "cancel"],
+                "multiple": False,
             },
         )
         # ResumeStateMapper가 resume.value.account_ids[0]을 from_account_id로
@@ -305,9 +292,7 @@ def build_external_transfer_graph(
             ValueError("계좌 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def emit_external_from_accounts_empty(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_external_from_accounts_empty(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
@@ -319,6 +304,7 @@ def build_external_transfer_graph(
                 "title": "출금 가능한 계좌가 없습니다.",
                 "accounts": [],
                 "actions": [],
+                "multiple": False,
             },
         )
         await _publish(dependencies, event, config)
@@ -326,15 +312,30 @@ def build_external_transfer_graph(
 
     async def check_external_transfer_amount(state: AgentState) -> dict[str, Any]:
         amount = _data(state).get("amount")
-        valid = isinstance(amount, int) and not isinstance(amount, bool) and amount > 0
+        if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
+            return {
+                "current_step_id": "check_external_transfer_amount",
+                "route_key": "invalid",
+            }
+        if amount > _TRANSFER_LIMIT:
+            return {
+                "current_step_id": "check_external_transfer_amount",
+                "route_key": "limit_exceeded",
+                "data": {
+                    "blocked_view": {
+                        "title": "송금할 수 없습니다.",
+                        "description": (
+                            f"1회 송금 한도({_TRANSFER_LIMIT:,}원)를 초과했습니다. 요청 금액: {amount:,}원"
+                        ),
+                    }
+                },
+            }
         return {
             "current_step_id": "check_external_transfer_amount",
-            "route_key": "valid" if valid else "invalid",
+            "route_key": "valid",
         }
 
-    async def request_external_transfer_amount(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_external_transfer_amount(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         input_request_id = dependencies.input_request_id_factory()
         event = dependencies.webhook_builder.need_input(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -383,14 +384,10 @@ def build_external_transfer_graph(
             "data": {"prepare_attempt": attempt},
         }
 
-    async def prepare_external_transfer(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def prepare_external_transfer(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         idempotency_key = (
-            f"external_transfer_prepare:"
-            f"{_config_context(config, 'execution_context_id')}:"
-            f"{data.get('prepare_attempt')}"
+            f"external_transfer_prepare:{_config_context(config, 'execution_context_id')}:{data.get('prepare_attempt')}"
         )
         arguments: dict[str, Any] = {
             "from_account_id": data.get("from_account_id"),
@@ -400,9 +397,7 @@ def build_external_transfer_graph(
         if data.get("to_recipient_id"):
             arguments["to_recipient_id"] = data["to_recipient_id"]
         else:
-            arguments["to_recipient_candidate_id"] = data.get(
-                "to_recipient_candidate_id"
-            )
+            arguments["to_recipient_candidate_id"] = data.get("to_recipient_candidate_id")
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
                 "prepare_external_transfer",
@@ -437,9 +432,7 @@ def build_external_transfer_graph(
             "data": update,
         }
 
-    async def request_external_transfer_approval(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_external_transfer_approval(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         confirmation_id = data.get("confirmation_id")
         if not isinstance(confirmation_id, str) or not confirmation_id:
@@ -566,9 +559,7 @@ def build_external_transfer_graph(
             "route_key": "multiple",
         }
 
-    async def request_external_transfer_correction(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_external_transfer_correction(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         input_request_id = dependencies.input_request_id_factory()
         view = data.get("correction_view") or {}
@@ -626,14 +617,9 @@ def build_external_transfer_graph(
             },
         }
 
-    async def create_external_auth_context(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def create_external_auth_context(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
-        idempotency_key = (
-            f"external_transfer_auth:{data.get('confirmation_id')}:"
-            f"{data.get('auth_attempt')}"
-        )
+        idempotency_key = f"external_transfer_auth:{data.get('confirmation_id')}:{data.get('auth_attempt')}"
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
                 "create_auth_context",
@@ -669,9 +655,7 @@ def build_external_transfer_graph(
             ValueError("Auth Context 응답 outcome이 계약과 일치하지 않습니다."),
         )
 
-    async def request_external_authentication(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_external_authentication(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         auth_context_id = data.get("auth_context_id")
         if not isinstance(auth_context_id, str) or not auth_context_id:
@@ -715,9 +699,7 @@ def build_external_transfer_graph(
             ValueError("인증 재개 결과가 올바르지 않습니다."),
         )
 
-    async def request_external_auth_retry(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def request_external_auth_retry(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         input_request_id = dependencies.input_request_id_factory()
         event = dependencies.webhook_builder.need_input(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -752,14 +734,9 @@ def build_external_transfer_graph(
             ValueError("재인증 선택 재개 결과가 올바르지 않습니다."),
         )
 
-    async def execute_external_transfer(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def execute_external_transfer(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
-        idempotency_key = (
-            f"external_transfer_execute:{data.get('confirmation_id')}:"
-            f"{data.get('auth_attempt')}"
-        )
+        idempotency_key = f"external_transfer_execute:{data.get('confirmation_id')}:{data.get('auth_attempt')}"
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
                 "execute_external_transfer",
@@ -819,9 +796,7 @@ def build_external_transfer_graph(
             ValueError("Execute 응답 outcome이 계약과 일치하지 않습니다."),
         )
 
-    async def emit_external_transfer_result(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_external_transfer_result(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         view = data.get("confirmation_view") or {}
         event = dependencies.webhook_builder.component(
@@ -843,9 +818,7 @@ def build_external_transfer_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_external_transfer_result")
 
-    async def emit_external_transfer_blocked(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_external_transfer_blocked(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         view = _data(state).get("blocked_view") or {}
         event = dependencies.webhook_builder.blocked(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -858,12 +831,9 @@ def build_external_transfer_graph(
         await _publish(dependencies, event, config)
         return _terminal_update("emit_external_transfer_blocked", status="blocked")
 
-    async def emit_external_transfer_error(
-        state: AgentState, config: RunnableConfig
-    ) -> dict[str, Any]:
+    async def emit_external_transfer_error(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         message = str(
-            _data(state).get("safe_error_message")
-            or "송금을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            _data(state).get("safe_error_message") or "송금을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요."
         )
         event = dependencies.webhook_builder.error(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -874,9 +844,7 @@ def build_external_transfer_graph(
             payload={"message": message},
         )
         await _publish(dependencies, event, config)
-        return _terminal_update(
-            "emit_external_transfer_error", status="workflow_failed"
-        )
+        return _terminal_update("emit_external_transfer_error", status="workflow_failed")
 
     graph = StateGraph(AgentState)
     graph.add_node("extract_external_transfer_slots", extract_external_transfer_slots)
@@ -887,25 +855,17 @@ def build_external_transfer_graph(
         "request_external_from_account_selection",
         request_external_from_account_selection,
     )
-    graph.add_node(
-        "emit_external_from_accounts_empty", emit_external_from_accounts_empty
-    )
+    graph.add_node("emit_external_from_accounts_empty", emit_external_from_accounts_empty)
     graph.add_node("check_external_transfer_amount", check_external_transfer_amount)
     graph.add_node("request_external_transfer_amount", request_external_transfer_amount)
     graph.add_node("start_external_transfer_prepare", start_external_transfer_prepare)
     graph.add_node("prepare_external_transfer", prepare_external_transfer)
-    graph.add_node(
-        "request_external_transfer_approval", request_external_transfer_approval
-    )
+    graph.add_node("request_external_transfer_approval", request_external_transfer_approval)
     graph.add_node("reset_external_from_account", reset_external_from_account)
     graph.add_node("reset_external_recipient", reset_external_recipient)
     graph.add_node("reset_external_transfer_amount", reset_external_transfer_amount)
-    graph.add_node(
-        "route_external_transfer_correction", route_external_transfer_correction
-    )
-    graph.add_node(
-        "request_external_transfer_correction", request_external_transfer_correction
-    )
+    graph.add_node("route_external_transfer_correction", route_external_transfer_correction)
+    graph.add_node("request_external_transfer_correction", request_external_transfer_correction)
     graph.add_node("start_external_auth", start_external_auth)
     graph.add_node("create_external_auth_context", create_external_auth_context)
     graph.add_node("request_external_authentication", request_external_authentication)
@@ -970,13 +930,14 @@ def build_external_transfer_graph(
         {
             "valid": "start_external_transfer_prepare",
             "invalid": "request_external_transfer_amount",
+            "limit_exceeded": "emit_external_transfer_blocked",
         },
     )
     graph.add_conditional_edges(
         "request_external_transfer_amount",
         _route_key,
         {
-            "submitted": "start_external_transfer_prepare",
+            "submitted": "check_external_transfer_amount",
             "cancelled": END,
             "error": "emit_external_transfer_error",
         },
@@ -1083,6 +1044,9 @@ def build_external_transfer_graph(
 def _confirmation_payload(raw_view: Any) -> dict[str, Any]:
     view = raw_view if isinstance(raw_view, Mapping) else {}
     return {
+        # FE ConfirmModalUI가 이 값으로 표시 분기 + 승인 시 backend component를 정한다
+        # (backend _CONFIRMATION_COMPONENTS와 문자열 일치 필수).
+        "purpose": "external_transfer",
         "from_account": view.get("from_account"),
         "recipient": view.get("recipient"),
         "amount": view.get("amount"),

@@ -92,9 +92,7 @@ def _read_rows(sheet: Worksheet) -> list[dict[str, Any]]:
     return rows
 
 
-def _unique_index(
-    rows: list[dict[str, Any]], key: str, label: str
-) -> dict[str, dict[str, Any]]:
+def _unique_index(rows: list[dict[str, Any]], key: str, label: str) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for row in rows:
         raw_value = row.get(key)
@@ -110,22 +108,16 @@ def _unique_index(
 def build_manifest(workbook_path: Path) -> dict[str, Any]:
     workbook = load_workbook(workbook_path, read_only=True, data_only=True)
     try:
-        missing_sheets = [
-            name for name in SHEETS.values() if name not in workbook.sheetnames
-        ]
+        missing_sheets = [name for name in SHEETS.values() if name not in workbook.sheetnames]
         if missing_sheets:
             missing = ", ".join(missing_sheets)
             raise ContractValidationError(f"관리시트 탭이 없습니다: {missing}")
-        rows = {
-            key: _read_rows(workbook[sheet_name]) for key, sheet_name in SHEETS.items()
-        }
+        rows = {key: _read_rows(workbook[sheet_name]) for key, sheet_name in SHEETS.items()}
     finally:
         workbook.close()
 
     catalog = _unique_index(rows["catalog"], "workflow_id", "Workflow Catalog")
-    contracts = _unique_index(
-        rows["contract_registry"], "contract_id", "Contract Registry"
-    )
+    contracts = _unique_index(rows["contract_registry"], "contract_id", "Contract Registry")
 
     common_state_schema: list[dict[str, Any]] = []
     workflow_state_schema: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -135,9 +127,7 @@ def build_manifest(workbook_path: Path) -> dict[str, Any]:
             continue
         workflow_id = row.get("workflow_id")
         if not workflow_id:
-            raise ContractValidationError(
-                "Workflow Data Schema에 workflow_id가 없습니다."
-            )
+            raise ContractValidationError("Workflow Data Schema에 workflow_id가 없습니다.")
         workflow_state_schema[str(workflow_id)].append(row)
 
     grouped: dict[str, dict[str, list[dict[str, Any]]]] = {
@@ -162,8 +152,7 @@ def build_manifest(workbook_path: Path) -> dict[str, Any]:
             workflow_id = row.get("workflow_id")
             if workflow_id not in grouped:
                 raise ContractValidationError(
-                    f"{SHEETS[source_key]}에 등록되지 않은 workflow_id가 있습니다: "
-                    f"{workflow_id}"
+                    f"{SHEETS[source_key]}에 등록되지 않은 workflow_id가 있습니다: {workflow_id}"
                 )
             grouped[str(workflow_id)][target_key].append(row)
 
@@ -199,11 +188,7 @@ def build_manifest(workbook_path: Path) -> dict[str, Any]:
 
 def validate_manifest(manifest: dict[str, Any]) -> None:
     contracts: dict[str, dict[str, Any]] = manifest["contracts"]
-    common_keys = {
-        row["state_key"]
-        for row in manifest["common_state_schema"]
-        if row.get("state_key")
-    }
+    common_keys = {row["state_key"] for row in manifest["common_state_schema"] if row.get("state_key")}
 
     for workflow_id, workflow in manifest["workflows"].items():
         steps: list[dict[str, Any]] = workflow["steps"]
@@ -211,83 +196,57 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
         for step in steps:
             step_id = str(step.get("step_id") or "")
             if not step_id:
-                raise ContractValidationError(
-                    f"[{workflow_id}] step_id가 없는 Step입니다."
-                )
+                raise ContractValidationError(f"[{workflow_id}] step_id가 없는 Step입니다.")
             if step_id in step_ids:
-                raise ContractValidationError(
-                    f"[{workflow_id}] step_id가 중복입니다: {step_id}"
-                )
+                raise ContractValidationError(f"[{workflow_id}] step_id가 중복입니다: {step_id}")
             step_ids.add(step_id)
 
         entry_step_id = workflow["catalog"].get("entry_step_id")
         if entry_step_id not in step_ids:
-            raise ContractValidationError(
-                f"[{workflow_id}] entry_step_id가 Step에 없습니다: {entry_step_id}"
-            )
+            raise ContractValidationError(f"[{workflow_id}] entry_step_id가 Step에 없습니다: {entry_step_id}")
 
-        schema_keys = common_keys | {
-            row["state_key"] for row in workflow["state_schema"] if row.get("state_key")
-        }
+        schema_keys = common_keys | {row["state_key"] for row in workflow["state_schema"] if row.get("state_key")}
         for step in steps:
             step_id = str(step["step_id"])
             interaction_mode = step.get("interaction_mode")
             if interaction_mode not in INTERACTION_MODES:
                 raise ContractValidationError(
-                    f"[{workflow_id}/{step_id}] interaction_mode가 잘못되었습니다: "
-                    f"{interaction_mode}"
+                    f"[{workflow_id}/{step_id}] interaction_mode가 잘못되었습니다: {interaction_mode}"
                 )
             contract_id = step.get("contract_id")
             if contract_id and contract_id not in contracts:
                 raise ContractValidationError(
-                    f"[{workflow_id}/{step_id}] 등록되지 않은 contract_id입니다: "
-                    f"{contract_id}"
+                    f"[{workflow_id}/{step_id}] 등록되지 않은 contract_id입니다: {contract_id}"
                 )
-            for state_key in step.get("input_state_keys", []) + step.get(
-                "output_state_keys", []
-            ):
+            for state_key in step.get("input_state_keys", []) + step.get("output_state_keys", []):
                 if state_key not in schema_keys:
-                    raise ContractValidationError(
-                        f"[{workflow_id}/{step_id}] 선언되지 않은 State입니다: "
-                        f"{state_key}"
-                    )
+                    raise ContractValidationError(f"[{workflow_id}/{step_id}] 선언되지 않은 State입니다: {state_key}")
 
         for route in workflow["routes"]:
             from_step_id = route.get("from_step_id")
             to_step_id = route.get("to_step_id")
             if from_step_id not in step_ids:
-                raise ContractValidationError(
-                    f"[{workflow_id}] Route 출발 Step이 없습니다: {from_step_id}"
-                )
+                raise ContractValidationError(f"[{workflow_id}] Route 출발 Step이 없습니다: {from_step_id}")
             if to_step_id != "END" and to_step_id not in step_ids:
-                raise ContractValidationError(
-                    f"[{workflow_id}] Route 도착 Step이 없습니다: {to_step_id}"
-                )
+                raise ContractValidationError(f"[{workflow_id}] Route 도착 Step이 없습니다: {to_step_id}")
 
         for mapping in workflow["step_data_mappings"]:
             step_id = mapping.get("step_id")
             state_key = mapping.get("state_key")
             if step_id not in step_ids:
-                raise ContractValidationError(
-                    f"[{workflow_id}] Mapping 대상 Step이 없습니다: {step_id}"
-                )
+                raise ContractValidationError(f"[{workflow_id}] Mapping 대상 Step이 없습니다: {step_id}")
             if state_key not in schema_keys:
                 raise ContractValidationError(
-                    f"[{workflow_id}/{step_id}] Mapping State가 선언되지 않았습니다: "
-                    f"{state_key}"
+                    f"[{workflow_id}/{step_id}] Mapping State가 선언되지 않았습니다: {state_key}"
                 )
 
         for mapping in workflow["contract_mappings"]:
             step_id = mapping.get("step_id")
             contract_id = mapping.get("contract_id")
             if step_id not in step_ids:
-                raise ContractValidationError(
-                    f"[{workflow_id}] 계약 대상 Step이 없습니다: {step_id}"
-                )
+                raise ContractValidationError(f"[{workflow_id}] 계약 대상 Step이 없습니다: {step_id}")
             if contract_id not in contracts:
-                raise ContractValidationError(
-                    f"[{workflow_id}/{step_id}] 등록되지 않은 계약입니다: {contract_id}"
-                )
+                raise ContractValidationError(f"[{workflow_id}/{step_id}] 등록되지 않은 계약입니다: {contract_id}")
 
 
 def render_manifest(manifest: dict[str, Any]) -> str:
@@ -340,11 +299,7 @@ def main() -> int:
         if args.output.read_text(encoding="utf-8") != rendered:
             print("계약 생성 파일이 관리시트와 일치하지 않습니다.")
             return 1
-        print(
-            "Workflow 계약 확인 완료: "
-            f"{len(manifest['workflows'])}개 Workflow, "
-            f"{len(manifest['contracts'])}개 계약"
-        )
+        print(f"Workflow 계약 확인 완료: {len(manifest['workflows'])}개 Workflow, {len(manifest['contracts'])}개 계약")
         return 0
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

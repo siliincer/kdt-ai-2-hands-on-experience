@@ -37,7 +37,7 @@ def test_all_sections_are_lists(fixtures):
 
 
 def test_accounts_count(fixtures):
-    assert len(fixtures["accounts"]) == 5
+    assert len(fixtures["accounts"]) == 7
 
 
 def test_accounts_required_fields(fixtures):
@@ -49,9 +49,7 @@ def test_accounts_required_fields(fixtures):
 
 def test_accounts_field_types(fixtures):
     for i, row in enumerate(fixtures["accounts"]):
-        assert isinstance(row["account_id"], str), (
-            f"accounts[{i}].account_id must be str"
-        )
+        assert isinstance(row["account_id"], str), f"accounts[{i}].account_id must be str"
         assert isinstance(row["owner"], str), f"accounts[{i}].owner must be str"
         assert isinstance(row["currency"], str), f"accounts[{i}].currency must be str"
 
@@ -98,9 +96,7 @@ def test_cards_positive_limits(fixtures):
 def test_cards_referential_integrity(fixtures):
     valid_ids = {r["account_id"] for r in fixtures["accounts"]}
     for i, row in enumerate(fixtures["cards"]):
-        assert row["account_id"] in valid_ids, (
-            f"cards[{i}].account_id '{row['account_id']}' not in accounts"
-        )
+        assert row["account_id"] in valid_ids, f"cards[{i}].account_id '{row['account_id']}' not in accounts"
 
 
 def test_cards_unique_ids(fixtures):
@@ -131,21 +127,11 @@ def test_card_products_required_fields(fixtures):
 
 def test_card_products_field_types(fixtures):
     for i, row in enumerate(fixtures["card_products"]):
-        assert isinstance(row["card_product_id"], str), (
-            f"card_products[{i}].card_product_id must be str"
-        )
-        assert isinstance(row["product_name"], str), (
-            f"card_products[{i}].product_name must be str"
-        )
-        assert isinstance(row["category"], str), (
-            f"card_products[{i}].category must be str"
-        )
-        assert isinstance(row["annual_fee"], int), (
-            f"card_products[{i}].annual_fee must be int"
-        )
-        assert isinstance(row["benefits"], str), (
-            f"card_products[{i}].benefits must be str (JSON)"
-        )
+        assert isinstance(row["card_product_id"], str), f"card_products[{i}].card_product_id must be str"
+        assert isinstance(row["product_name"], str), f"card_products[{i}].product_name must be str"
+        assert isinstance(row["category"], str), f"card_products[{i}].category must be str"
+        assert isinstance(row["annual_fee"], int), f"card_products[{i}].annual_fee must be int"
+        assert isinstance(row["benefits"], str), f"card_products[{i}].benefits must be str (JSON)"
 
 
 def test_card_products_unique_ids(fixtures):
@@ -168,9 +154,7 @@ def test_card_products_four_per_category(fixtures):
 def test_card_products_benefits_valid_json_list(fixtures):
     for i, row in enumerate(fixtures["card_products"]):
         parsed = json.loads(row["benefits"])
-        assert isinstance(parsed, list), (
-            f"card_products[{i}].benefits must be JSON list"
-        )
+        assert isinstance(parsed, list), f"card_products[{i}].benefits must be JSON list"
         assert len(parsed) >= 1, f"card_products[{i}].benefits must be non-empty"
 
 
@@ -201,7 +185,7 @@ def test_to_json_parses_to_correct_structure():
 
     parsed = json.loads(to_json())
     assert set(parsed.keys()) == {"accounts", "cards", "card_products"}
-    assert len(parsed["accounts"]) == 5
+    assert len(parsed["accounts"]) == 7
     assert 5 <= len(parsed["cards"]) <= 10
     assert len(parsed["card_products"]) == 20
 

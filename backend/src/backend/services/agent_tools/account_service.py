@@ -22,6 +22,7 @@ from ...schemas.agent_tools.account import (
     AccountCapability,
     AccountListData,
     AccountListItem,
+    AccountResolutionOutcome,
     BalanceQueryData,
     BalanceResultItem,
 )
@@ -51,17 +52,41 @@ def _to_list_item(account: Account) -> AccountListItem:
     )
 
 
+def _resolve_accounts(
+    candidates: list[Account], all_accounts_requested: bool
+) -> tuple[AccountResolutionOutcome, list[str]]:
+    """필터된 후보로 계좌 해소 결과를 판정한다(계약 9.2).
+
+    - 후보 0개: no_accounts.
+    - 전체 요청이거나 후보 1개: resolved(확정 account_ids).
+    - 후보 2개+ (전체 요청 아님): selection_required(사용자 선택 필요, account_ids 없음).
+    """
+    if not candidates:
+        return "no_accounts", []
+    if all_accounts_requested or len(candidates) == 1:
+        return "resolved", [str(a.id) for a in candidates]
+    return "selection_required", []
+
+
 async def list_accounts(
     session: AsyncSession,
     context: ResolvedExecutionContext,
     account_hint: str | None,
     account_capability: AccountCapability | None,
     limit: int,
+    *,
+    resolve_selection: bool = False,
+    all_accounts_requested: bool = False,
+    exclude_account_ids: list[str] | None = None,
 ) -> AccountListData:
     """사용자 소유 계좌를 검색·필터해 반환한다.
 
     account_capability 가 주어지면 활성 계좌만 반환한다(Backend 가 상태 판단).
     단일 은행 샌드박스라 capability 별 세부 거래 가능 여부는 활성 여부로 근사한다.
+
+    resolve_selection=True 면 후보로부터 계좌 해소 결과(account_resolution_outcome·
+    account_ids)를 함께 채운다(계약 9.2). Agent read/transfer 워크플로우가 이 값으로
+    바로 조회할지(resolved)·사용자에게 선택을 물을지(selection_required)를 결정한다.
     """
     accounts = await get_mapped_accounts(session, context.user_id)
 
@@ -69,11 +94,24 @@ async def list_accounts(
     if account_capability is not None:
         accounts = [a for a in accounts if a.active]
 
+    if exclude_account_ids:
+        excluded = set(exclude_account_ids)
+        accounts = [a for a in accounts if str(a.id) not in excluded]
+
     if account_hint:
         accounts = [a for a in accounts if _matches_hint(a, account_hint)]
 
-    accounts = accounts[:limit]
-    return AccountListData(accounts=[_to_list_item(a) for a in accounts])
+    # 해소는 필터된 전체 후보 기준으로 판정하고, 반환 목록만 limit 를 적용한다.
+    items = [_to_list_item(a) for a in accounts[:limit]]
+    if not resolve_selection:
+        return AccountListData(accounts=items)
+
+    outcome, resolved_ids = _resolve_accounts(accounts, all_accounts_requested)
+    return AccountListData(
+        accounts=items,
+        account_resolution_outcome=outcome,
+        account_ids=resolved_ids,
+    )
 
 
 def _invalid_account_ids() -> AgentToolError:

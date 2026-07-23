@@ -40,9 +40,7 @@ async def test_default_account_llm_fills_account_hint(monkeypatch) -> None:
     fake = _FakeStructuredLlm({"account_hint": "급여 통장"})
     monkeypatch.setattr(setting_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await setting_slot_extraction.extract_default_account_slots_llm_first(
-        message
-    )
+    result = await setting_slot_extraction.extract_default_account_slots_llm_first(message)
 
     assert result == {"account_hint": "급여 통장"}
     assert "오타 교정" in fake.prompts[0]
@@ -54,9 +52,7 @@ async def test_default_account_ungrounded_correction_is_rejected(monkeypatch) ->
     fake = _FakeStructuredLlm({"account_hint": "신한은행 계좌"})
     monkeypatch.setattr(setting_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await setting_slot_extraction.extract_default_account_slots_llm_first(
-        message
-    )
+    result = await setting_slot_extraction.extract_default_account_slots_llm_first(message)
 
     assert result == {"account_hint": "신후은행 계좌"}
 
@@ -67,13 +63,9 @@ async def test_default_account_llm_failure_uses_rule_fallback(monkeypatch) -> No
     failed = _FailedStructuredLlm()
     monkeypatch.setattr(setting_slot_extraction, "get_llm", lambda **_: failed)
 
-    result = await setting_slot_extraction.extract_default_account_slots_llm_first(
-        message
-    )
+    result = await setting_slot_extraction.extract_default_account_slots_llm_first(message)
 
-    assert result == setting_slot_extraction.extract_default_account_slots_by_rule(
-        message
-    )
+    assert result == setting_slot_extraction.extract_default_account_slots_by_rule(message)
 
 
 @pytest.mark.asyncio
@@ -82,9 +74,7 @@ async def test_account_alias_llm_fills_alias_rule_misses(monkeypatch) -> None:
     fake = _FakeStructuredLlm({"account_hint": "저축 계좌", "alias": "커피값"})
     monkeypatch.setattr(setting_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await setting_slot_extraction.extract_account_alias_slots_llm_first(
-        message
-    )
+    result = await setting_slot_extraction.extract_account_alias_slots_llm_first(message)
 
     assert result == {"account_hint": "저축 계좌", "alias": "커피값"}
 
@@ -102,9 +92,7 @@ async def test_account_alias_ungrounded_correction_is_rejected(monkeypatch) -> N
     fake = _FakeStructuredLlm({"account_hint": "생활비 통장", "alias": "여행경비"})
     monkeypatch.setattr(setting_slot_extraction, "get_llm", lambda **_: fake)
 
-    result = await setting_slot_extraction.extract_account_alias_slots_llm_first(
-        message
-    )
+    result = await setting_slot_extraction.extract_account_alias_slots_llm_first(message)
 
     assert result == {"account_hint": "생활비 통장", "alias": "여행자금"}
 
@@ -115,10 +103,6 @@ async def test_account_alias_llm_failure_uses_rule_fallback(monkeypatch) -> None
     failed = _FailedStructuredLlm()
     monkeypatch.setattr(setting_slot_extraction, "get_llm", lambda **_: failed)
 
-    result = await setting_slot_extraction.extract_account_alias_slots_llm_first(
-        message
-    )
+    result = await setting_slot_extraction.extract_account_alias_slots_llm_first(message)
 
-    assert result == setting_slot_extraction.extract_account_alias_slots_by_rule(
-        message
-    )
+    assert result == setting_slot_extraction.extract_account_alias_slots_by_rule(message)

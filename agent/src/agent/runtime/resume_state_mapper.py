@@ -17,9 +17,7 @@ ResumeMappingErrorCode = Literal[
     "REQUIRED_RESUME_VALUE_MISSING",
     "RESUME_VALUE_TYPE_MISMATCH",
 ]
-_RESUME_PATH_PATTERN = re.compile(
-    r"^resume\.value\.(?P<field>[a-z][a-z0-9_]*)(?:\[(?P<index>\d+)\])?$"
-)
+_RESUME_PATH_PATTERN = re.compile(r"^resume\.value\.(?P<field>[a-z][a-z0-9_]*)(?:\[(?P<index>\d+)\])?$")
 _MISSING = object()
 
 
@@ -67,10 +65,7 @@ class ResumeStateMapper:
         if not mappings:
             raise ResumeStateMappingError(
                 code="RESUME_MAPPING_NOT_FOUND",
-                reason=(
-                    f"[{pending.workflow_id}/{pending.step_id}] "
-                    "Resume 출력 매핑이 없습니다."
-                ),
+                reason=(f"[{pending.workflow_id}/{pending.step_id}] Resume 출력 매핑이 없습니다."),
             )
 
         resume_value = self._normalize_resume_value(validated)

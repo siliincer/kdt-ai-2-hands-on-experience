@@ -53,9 +53,7 @@ class _RecordingWebhookClient:
 
 class _Dependencies:
     def __init__(self) -> None:
-        self.tool_request_id_factory: Callable[[str, str], str] = (
-            lambda request_id, step_id: f"{request_id}:{step_id}"
-        )
+        self.tool_request_id_factory: Callable[[str, str], str] = lambda request_id, step_id: f"{request_id}:{step_id}"
         self.webhook_client = _RecordingWebhookClient()
 
 
@@ -128,9 +126,7 @@ def test_common_request_id_factories_preserve_trace_format() -> None:
     assert first.startswith("input_")
     assert second.startswith("input_")
     assert first != second
-    assert step_request_id("request_123", "query_accounts") == (
-        "request_123:query_accounts"
-    )
+    assert step_request_id("request_123", "query_accounts") == ("request_123:query_accounts")
 
 
 def test_masked_account_options_excludes_sensitive_and_unknown_fields() -> None:

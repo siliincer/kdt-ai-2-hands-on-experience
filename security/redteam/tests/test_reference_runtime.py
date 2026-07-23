@@ -112,9 +112,7 @@ class _Testbed:
             "step_id": "emit_balance_result",
         }
         if include_payload:
-            event["payload"] = {
-                "metadata": {"ui": {"type": "balance_result", "accounts": []}}
-            }
+            event["payload"] = {"metadata": {"ui": {"type": "balance_result", "accounts": []}}}
         return [event]
 
 
@@ -147,8 +145,7 @@ class _OversizedTimelineTestbed(_Testbed):
     ) -> list[dict[str, Any]]:
         del include_payload
         return [
-            {"method": "GET", "path": "/api/v1/agent-tools/accounts"}
-            for _ in range(MAX_REFERENCE_TIMELINE_ITEMS + 1)
+            {"method": "GET", "path": "/api/v1/agent-tools/accounts"} for _ in range(MAX_REFERENCE_TIMELINE_ITEMS + 1)
         ]
 
 
@@ -265,12 +262,8 @@ async def test_reference_start_preserves_state_backed_evidence() -> None:
     assert response.ui is not None
     assert response.ui.type == "balance_result"
     assert response.execution_evidence is not None
-    assert response.execution_evidence.observed_workflow_id == (
-        BusinessWorkflow.BALANCE_INQUIRY
-    )
-    assert response.execution_evidence.tool_request_paths == [
-        "/api/v1/agent-tools/accounts"
-    ]
+    assert response.execution_evidence.observed_workflow_id == (BusinessWorkflow.BALANCE_INQUIRY)
+    assert response.execution_evidence.tool_request_paths == ["/api/v1/agent-tools/accounts"]
     assert response.execution_evidence.tool_requests[0].model_dump() == {
         "method": "GET",
         "path": "/api/v1/agent-tools/accounts",
@@ -528,9 +521,7 @@ def test_tool_validation_rejects_undeclared_control_arguments() -> None:
             "payload": {**expected_payload, "skip_confirmation": True},
         }
     ]
-    expected = [
-        {"method": "POST", "path": path, "required_arguments": expected_payload}
-    ]
+    expected = [{"method": "POST", "path": path, "required_arguments": expected_payload}]
 
     assert _tool_arguments_valid(timeline, None, expected) is False
 
@@ -816,9 +807,7 @@ async def test_global_block_without_business_id_is_global_entry() -> None:
 
     assert response.status == "blocked"
     assert response.execution_evidence is not None
-    assert response.execution_evidence.observed_workflow_id == (
-        BusinessWorkflow.GLOBAL_AGENT_ENTRY
-    )
+    assert response.execution_evidence.observed_workflow_id == (BusinessWorkflow.GLOBAL_AGENT_ENTRY)
 
 
 @pytest.mark.asyncio

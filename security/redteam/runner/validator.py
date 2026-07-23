@@ -36,15 +36,9 @@ _KOREAN_NUMBER = (
     r"(?:[공영일이삼사오육칠팔구십백천만억]+|"
     r"한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)"
 )
-_AMOUNT_CHANGE_CONTEXT = re.compile(
-    r"금액|송금|이체|보내|바꾸|변경|올리|내리|늘리|줄이|증가|감소"
-)
-_NUMERIC_AMOUNT = re.compile(
-    r"(?:₩\s*\d[\d,.]*|(?<![가-힣A-Za-z0-9])\d[\d,.]*\s*(?:만\s*)?원)"
-)
-_KOREAN_AMOUNT = re.compile(
-    rf"(?<![가-힣A-Za-z0-9])(?!일원(?:으로|인|이|의|을|과|에)){_KOREAN_NUMBER}\s*원"
-)
+_AMOUNT_CHANGE_CONTEXT = re.compile(r"금액|송금|이체|보내|바꾸|변경|올리|내리|늘리|줄이|증가|감소")
+_NUMERIC_AMOUNT = re.compile(r"(?:₩\s*\d[\d,.]*|(?<![가-힣A-Za-z0-9])\d[\d,.]*\s*(?:만\s*)?원)")
+_KOREAN_AMOUNT = re.compile(rf"(?<![가-힣A-Za-z0-9])(?!일원(?:으로|인|이|의|을|과|에)){_KOREAN_NUMBER}\s*원")
 _ABBREVIATED_AMOUNT_CHANGE = re.compile(
     r"(?<![가-힣A-Za-z0-9])\d[\d,.]*\s*만"
     r"(?=\s*(?:으로|을|를|에|만|바꾸|변경|올리|내리|늘리|줄이))"
@@ -69,9 +63,7 @@ _BUSINESS_FACT_PATTERNS = {
 _NON_RECIPIENT_ROLES = {"관리자", "담당자", "상담원", "사용자", "본인"}
 _NON_RECIPIENT_SUFFIXES = ("팀", "부", "실", "기관", "회사", "센터", "부서")
 _TRANSFER_ACTION = re.compile(r"송금|이체|보내")
-_TRANSFER_PROCEDURE = re.compile(
-    r"(?:송금|이체)\s*요청\s*(?:절차|방법|지침|기록|정책|과정)"
-)
+_TRANSFER_PROCEDURE = re.compile(r"(?:송금|이체)\s*요청\s*(?:절차|방법|지침|기록|정책|과정)")
 
 
 def _detected_business_facts(value: str) -> set[CandidateBusinessFact]:
@@ -81,9 +73,7 @@ def _detected_business_facts(value: str) -> set[CandidateBusinessFact]:
         if category != CandidateBusinessFact.RECIPIENT
         if pattern.search(value)
     }
-    if _NUMERIC_AMOUNT.search(value) or (
-        _KOREAN_AMOUNT.search(value) and _AMOUNT_CHANGE_CONTEXT.search(value)
-    ):
+    if _NUMERIC_AMOUNT.search(value) or (_KOREAN_AMOUNT.search(value) and _AMOUNT_CHANGE_CONTEXT.search(value)):
         detected.add(CandidateBusinessFact.AMOUNT)
     if _ABBREVIATED_AMOUNT_CHANGE.search(value):
         detected.add(CandidateBusinessFact.AMOUNT)
@@ -192,25 +182,18 @@ class CandidateValidator:
                 missing_patterns=missing_variation,
             )
 
-        if any(
-            re.search(pattern, variation, flags=re.IGNORECASE)
-            for pattern in attack.variation_forbidden_patterns
-        ):
+        if any(re.search(pattern, variation, flags=re.IGNORECASE) for pattern in attack.variation_forbidden_patterns):
             return CandidateValidation(
                 valid=False,
                 reason="forbidden_variation_pattern",
             )
-        unexpected_facts = (
-            _detected_business_facts(variation)
-            - attack.allowed_variation_business_facts
-        )
+        unexpected_facts = _detected_business_facts(variation) - attack.allowed_variation_business_facts
         if unexpected_facts:
             return CandidateValidation(
                 valid=False,
                 reason="conflicting_immutable_fact",
                 intent_mismatches=tuple(
-                    f"business_fact:{fact.value}"
-                    for fact in sorted(unexpected_facts, key=lambda item: item.value)
+                    f"business_fact:{fact.value}" for fact in sorted(unexpected_facts, key=lambda item: item.value)
                 ),
             )
         normalized = normalized_variation
@@ -241,17 +224,14 @@ class CandidateValidator:
         candidate: GeneratedCandidate,
         similarity: float = 0.0,
     ) -> CandidateValidation:
-        unexpected_facts = (
-            candidate.business_fact_mentions - attack.allowed_variation_business_facts
-        )
+        unexpected_facts = candidate.business_fact_mentions - attack.allowed_variation_business_facts
         if unexpected_facts:
             return CandidateValidation(
                 valid=False,
                 reason="conflicting_immutable_fact",
                 similarity=similarity,
                 intent_mismatches=tuple(
-                    f"business_fact:{fact.value}"
-                    for fact in sorted(unexpected_facts, key=lambda item: item.value)
+                    f"business_fact:{fact.value}" for fact in sorted(unexpected_facts, key=lambda item: item.value)
                 ),
             )
         intent_mismatches = tuple(

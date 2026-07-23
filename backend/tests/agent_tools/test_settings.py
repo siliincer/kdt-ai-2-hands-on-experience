@@ -99,9 +99,7 @@ async def test_prepare_default_ready_for_confirmation(monkeypatch):
         return current
 
     monkeypatch.setattr(setting_service, "get_default_account", _get_default)
-    _patch_confirmation_create(
-        monkeypatch, _confirmation({"account_id": str(target.id)})
-    )
+    _patch_confirmation_create(monkeypatch, _confirmation({"account_id": str(target.id)}))
 
     data = await setting_service.prepare_default_account(
         _NO_SESSION, ctx, DefaultAccountPrepareRequest(account_id=str(target.id))

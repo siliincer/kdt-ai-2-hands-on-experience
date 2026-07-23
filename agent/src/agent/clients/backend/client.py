@@ -107,10 +107,7 @@ class BackendToolClient(BackendHttpClientBase):
                 await self._backoff()
                 continue
 
-            if (
-                response.status_code in RETRYABLE_STATUS_CODES
-                and attempt + 1 < attempts
-            ):
+            if response.status_code in RETRYABLE_STATUS_CODES and attempt + 1 < attempts:
                 await self._backoff()
                 continue
             break
@@ -122,9 +119,7 @@ class BackendToolClient(BackendHttpClientBase):
     @staticmethod
     def _validate_path(path: str) -> None:
         if not path.startswith(f"{AGENT_TOOL_PREFIX}/"):
-            raise ValueError(
-                "Agent Tool API 공통 Prefix 밖의 Path는 호출할 수 없습니다."
-            )
+            raise ValueError("Agent Tool API 공통 Prefix 밖의 Path는 호출할 수 없습니다.")
         if "://" in path or ".." in path:
             raise ValueError("동적 외부 URL이나 상위 경로는 호출할 수 없습니다.")
 

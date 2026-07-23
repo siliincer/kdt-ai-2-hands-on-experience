@@ -16,6 +16,7 @@ from .crud import (
     get_balance,
     get_card,
     get_card_ledger_entries,
+    get_cards_by_account,
     get_ledger_entries,
     reconcile_balance,
 )
@@ -98,9 +99,7 @@ def get_analytics_balance(account_id: str, db: DbDep, _auth: AnalyticsAuth):
     if acct is None:
         throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
     balance = get_balance(db, account_id)
-    return BalanceResponse(
-        account_id=account_id, balance=balance, currency=acct.currency
-    )
+    return BalanceResponse(account_id=account_id, balance=balance, currency=acct.currency)
 
 
 # ── GET /analytics/accounts/{account_id}/ledger ──────────────────────────────
@@ -138,6 +137,33 @@ def get_analytics_ledger(
             created_at=e.created_at,
         )
         for e in entries
+    ]
+
+
+# ── GET /analytics/accounts/{account_id}/cards ────────────────────────────────
+
+
+@analytics_router.get(
+    "/accounts/{account_id}/cards",
+    response_model=list[CardResponse],
+    responses={404: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+    summary="Read cards issued under an account (정보계)",
+)
+def get_analytics_account_cards(account_id: str, db: DbDep, _auth: AnalyticsAuth):
+    """Return cards for an account — backend has no other way to enumerate them."""
+    acct = get_account(db, account_id)
+    if acct is None:
+        throw_err(404, "ACCOUNT_NOT_FOUND", f"Account {account_id} not found")
+    cards = get_cards_by_account(db, account_id)
+    return [
+        CardResponse(
+            card_id=c.card_id,
+            account_id=c.account_id,
+            limit=c.limit,
+            currency=c.currency,
+            created_at=c.created_at,
+        )
+        for c in cards
     ]
 
 
@@ -234,6 +260,7 @@ def get_analytics_card_ledger(
             card_ledger_entry_id=e.card_ledger_entry_id,
             card_id=e.card_id,
             amount=e.amount,
+            merchant_name=e.merchant_name,
             created_at=e.created_at,
         )
         for e in entries

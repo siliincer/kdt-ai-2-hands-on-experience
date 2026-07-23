@@ -266,9 +266,7 @@ def test_reference_campaign_rejects_unsupported_entry_with_run_result() -> None:
 
 def test_generated_campaign_entry_requires_candidate_and_independent_judgment() -> None:
     case = load_reference_case(
-        Path(__file__).resolve().parents[1]
-        / "reference_cases"
-        / "account_list_generated_instruction_case.yaml"
+        Path(__file__).resolve().parents[1] / "reference_cases" / "account_list_generated_instruction_case.yaml"
     )
     response = _response()
 
@@ -314,9 +312,7 @@ async def test_reference_campaign_rejects_ambiguous_or_unbounded_cases(
 async def test_reference_campaign_bounds_arbitrary_hanging_executor(
     timeout_index: int,
 ) -> None:
-    cases = [
-        _case(f"case_{index}", BusinessWorkflow.ACCOUNT_LIST) for index in range(3)
-    ]
+    cases = [_case(f"case_{index}", BusinessWorkflow.ACCOUNT_LIST) for index in range(3)]
 
     async def execute(case: ReferenceCase) -> ReferenceCampaignEntry:
         if case.id == f"case_{timeout_index}":
@@ -353,9 +349,7 @@ async def test_reference_campaign_bounds_arbitrary_hanging_executor(
     assert len(result.entries) == 3
     assert [entry.case_id for entry in result.entries] == [case.id for case in cases]
     assert result.entries[timeout_index].error_stage == "campaign_timeout"
-    assert all(
-        entry.status == "not_executed" for entry in result.entries[timeout_index + 1 :]
-    )
+    assert all(entry.status == "not_executed" for entry in result.entries[timeout_index + 1 :])
     assert result.totals["not_executed"] == 2 - timeout_index
     assert result.totals["ERROR"] == 3 - timeout_index
 
