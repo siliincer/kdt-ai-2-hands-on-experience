@@ -6,7 +6,7 @@
 
 ## 결론
 
-- EC2 단일 서버 + Docker Compose 방식으로 시연 가능한 배포선을 확인했다.
+- 애플리케이션 EC2 + Docker Compose 방식으로 시연 가능한 배포선을 확인했다.
 - frontend, nginx, backend, agent, postgres, redis가 한 서버에서 함께 실행되는 것을
   확인했다.
 - 현재 Backend 채팅은 `mock_agent_driver`를 사용한다. Agent 컨테이너는 독립
@@ -15,7 +15,8 @@
   접근한다.
 - 비용 최소화를 위해 현재 EC2는 `stopped` 상태로 둔다.
 - 도메인은 구매하지 않는다. 시연 시에는 Elastic IP를 직접 사용한다.
-- Ollama는 로컬 전용으로 실행한다. EC2에는 Ollama 서버/모델을 올리지 않는다.
+- 배포용 Ollama는 같은 VPC의 별도 모델 EC2에 두는 구조로 정했다. 임시 모델은
+  `exaone3.5:2.4b`(약 1.6GB)이며 인스턴스는 아직 생성 전이다.
 
 ## AWS 리소스
 
@@ -36,6 +37,15 @@
 - `80/tcp`: 전체 공개
 - `443/tcp`: HTTPS 미적용 상태이므로 인바운드 규칙 제거 완료
 
+### Model EC2 (planned)
+
+- 애플리케이션 EC2와 같은 VPC에 생성한다.
+- Ollama `11434/tcp`는 애플리케이션 EC2 Security Group에서 오는 연결만 허용한다.
+- Ollama API는 Nginx나 인터넷에 공개하지 않는다.
+- 임시 모델은 `exaone3.5:2.4b`(약 1.6GB)이고 환경변수로 교체 가능하게 유지한다.
+- 인스턴스 유형과 사설 주소는 모델 부하 시험 후 기록한다.
+- 현재 `t4g.small` 애플리케이션 EC2에는 모델을 함께 배치하지 않는다.
+
 ### RDS
 
 - DB instance: `kdt-team3-postgres`
@@ -54,13 +64,16 @@
 
 ```text
 Elastic IP: 15.164.26.234
-  -> EC2
+  -> Application EC2
     -> nginx:80
       -> /            frontend/dist
       -> /backendApi/ backend:8000
     -> agent:8001     EC2 loopback/Docker 내부에서만 접근
     -> postgres:5432  EC2 내부 컨테이너
     -> redis:6379     EC2 내부 컨테이너
+
+Private VPC traffic
+  Application EC2 agent -> Model EC2 Ollama:11434
 ```
 
 서버 안의 주요 파일:
@@ -72,15 +85,17 @@ Elastic IP: 15.164.26.234
 - `/opt/kdt-team3/app/frontend/dist`
 
 `docker-compose.ec2.yml`과 `nginx/ec2.conf`는 레포에 포함한다. EC2에서는 nginx
-`80/tcp`를 공개한다. backend/agent/postgres/redis 포트는 `127.0.0.1` 바인딩이라
-외부에는 열리지 않는다.
+`80/tcp`만 공개한다. backend/agent/postgres/Redis/mock service 포트는
+`127.0.0.1`에만 바인딩한다.
 
 현재 Backend 채팅은 `mock_agent_driver`로 UI/SSE 흐름을 만든다. 실제 LangGraph
 Agent 연결은 Backend가 Docker 내부의 `http://agent-service:8001`을 호출하고
 기존 SSE/webhook 흐름으로 결과를 중계하는 계약이 확정된 뒤 적용한다.
 
 EC2 재배포 전에 `/opt/kdt-team3/app/.env`에 `POSTGRES_PASSWORD`,
-`COMPOSE_DATABASE_URL`, `JWT_SECRET_KEY`, `AGENT_WEBHOOK_SECRET`을 설정해야 한다.
+`COMPOSE_DATABASE_URL`, `JWT_SECRET_KEY`, `AGENT_WEBHOOK_SECRET`,
+`AGENT_SERVICE_TOKEN`, `BACKEND_SERVICE_TOKEN`, `LLM_PROVIDER`, `OLLAMA_BASE_URL`,
+`OLLAMA_MODEL`을 설정해야 한다.
 EC2 Compose는 이 값이 비어 있으면 알려진 로컬 기본값으로 기동하지 않고 실패한다.
 `python3 scripts/validate_ec2_env.py --env-file .env`는 빈 값뿐 아니라 알려진
 placeholder, 짧은 secret, DB 비밀번호 불일치도 거부한다. 실제 EC2 `.env` 갱신은
@@ -109,12 +124,22 @@ curl http://127.0.0.1:8001/health
 
 ## Ollama 정책
 
-Ollama는 로컬 개발/실험 전용이다.
+로컬 개발과 AWS 배포는 서로 다른 endpoint를 사용한다.
 
-- 로컬 머신에는 Ollama 서버와 모델을 둘 수 있다.
-- EC2에는 Ollama 서버나 모델을 설치하지 않는다.
-- 코드와 환경변수에는 Ollama provider를 포함한다.
-- EC2 데모는 `LLM_PROVIDER=openai` 또는 LLM 실패 시 규칙 기반 fallback 경로로 동작하게 둔다.
+- 로컬 개발에서는 개발자 머신의 Ollama를 사용한다.
+- AWS 배포에서는 같은 VPC의 별도 모델 EC2를 사용한다.
+- AWS 임시 모델은 `exaone3.5:2.4b`(약 1.6GB)이며 `OLLAMA_MODEL`로 교체할 수 있다.
+- 모델 EC2의 `11434/tcp`는 애플리케이션 EC2 Security Group만 접근할 수 있다.
+- 레드팀 검증용 생성/판정 모델은 제품 Agent 배포 모델과 별도이며 AWS 제품 스택에
+  함께 배포하지 않는다.
+
+AWS 배포 환경:
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://<MODEL_EC2_PRIVATE_IP_OR_DNS>:11434
+OLLAMA_MODEL=exaone3.5:2.4b
+```
 
 로컬 직접 실행:
 
@@ -155,9 +180,19 @@ aws ec2 stop-instances \
   --profile kdt-team3-infra
 ```
 
+모델 EC2 생성 후에는 실제 ID를 사용해 함께 중지한다.
+
+```bash
+aws ec2 stop-instances \
+  --instance-ids "$MODEL_EC2_INSTANCE_ID" \
+  --region ap-northeast-2 \
+  --profile kdt-team3-infra
+```
+
 EC2를 stop해도 남을 수 있는 비용:
 
 - EBS root volume: `vol-07152b79beb161283`
+- 모델 EC2의 인스턴스 실행 비용과 EBS(생성 후 식별자 기록)
 - Elastic IP / public IPv4: `15.164.26.234`
 - RDS stopped 상태의 스토리지/백업/Secret
 
@@ -211,4 +246,4 @@ sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.
 - Agent `8001` API는 외부에 공개하지 않는다.
 - 평소에는 비용 절감을 위해 EC2를 꺼둔다.
 - EC2를 켜면 같은 Elastic IP로 다시 접근할 수 있다.
-- Ollama는 로컬 전용이며, EC2 배포 런타임에는 포함하지 않는다.
+- 배포 시 모델 EC2도 함께 시작하고 종료하며, Agent는 사설 주소로만 Ollama에 접근한다.

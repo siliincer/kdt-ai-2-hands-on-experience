@@ -116,6 +116,11 @@ jobs:
             echo "COMPOSE_DATABASE_URL=postgresql://app:${db_password}@postgres:5432/financial_agent"
             echo "JWT_SECRET_KEY=$(openssl rand -hex 32)"
             echo "AGENT_WEBHOOK_SECRET=$(openssl rand -hex 32)"
+            echo "AGENT_SERVICE_TOKEN=$(openssl rand -hex 32)"
+            echo "BACKEND_SERVICE_TOKEN=$(openssl rand -hex 32)"
+            echo "LLM_PROVIDER=ollama"
+            echo "OLLAMA_BASE_URL=http://10.0.1.20:11434"
+            echo "OLLAMA_MODEL=exaone3.5:2.4b"
           } > .env.ec2-ci
       - name: Validate EC2 environment
         run: python3 scripts/validate_ec2_env.py --env-file .env.ec2-ci
@@ -125,7 +130,9 @@ jobs:
           docker compose --env-file .env.example -f docker-compose.dev.yml config --quiet
           docker compose --env-file .env.example -f docker-compose.prod.yml config --quiet
           docker compose --env-file .env.ec2-ci --profile agent \
-            -f docker-compose.yml -f docker-compose.ec2.yml config --quiet
+            -f docker-compose.yml -f docker-compose.ec2.yml config --format json \
+            > /tmp/docker-compose-ec2.json
+          python3 scripts/validate_ec2_compose.py /tmp/docker-compose-ec2.json
       - name: Nginx syntax check
         run: |
           docker run --rm --add-host backend:127.0.0.1 \

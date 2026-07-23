@@ -23,7 +23,7 @@ services:
     image: redis:7-alpine
     container_name: kdt-redis-cache
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -34,7 +34,7 @@ services:
     image: redis:7-alpine
     container_name: kdt-redis-stream
     ports:
-      - "6380:6379" # 호스트의 6380 포트 매핑
+      - "127.0.0.1:6380:6379" # 호스트의 6380 포트 매핑
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -133,7 +133,7 @@ services:
       dockerfile: mock-financial-service/Dockerfile
     container_name: kdt-mock-financial-service
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     networks:
       default:
         aliases:

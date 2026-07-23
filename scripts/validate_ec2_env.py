@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 from enum import StrEnum
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -11,15 +12,23 @@ REQUIRED_SECRET_LENGTHS = {
     "POSTGRES_PASSWORD": 16,
     "JWT_SECRET_KEY": 32,
     "AGENT_WEBHOOK_SECRET": 32,
+    "AGENT_SERVICE_TOKEN": 32,
+    "BACKEND_SERVICE_TOKEN": 32,
 }
 KNOWN_PLACEHOLDERS = {
     "change-me",
     "change-me-agent-webhook",
     "change-me-in-local",
+    "change-me-agent-service-token",
+    "change-me-backend-service-token",
     "changeme",
     "mypassword",
     "password",
 }
+PRIVATE_VPC_NETWORKS = tuple(
+    ipaddress.ip_network(cidr)
+    for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
 
 
 class ValidationError(StrEnum):
@@ -32,11 +41,35 @@ class ValidationError(StrEnum):
     AGENT_WEBHOOK_SECRET_MISSING = "AGENT_WEBHOOK_SECRET is missing or empty"
     AGENT_WEBHOOK_SECRET_PLACEHOLDER = "AGENT_WEBHOOK_SECRET uses a known placeholder"
     AGENT_WEBHOOK_SECRET_SHORT = "AGENT_WEBHOOK_SECRET must be at least 32 characters"
+    AGENT_SERVICE_TOKEN_MISSING = "AGENT_SERVICE_TOKEN is missing or empty"
+    AGENT_SERVICE_TOKEN_PLACEHOLDER = "AGENT_SERVICE_TOKEN uses a known placeholder"
+    AGENT_SERVICE_TOKEN_SHORT = "AGENT_SERVICE_TOKEN must be at least 32 characters"
+    BACKEND_SERVICE_TOKEN_MISSING = "BACKEND_SERVICE_TOKEN is missing or empty"
+    BACKEND_SERVICE_TOKEN_PLACEHOLDER = "BACKEND_SERVICE_TOKEN uses a known placeholder"
+    BACKEND_SERVICE_TOKEN_SHORT = "BACKEND_SERVICE_TOKEN must be at least 32 characters"
     DATABASE_URL_MISSING = "COMPOSE_DATABASE_URL is missing or empty"
+    DATABASE_URL_FORMAT = "COMPOSE_DATABASE_URL is not a valid URL"
     DATABASE_URL_SCHEME = "COMPOSE_DATABASE_URL must use a PostgreSQL scheme"
     DATABASE_URL_PARTS = "COMPOSE_DATABASE_URL must include host, user, and password"
     DATABASE_URL_PASSWORD = "COMPOSE_DATABASE_URL password must match POSTGRES_PASSWORD"
     DATABASE_URL_HOST = "COMPOSE_DATABASE_URL host must be postgres for EC2 Compose"
+    LLM_PROVIDER = "LLM_PROVIDER must be ollama for the EC2 model-host deployment"
+    OLLAMA_BASE_URL_MISSING = "OLLAMA_BASE_URL is missing or empty"
+    OLLAMA_BASE_URL_FORMAT = (
+        "OLLAMA_BASE_URL must be an HTTP URL with port 11434 and no credentials, "
+        "query, or fragment"
+    )
+    OLLAMA_BASE_URL_LOCAL = (
+        "OLLAMA_BASE_URL must target the separate model host, not localhost or "
+        "host.docker.internal"
+    )
+    OLLAMA_BASE_URL_PUBLIC_IP = (
+        "OLLAMA_BASE_URL IP address must be in an RFC1918 private VPC range"
+    )
+    OLLAMA_BASE_URL_PUBLIC_DNS = (
+        "OLLAMA_BASE_URL hostname must be an AWS private DNS name ending in .internal"
+    )
+    OLLAMA_MODEL_MISSING = "OLLAMA_MODEL is missing or empty"
 
 
 SECRET_ERRORS = {
@@ -54,6 +87,16 @@ SECRET_ERRORS = {
         ValidationError.AGENT_WEBHOOK_SECRET_MISSING,
         ValidationError.AGENT_WEBHOOK_SECRET_PLACEHOLDER,
         ValidationError.AGENT_WEBHOOK_SECRET_SHORT,
+    ),
+    "AGENT_SERVICE_TOKEN": (
+        ValidationError.AGENT_SERVICE_TOKEN_MISSING,
+        ValidationError.AGENT_SERVICE_TOKEN_PLACEHOLDER,
+        ValidationError.AGENT_SERVICE_TOKEN_SHORT,
+    ),
+    "BACKEND_SERVICE_TOKEN": (
+        ValidationError.BACKEND_SERVICE_TOKEN_MISSING,
+        ValidationError.BACKEND_SERVICE_TOKEN_PLACEHOLDER,
+        ValidationError.BACKEND_SERVICE_TOKEN_SHORT,
     ),
 }
 
@@ -93,15 +136,64 @@ def validate_environment(values: dict[str, str]) -> list[ValidationError]:
         errors.append(ValidationError.DATABASE_URL_MISSING)
         return errors
 
-    parsed = urlsplit(database_url)
-    if parsed.scheme not in {"postgresql", "postgresql+asyncpg"}:
-        errors.append(ValidationError.DATABASE_URL_SCHEME)
-    if not parsed.hostname or not parsed.username or parsed.password is None:
-        errors.append(ValidationError.DATABASE_URL_PARTS)
-    elif unquote(parsed.password) != values.get("POSTGRES_PASSWORD", ""):
-        errors.append(ValidationError.DATABASE_URL_PASSWORD)
-    if parsed.hostname != "postgres":
-        errors.append(ValidationError.DATABASE_URL_HOST)
+    try:
+        parsed = urlsplit(database_url)
+        hostname = parsed.hostname
+        username = parsed.username
+        password = parsed.password
+        _ = parsed.port
+    except ValueError:
+        errors.append(ValidationError.DATABASE_URL_FORMAT)
+    else:
+        if parsed.scheme not in {"postgresql", "postgresql+asyncpg"}:
+            errors.append(ValidationError.DATABASE_URL_SCHEME)
+        if not hostname or not username or password is None:
+            errors.append(ValidationError.DATABASE_URL_PARTS)
+        elif unquote(password) != values.get("POSTGRES_PASSWORD", ""):
+            errors.append(ValidationError.DATABASE_URL_PASSWORD)
+        if hostname != "postgres":
+            errors.append(ValidationError.DATABASE_URL_HOST)
+
+    if values.get("LLM_PROVIDER", "").strip().lower() != "ollama":
+        errors.append(ValidationError.LLM_PROVIDER)
+
+    ollama_url = values.get("OLLAMA_BASE_URL", "").strip()
+    if not ollama_url:
+        errors.append(ValidationError.OLLAMA_BASE_URL_MISSING)
+    else:
+        parsed_ollama = urlsplit(ollama_url)
+        try:
+            port = parsed_ollama.port
+        except ValueError:
+            port = None
+        if (
+            parsed_ollama.scheme != "http"
+            or not parsed_ollama.hostname
+            or port != 11434
+            or parsed_ollama.username is not None
+            or parsed_ollama.password is not None
+            or parsed_ollama.path not in {"", "/"}
+            or parsed_ollama.query
+            or parsed_ollama.fragment
+        ):
+            errors.append(ValidationError.OLLAMA_BASE_URL_FORMAT)
+        elif parsed_ollama.hostname.lower() in {
+            "localhost",
+            "host.docker.internal",
+        }:
+            errors.append(ValidationError.OLLAMA_BASE_URL_LOCAL)
+        else:
+            try:
+                address = ipaddress.ip_address(parsed_ollama.hostname)
+            except ValueError:
+                if not parsed_ollama.hostname.lower().endswith(".internal"):
+                    errors.append(ValidationError.OLLAMA_BASE_URL_PUBLIC_DNS)
+            else:
+                if not any(address in network for network in PRIVATE_VPC_NETWORKS):
+                    errors.append(ValidationError.OLLAMA_BASE_URL_PUBLIC_IP)
+
+    if not values.get("OLLAMA_MODEL", "").strip():
+        errors.append(ValidationError.OLLAMA_MODEL_MISSING)
     return errors
 
 
