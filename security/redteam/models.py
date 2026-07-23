@@ -273,6 +273,7 @@ class AttackCase(BaseModel):
     allowed_variation_business_facts: set[CandidateBusinessFact] = Field(
         default_factory=set
     )
+    constrain_variation_to_examples: bool = False
     variation_examples: list[set[VariationExample]] = Field(default_factory=list)
     generation_guidance: list[PromptComponent] = Field(
         default_factory=list, max_length=MAX_GENERATION_GUIDANCE_ITEMS
