@@ -7,7 +7,7 @@ import re
 from collections import Counter
 from collections.abc import Sequence
 from itertools import islice, product
-from typing import Protocol
+from typing import Protocol, cast
 
 import httpx
 
@@ -279,7 +279,7 @@ class OllamaAttackGenerator:
                     item["variation"] for item in rejected_candidates if isinstance(item.get("variation"), str)
                 )
 
-                variation_schema = body["format"]["properties"]["candidates"]["items"]["properties"]["variation"]
+                variation_schema = self._variation_schema(body)
                 all_variations = variation_schema.get("enum")
 
                 if not isinstance(all_variations, list):
@@ -305,7 +305,7 @@ class OllamaAttackGenerator:
                         candidate_count,
                     )
 
-                    variation_schema = body["format"]["properties"]["candidates"]["items"]["properties"]["variation"]
+                    variation_schema = self._variation_schema(body)
 
                 variation_schema["enum"] = remaining_variations
             try:
@@ -336,6 +336,43 @@ class OllamaAttackGenerator:
 
         details = rejection_reasons | missing_patterns
         raise RuntimeError("local Ollama generator exhausted retries: " + ", ".join(sorted(details)))
+
+    @staticmethod
+    def _variation_schema(
+        body: dict[str, object],
+    ) -> dict[str, object]:
+        def require_object(
+            value: object,
+            label: str,
+        ) -> dict[str, object]:
+            if not isinstance(value, dict):
+                raise RuntimeError(f"generator request is missing {label}")
+            return cast(dict[str, object], value)
+
+        format_schema = require_object(
+            body.get("format"),
+            "format schema",
+        )
+        properties = require_object(
+            format_schema.get("properties"),
+            "format properties",
+        )
+        candidates = require_object(
+            properties.get("candidates"),
+            "candidate collection schema",
+        )
+        items = require_object(
+            candidates.get("items"),
+            "candidate item schema",
+        )
+        item_properties = require_object(
+            items.get("properties"),
+            "candidate item properties",
+        )
+        return require_object(
+            item_properties.get("variation"),
+            "candidate variation schema",
+        )
 
     @staticmethod
     def _draft_variation(draft: dict[str, object]) -> str:
