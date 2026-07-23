@@ -46,6 +46,10 @@ from agent.workflows.workflow_support import tool_call as _tool_call
 WORKFLOW_ID = "wf_external_transfer"
 _tool_error_update = build_tool_error_update("송금을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
+# 관리시트 route_key=limit_exceeded(1회 송금 한도) 스펙 — Prepare 호출 전에 먼저 걸러
+# 백엔드까지 안 보내고 바로 차단한다.
+_TRANSFER_LIMIT = 50_000_000
+
 # 승인·수정 화면의 정정 대상 3종 — route_external_transfer_correction,
 # request_external_transfer_approval, request_external_transfer_correction이 공유한다.
 _RESET_STEP_BY_TARGET = {
@@ -308,10 +312,27 @@ def build_external_transfer_graph(
 
     async def check_external_transfer_amount(state: AgentState) -> dict[str, Any]:
         amount = _data(state).get("amount")
-        valid = isinstance(amount, int) and not isinstance(amount, bool) and amount > 0
+        if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
+            return {
+                "current_step_id": "check_external_transfer_amount",
+                "route_key": "invalid",
+            }
+        if amount > _TRANSFER_LIMIT:
+            return {
+                "current_step_id": "check_external_transfer_amount",
+                "route_key": "limit_exceeded",
+                "data": {
+                    "blocked_view": {
+                        "title": "송금할 수 없습니다.",
+                        "description": (
+                            f"1회 송금 한도({_TRANSFER_LIMIT:,}원)를 초과했습니다. 요청 금액: {amount:,}원"
+                        ),
+                    }
+                },
+            }
         return {
             "current_step_id": "check_external_transfer_amount",
-            "route_key": "valid" if valid else "invalid",
+            "route_key": "valid",
         }
 
     async def request_external_transfer_amount(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -909,13 +930,14 @@ def build_external_transfer_graph(
         {
             "valid": "start_external_transfer_prepare",
             "invalid": "request_external_transfer_amount",
+            "limit_exceeded": "emit_external_transfer_blocked",
         },
     )
     graph.add_conditional_edges(
         "request_external_transfer_amount",
         _route_key,
         {
-            "submitted": "start_external_transfer_prepare",
+            "submitted": "check_external_transfer_amount",
             "cancelled": END,
             "error": "emit_external_transfer_error",
         },
