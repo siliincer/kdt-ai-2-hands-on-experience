@@ -223,7 +223,8 @@ async def test_all_reference_cases_have_reproducible_agent_outcomes() -> None:
         text=True,
         timeout=5,
     ).stdout.strip()
-    assert result.metadata.agent_source_commit == expected_agent_revision
+    assert manifest["agent_source_commit"] == expected_agent_revision
+    assert result.metadata.agent_source_commit == manifest["agent_source_commit"]
     assert result.metadata.case_set_sha256 == manifest["case_set_sha256"]
     assert [entry.case_id for entry in result.entries] == manifest["case_ids"]
     by_id = {entry.case_id: entry for entry in result.entries}

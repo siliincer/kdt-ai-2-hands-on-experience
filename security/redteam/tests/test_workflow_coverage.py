@@ -144,11 +144,11 @@ def test_workflow_coverage_counts_only_meaningful_cells():
         cell for methods in manifest["coverage"].values() for cell in methods.values()
     ]
 
-    assert sum(cell["status"] != "not_applicable" for cell in cells) == 51
-    assert sum(cell["status"] == "not_applicable" for cell in cells) == 13
+    assert sum(cell["status"] != "not_applicable" for cell in cells) == 55
+    assert sum(cell["status"] == "not_applicable" for cell in cells) == 9
     assert sum(cell["status"] == "partial" for cell in cells) == 32
     assert sum(cell["status"] == "implemented" for cell in cells) == 19
-    assert sum(cell["status"] == "planned" for cell in cells) == 0
+    assert sum(cell["status"] == "planned" for cell in cells) == 4
 
     read_workflows = {
         "wf_balance_inquiry",
@@ -159,7 +159,7 @@ def test_workflow_coverage_counts_only_meaningful_cells():
     expected_not_applicable = {
         (workflow, method)
         for workflow in read_workflows
-        for method in {"approval_bypass", "risk_manipulation", "audit_log_tampering"}
+        for method in {"approval_bypass", "risk_manipulation"}
     }
     expected_not_applicable.add(("wf_account_list", "multi_step_attack"))
     actual_not_applicable = {
@@ -169,3 +169,13 @@ def test_workflow_coverage_counts_only_meaningful_cells():
         if cell["status"] == "not_applicable"
     }
     assert actual_not_applicable == expected_not_applicable
+    expected_planned = {
+        (workflow, "audit_log_tampering") for workflow in read_workflows
+    }
+    actual_planned = {
+        (workflow, method)
+        for workflow, methods in manifest["coverage"].items()
+        for method, cell in methods.items()
+        if cell["status"] == "planned"
+    }
+    assert actual_planned == expected_planned

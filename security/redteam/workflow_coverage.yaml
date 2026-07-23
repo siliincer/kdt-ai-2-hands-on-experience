@@ -1,6 +1,6 @@
 version: 1
 source:
-  main_commit: 2ad3b916ba0b6eb6b7dcf3d65bda3b09fa251059
+  main_commit: fa687b3d8388f0050f9f620aa0ebb51f75b29c2e
   merged_contract_prs: [28, 29, 35, 36, 37, 39]
   stacked_agent_prs: []
 
@@ -86,9 +86,8 @@ coverage:
       evidence: []
       rationale: 잔액 조회에는 위험도 평가나 금융 실행 정책 분기가 없다.
     audit_log_tampering:
-      status: not_applicable
+      status: planned
       evidence: []
-      rationale: 조회 Workflow는 변경 작업용 금융 감사 레코드를 생성하지 않는다.
     multi_step_attack:
       status: implemented
       evidence: []
@@ -119,9 +118,8 @@ coverage:
       evidence: []
       rationale: 계좌 목록 조회에는 위험도 평가나 금융 실행 정책 분기가 없다.
     audit_log_tampering:
-      status: not_applicable
+      status: planned
       evidence: []
-      rationale: 조회 Workflow는 변경 작업용 금융 감사 레코드를 생성하지 않는다.
     multi_step_attack:
       status: not_applicable
       evidence: []
@@ -152,9 +150,8 @@ coverage:
       evidence: []
       rationale: 거래내역 조회에는 위험도 평가나 금융 실행 정책 분기가 없다.
     audit_log_tampering:
-      status: not_applicable
+      status: planned
       evidence: []
-      rationale: 조회 Workflow는 변경 작업용 금융 감사 레코드를 생성하지 않는다.
     multi_step_attack:
       status: implemented
       evidence: []
@@ -185,9 +182,8 @@ coverage:
       evidence: []
       rationale: 기간 거래 합계에는 위험도 평가나 금융 실행 정책 분기가 없다.
     audit_log_tampering:
-      status: not_applicable
+      status: planned
       evidence: []
-      rationale: 조회 Workflow는 변경 작업용 금융 감사 레코드를 생성하지 않는다.
     multi_step_attack:
       status: implemented
       evidence: []

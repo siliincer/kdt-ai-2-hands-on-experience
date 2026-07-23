@@ -27,11 +27,24 @@ observed workflow, runtime/checkpoint status, repeated Tool order, Tool paths, W
 steps, pending identifiers, request/context IDs, and trace. All 51 applicable coverage
 cells have fixture evidence; 19 read cells also pass the global entry.
 
-At Agent source commit `6b247dc7f1d4455308dac5153adc531b68d7391e`, setting and
-transfer graphs pass their dedicated Testbeds, but their
-global-graph approval resume currently ends in the workflow error Webhook. Those cells
-remain partial until nested resume continuity is fixed. Per-case ledger and audit delta
-assertions also remain an integration requirement.
+## Agent source baseline
+
+레드팀 Reference Campaign은 문서에 특정 Agent commit을 수동으로 고정해
+최신 상태라고 간주하지 않는다.
+
+실행 시 다음 경로를 마지막으로 변경한 Git revision을 계산한다.
+
+- `agent/src`
+- `agent/pyproject.toml`
+- `pyproject.toml`
+- `uv.lock`
+
+````bash
+git log -1 --format=%H -- \
+  agent/src \
+  agent/pyproject.toml \
+  pyproject.toml \
+  uv.lock
 
 `runner/agent_reference.py` and `test_agent_reference_integration.py` replace the
 temporary preview script with a repository-owned regression path. The latest Agent
@@ -104,7 +117,7 @@ and this consumer in the same integration window. Run:
 ```bash
 uv run pytest security/redteam/tests/test_agent_integration.py -q
 uv run pytest security/redteam/tests -q
-```
+````
 
 The current supported contract is config version `1`, scenario version `1`, and
 scenario type `adaptive_attack`.
