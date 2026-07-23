@@ -552,6 +552,10 @@ def get_card(db: Session, card_id: str) -> Card | None:
     return db.execute(select(Card).where(Card.card_id == card_id)).scalar_one_or_none()
 
 
+def get_cards_by_account(db: Session, account_id: str) -> list[Card]:
+    return list(db.execute(select(Card).where(Card.account_id == account_id)).scalars().all())
+
+
 def _get_card_watermark(db: Session, card_id: str) -> int:
     """Highest card-ledger rowid covered by the latest settlement (0 if none)."""
     result = db.execute(

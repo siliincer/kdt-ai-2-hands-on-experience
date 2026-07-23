@@ -70,11 +70,15 @@ def _patch(monkeypatch, owned, rows):
     async def _fake_rows(owned_arg):
         return rows
 
+    async def _fake_card_rows(owned_arg):
+        return []
+
     async def _fake_create_ctx(session, **kwargs):
         return SimpleNamespace(id=uuid4())
 
     monkeypatch.setattr(transaction_service, "get_owned_accounts_by_ids", _fake_owned)
     monkeypatch.setattr(transaction_service, "_load_ledger_rows", _fake_rows)
+    monkeypatch.setattr(transaction_service, "_load_card_rows", _fake_card_rows)
     monkeypatch.setattr(transaction_service, "create_transaction_query_context", _fake_create_ctx)
 
 
@@ -166,7 +170,7 @@ async def test_query_preserves_instant_and_maps_fields(monkeypatch):
     assert item.account_alias == "비상금"
     assert item.transaction_type == "withdrawal"
     assert item.occurred_at == when  # 같은 순간(표현만 KST 로 변환)
-    assert item.transaction_title is None  # 원장에 없음
+    assert item.transaction_title == "출금"  # 상호명 없는 송금류 폴백
     assert item.category is None
 
 
