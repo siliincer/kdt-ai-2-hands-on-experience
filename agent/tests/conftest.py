@@ -24,3 +24,16 @@ def no_openai_key(monkeypatch):
     agent.llm.get_llm.cache_clear()
     yield
     agent.llm.get_llm.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def disable_intent_gate(monkeypatch):
+    """기본 테스트 환경에서는 Intent Gate를 끈다.
+
+    이 환경은 LLM을 강제 실패시키는 결정적 경로다(no_openai_key). Intent Gate는
+    LLM 분류를 요구하므로 여기서는 동작할 수 없고, 켜 두면 fail-closed로 모든
+    요청이 차단되어 규칙 엔진 단위 테스트를 오염시킨다. 게이트 자체 동작은
+    test_intent_gate.py가 분류기를 monkeypatch하고 게이트를 켜서 검증한다.
+    """
+    monkeypatch.setenv("GUARDRAIL_INTENT_GATE_ENABLED", "false")
+    yield
