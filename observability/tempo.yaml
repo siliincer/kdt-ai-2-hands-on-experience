@@ -1,0 +1,36 @@
+# Grafana Tempo (single-binary) 설정.
+# 근거: https://github.com/grafana/tempo/tree/main/example/docker-compose/single-binary
+#
+# 공식 예제와의 차이 2가지(의도적):
+#  1) OTLP 수신 주소를 0.0.0.0 으로 둔다. dev 에서 backend 는 컨테이너가 아니라 호스트에서
+#     `fastapi dev` 로 뜨므로, 퍼블리시된 포트를 통해 호스트에서 들어오는 트래픽을 받아야 한다.
+#  2) compactor.compaction.block_retention 을 명시(24h) — 로컬 디스크 사용량을 묶어둔다.
+
+server:
+  http_listen_port: 3200
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+compactor:
+  compaction:
+    # 결정(2026-07-24): 개발용 24h 보존. 늘리려면 여기만 바꾼다.
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+# 참고: 공식 예제의 metrics_generator(서비스 그래프/스팬 메트릭)는 Prometheus 의
+# remote-write receiver 활성화가 필요해 Phase 1 에서는 넣지 않는다. 트레이스 조회에는 불필요.
