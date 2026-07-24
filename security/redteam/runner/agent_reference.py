@@ -51,6 +51,10 @@ from security.redteam.runner.reference_runtime import (
     execute_reference_resume,
     execute_reference_start,
 )
+from security.redteam.runner.target_model import (
+    TargetModelExecutionError,
+    TargetModelMonitor,
+)
 
 _NOW = datetime(2026, 7, 19, 3, 0, tzinfo=timezone.utc)
 
@@ -159,6 +163,7 @@ class AgentReferenceExecutor:
         scenarios: dict[str, Scenario],
         redact_fields: set[str],
         request_budget: RequestBudget | None = None,
+        target_model_monitor: TargetModelMonitor | None = None,
         max_iterations_per_generated_case: int = 1,
     ) -> None:
         if not 1 <= max_iterations_per_generated_case <= 10:
@@ -168,6 +173,7 @@ class AgentReferenceExecutor:
         self._scenarios = scenarios
         self._redact_fields = redact_fields
         self._request_budget = request_budget
+        self._target_model_monitor = target_model_monitor
         self._max_iterations_per_generated_case = max_iterations_per_generated_case
         self._api = _load_agent_api()
         self._active_case_id: str | None = None
@@ -217,7 +223,68 @@ class AgentReferenceExecutor:
             return await self._adaptive(case)
         return await self._execute_once(case)
 
-    async def _execute_once(self, case: ReferenceCase) -> ReferenceCampaignEntry:
+    async def _execute_once(
+        self,
+        case: ReferenceCase,
+    ) -> ReferenceCampaignEntry:
+        monitor = self._target_model_monitor
+        before = monitor.snapshot() if monitor is not None else None
+
+        entry = await self._execute_once_unchecked(case)
+
+        if monitor is None or before is None:
+            return entry
+
+        evidence = monitor.delta(before)
+        entry = entry.model_copy(
+            update={
+                "target_model_evidence": evidence,
+            }
+        )
+
+        if case.generation is None or entry.error_stage == "input_generation":
+            return entry
+
+        stage: str | None = None
+        reason: str | None = None
+
+        if evidence.fallbacks > 0:
+            stage = "target_model_fallback"
+            reason = "Target model execution used a forbidden rule-based fallback"
+        elif evidence.failures > 0:
+            stage = "target_model_execution"
+            reason = "Target model inference failed"
+        elif evidence.attempts < 1 or evidence.successes < 1:
+            stage = "target_model_not_invoked"
+            reason = "generated attack prompt did not invoke the configured Target model"
+
+        if stage is None or reason is None:
+            return entry
+
+        error = TargetModelExecutionError(
+            f"{reason}: "
+            f"attempts={evidence.attempts}, "
+            f"successes={evidence.successes}, "
+            f"failures={evidence.failures}, "
+            f"fallbacks={evidence.fallbacks}"
+        )
+
+        return _partial_error_entry(
+            case,
+            stage,
+            error,
+            candidate=self._active_candidate,
+            steps=[step for group in self._active_step_groups for step in group],
+        ).model_copy(
+            update={
+                "target_model_evidence": evidence,
+            }
+        )
+
+    async def _execute_once_unchecked(
+        self,
+        case: ReferenceCase,
+    ) -> ReferenceCampaignEntry:
         self._active_candidate = None
         self._active_step_groups = []
         try:
@@ -286,6 +353,7 @@ class AgentReferenceExecutor:
         return ReferenceAdaptiveAttempt(
             iteration=iteration,
             candidate=entry.candidate,
+            target_model_evidence=entry.target_model_evidence,
             evaluation=entry.evaluation,
             rule_evaluation=entry.rule_evaluation,
             steps=entry.steps,

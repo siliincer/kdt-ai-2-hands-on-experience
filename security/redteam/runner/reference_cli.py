@@ -48,6 +48,7 @@ from security.redteam.runner.reporter import (
     ReportWriteError,
     write_reference_campaign_report,
 )
+from security.redteam.runner.target_model import TargetModelMonitor
 
 REDTEAM_ROOT = Path(__file__).resolve().parents[1]
 
@@ -100,7 +101,13 @@ def _required_reference_requests(
     cases: list[ReferenceCase],
 ) -> int:
     generated = sum(case.generation is not None for case in cases)
-    preflight_requests = 1 + len({config.adaptive_attack.model, config.judgment.model})
+    preflight_requests = 1 + len(
+        {
+            config.adaptive_attack.model,
+            config.safety.required_ollama_model,
+            config.judgment.model,
+        }
+    )
     generated_iteration_requests = (
         2 * config.adaptive_attack.max_generation_attempts
         + config.adaptive_attack.candidates_per_generation
@@ -136,6 +143,7 @@ def _parser() -> argparse.ArgumentParser:
         default=REDTEAM_ROOT / "reports",
     )
     parser.add_argument("--generator-model", type=_model_name)
+    parser.add_argument("--target-model", type=_model_name)
     parser.add_argument("--judgment-model", type=_model_name)
     parser.add_argument(
         "--max-iterations",
@@ -173,6 +181,7 @@ def _load_reference_config(args: argparse.Namespace) -> RedTeamConfig:
     config = _with_model_overrides(
         load_config(args.config),
         generator_model=args.generator_model,
+        target_model=getattr(args, "target_model", None),
         judgment_model=args.judgment_model,
     )
     max_iterations = getattr(args, "max_iterations", None)
@@ -206,6 +215,14 @@ async def _run(
     planned_iterations = (
         generated_cases * config.adaptive_attack.max_iterations_per_attack + len(cases) - generated_cases
     )
+    role_models = {
+        config.adaptive_attack.model,
+        config.safety.required_ollama_model,
+        config.judgment.model,
+    }
+    if len(role_models) != 3:
+        raise ValueError("generator, Target, and judgment models must be distinct")
+
     required_requests = _required_reference_requests(config, cases)
     request_limit = config.execution.max_reference_requests_per_run
     if required_requests > request_limit:
@@ -228,59 +245,80 @@ async def _run(
     model_digests = require_ollama_models(
         config,
         budget,
-        {config.adaptive_attack.model, config.judgment.model},
+        {
+            config.adaptive_attack.model,
+            config.safety.required_ollama_model,
+            config.judgment.model,
+        },
     )
     runner_git_commit, runner_git_dirty = _git_state()
     config_sha256 = _canonical_sha256(config)
     case_set_sha256 = _canonical_sha256(cases)
-    with OllamaAttackGenerator(
-        config.adaptive_attack,
-        budget,
-        classifier_model=config.judgment.model,
-    ) as generator:
-        with OllamaResponseJudge(config.judgment, budget) as judge:
-            executor = AgentReferenceExecutor(
-                generator,
-                judge,
-                scenarios,
-                config.safety.redact_fields,
+    with TargetModelMonitor(
+        base_url=config.safety.required_ollama_base_url,
+        model=config.safety.required_ollama_model,
+    ) as target_monitor:
+        with OllamaAttackGenerator(
+            config.adaptive_attack,
+            budget,
+            classifier_model=config.judgment.model,
+        ) as generator:
+            with OllamaResponseJudge(
+                config.judgment,
                 budget,
-                max_iterations_per_generated_case=(config.adaptive_attack.max_iterations_per_attack),
-            )
-            agent_source_commit = executor.agent_source_commit
-            if (
-                args.agent_source_commit is not None
-                and executor.resolve_source_commit(args.agent_source_commit) != agent_source_commit
-            ):
-                raise ValueError("imported Agent checkout does not match --agent-source-commit")
-            if executor.agent_source_dirty:
-                raise ValueError("imported Agent source directory has local changes")
-            result = await run_reference_campaign(
-                cases,
-                executor,
-                metadata_factory=lambda: ReferenceCampaignMetadata(
-                    agent_source_commit=agent_source_commit,
-                    case_set_kind=(
-                        "default"
-                        if case_id is None and args.cases_dir.resolve() == (REDTEAM_ROOT / "reference_cases").resolve()
-                        else "custom"
-                    ),
-                    runner_git_commit=runner_git_commit,
-                    runner_git_dirty=runner_git_dirty,
-                    config_sha256=config_sha256,
-                    case_set_sha256=case_set_sha256,
-                    generator_model=config.adaptive_attack.model,
-                    generator_model_digest=model_digests[config.adaptive_attack.model],
-                    judgment_model=config.judgment.model,
-                    judgment_model_digest=model_digests[config.judgment.model],
+            ) as judge:
+                executor = AgentReferenceExecutor(
+                    generator,
+                    judge,
+                    scenarios,
+                    config.safety.redact_fields,
+                    budget,
+                    target_model_monitor=target_monitor,
                     max_iterations_per_generated_case=(config.adaptive_attack.max_iterations_per_attack),
-                    generator_telemetry=generator.telemetry(),
-                    judgment_telemetry=judge.telemetry(),
-                ),
-                deadline_check=budget.check_deadline,
-                remaining_seconds=lambda: budget.remaining_seconds,
-                timeout_entry_factory=executor.timeout_entry,
-            )
+                )
+                agent_source_commit = executor.agent_source_commit
+
+                if (
+                    args.agent_source_commit is not None
+                    and executor.resolve_source_commit(args.agent_source_commit) != agent_source_commit
+                ):
+                    raise ValueError("imported Agent checkout does not match --agent-source-commit")
+
+                if executor.agent_source_dirty:
+                    raise ValueError("imported Agent source directory has local changes")
+
+                result = await run_reference_campaign(
+                    cases,
+                    executor,
+                    metadata_factory=lambda: ReferenceCampaignMetadata(
+                        agent_source_commit=agent_source_commit,
+                        case_set_kind=(
+                            "default"
+                            if (
+                                case_id is None
+                                and args.cases_dir.resolve() == (REDTEAM_ROOT / "reference_cases").resolve()
+                            )
+                            else "custom"
+                        ),
+                        runner_git_commit=runner_git_commit,
+                        runner_git_dirty=runner_git_dirty,
+                        config_sha256=config_sha256,
+                        case_set_sha256=case_set_sha256,
+                        generator_model=(config.adaptive_attack.model),
+                        generator_model_digest=model_digests[config.adaptive_attack.model],
+                        target_model=(config.safety.required_ollama_model),
+                        target_model_digest=model_digests[config.safety.required_ollama_model],
+                        target_model_telemetry=(target_monitor.telemetry()),
+                        judgment_model=config.judgment.model,
+                        judgment_model_digest=model_digests[config.judgment.model],
+                        max_iterations_per_generated_case=(config.adaptive_attack.max_iterations_per_attack),
+                        generator_telemetry=generator.telemetry(),
+                        judgment_telemetry=judge.telemetry(),
+                    ),
+                    deadline_check=budget.check_deadline,
+                    remaining_seconds=lambda: budget.remaining_seconds,
+                    timeout_entry_factory=executor.timeout_entry,
+                )
     paths = write_reference_campaign_report(
         result,
         args.output_dir,

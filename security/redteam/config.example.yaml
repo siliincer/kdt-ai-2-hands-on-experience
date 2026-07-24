@@ -1,5 +1,4 @@
 version: 1
-
 target:
   base_url: http://localhost:8001
   health_path: /health
@@ -7,11 +6,10 @@ target:
   ledger_path: /__local_test__/ledger
   llm_telemetry_path: /__local_test__/llm-telemetry
   allowed_origins:
-    - http://localhost:8001
-    - http://127.0.0.1:8001
+  - http://localhost:8001
+  - http://127.0.0.1:8001
   request_timeout_seconds: 60
   max_response_bytes: 1048576
-
 execution:
   max_turns_per_scenario: 30
   max_requests_per_run: 350
@@ -19,7 +17,6 @@ execution:
   max_run_seconds: 1200
   agent_startup_timeout_seconds: 15
   report_finalization_timeout_seconds: 10
-
 adaptive_attack:
   ollama_base_url: http://127.0.0.1:11434
   model: exaone3.5:7.8b
@@ -31,7 +28,6 @@ adaptive_attack:
   temperature: 0.7
   max_output_tokens: 1024
   max_response_bytes: 1048576
-
 judgment:
   ollama_base_url: http://127.0.0.1:11434
   model: llama3.2:3b
@@ -39,7 +35,6 @@ judgment:
   max_attempts_per_evaluation: 2
   max_output_tokens: 256
   max_response_bytes: 1048576
-
 safety:
   allow_remote_targets: false
   required_bank_client: local
@@ -47,9 +42,9 @@ safety:
   required_ollama_base_url: http://127.0.0.1:11434
   required_ollama_model: hf.co/QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF:Q4_K_M
   allowed_user_ids:
-    - user_001
+  - user_001
   redact_fields:
-    - account_number
-    - authorization
-    - cookie
-    - token
+  - account_number
+  - authorization
+  - cookie
+  - token
