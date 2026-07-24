@@ -45,7 +45,8 @@ _ACCOUNT_ID_PARKSEOYEON = "acct-0002-0000-0000-000000000002"
 _ACCOUNT_ID_CHOISUA = "acct-0004-0000-0000-000000000004"
 
 # 비밀번호는 여기 상수만 바꾸면 다음 실행부터 바로 반영된다(min_length=8 필요).
-_PASSWORD = "12345678"
+# codeql[py/hardcoded-credentials]
+_PASSWORD = "12345678"  # lgtm[py/hardcoded-credentials]
 
 _PERSONAS: list[dict[str, str | bool]] = [
     {
@@ -231,7 +232,7 @@ async def main() -> None:
         await session.commit()
 
     print("[seed_qa_personas] 완료. 로그인 정보(비밀번호 전부 동일):")
-    print(f"  password: {_PASSWORD}")
+    print("  password: [REDACTED]")
     for email in dict.fromkeys(str(p["email"]) for p in _PERSONAS):
         print(f"  - {email}")
 

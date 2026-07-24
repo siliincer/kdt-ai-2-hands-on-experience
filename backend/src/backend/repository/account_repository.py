@@ -102,9 +102,7 @@ async def get_account_by_number(session: AsyncSession, account_number: str) -> A
     숫자 이외 문자를 제거한 뒤 비교한다.
     """
     normalized = re.sub(r"\D", "", account_number)
-    stmt = select(Account).where(
-        func.regexp_replace(Account.account_number, r"\D", "", "g") == normalized
-    )
+    stmt = select(Account).where(func.regexp_replace(Account.account_number, r"\D", "", "g") == normalized)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 

@@ -155,6 +155,70 @@ async def test_resolve_multiple_requires_selection(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_resolve_withdraw_prefers_single_default(monkeypatch):
+    # 힌트 없는 출금 계좌 해소(송금 from-account, capability=withdraw)에서는 후보가 여러 개라도
+    # 기본 출금 계좌(is_default)가 1개면 그걸로 resolved — 매번 선택을 묻지 않는다(회귀).
+    default = _acct(is_default=True)
+    other1 = _acct(is_default=False)
+    other2 = _acct(is_default=False)
+    _patch_mapped(monkeypatch, [default, other1, other2])
+
+    data = await account_service.list_accounts(
+        _NO_SESSION,
+        _ctx(),
+        None,
+        AccountCapability.WITHDRAW,
+        20,
+        resolve_selection=True,
+    )
+
+    assert data.account_resolution_outcome == "resolved"
+    assert data.account_ids == [str(default.id)]
+
+
+@pytest.mark.asyncio
+async def test_resolve_withdraw_with_hint_still_selects(monkeypatch):
+    # 힌트가 주어졌는데 후보가 여러 개면 기본계좌로 덮어쓰지 않고 선택을 묻는다(힌트 존중).
+    default = _acct(is_default=True, alias="주거래", bank_name="카카오뱅크")
+    other = _acct(is_default=False, alias="주거래 비상금", bank_name="신한은행")
+    _patch_mapped(monkeypatch, [default, other])
+
+    data = await account_service.list_accounts(
+        _NO_SESSION,
+        _ctx(),
+        "주거래",
+        AccountCapability.WITHDRAW,
+        20,
+        resolve_selection=True,
+    )
+
+    assert data.account_resolution_outcome == "selection_required"
+
+
+@pytest.mark.asyncio
+async def test_resolve_withdraw_force_selection_skips_default(monkeypatch):
+    # force_selection=True 면 기본 출금 계좌가 있어도 자동 확정하지 않고 항상
+    # selection_required — 승인 화면 "계좌 변경" 재진입 시 매번 같은 기본 계좌로
+    # 되돌아가 버튼이 무효해지는 것을 막는다.
+    default = _acct(is_default=True)
+    other = _acct(is_default=False)
+    _patch_mapped(monkeypatch, [default, other])
+
+    data = await account_service.list_accounts(
+        _NO_SESSION,
+        _ctx(),
+        None,
+        AccountCapability.WITHDRAW,
+        20,
+        resolve_selection=True,
+        force_selection=True,
+    )
+
+    assert data.account_resolution_outcome == "selection_required"
+    assert data.account_ids == []
+
+
+@pytest.mark.asyncio
 async def test_resolve_all_accounts_requested_is_resolved(monkeypatch):
     a1, a2 = _acct(), _acct()
     _patch_mapped(monkeypatch, [a1, a2])

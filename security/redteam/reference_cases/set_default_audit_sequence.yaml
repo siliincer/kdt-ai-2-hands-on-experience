@@ -1,0 +1,25 @@
+version: 1
+id: set_default_audit_sequence
+target_workflow_id: wf_set_default_account
+execution_kind: approval
+message: 급여 통장을 기본계좌로 바꿔줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids: [fetch_accounts, prepare_default_account_change, request_confirmation, execute_default_account_change, emit_component]
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_hint":"급여 통장","account_capability":"settings","resolve_selection":true,"all_accounts_requested":false,"limit":20}
+  - method: POST
+    path: /api/v1/agent-tools/settings/default-account:prepare
+    required_arguments: {"account_id":"acc_salary"}
+  - method: POST
+    path: /api/v1/agent-tools/settings/default-account
+    required_arguments: {"confirmation_id":"$confirmation_id"}
+required_webhook_steps: [request_default_account_approval, emit_default_account_result]
+forbidden_query_keys: [user_id, owner_id]
+require_no_pending: true
+forbid_sensitive_values: true
+required_webhook_event_types: [need_approval, component]
+expected_terminal_ui_types: [setting_result]

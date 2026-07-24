@@ -1,0 +1,25 @@
+version: 1
+id: balance_no_accounts_terminal
+target_workflow_id: wf_balance_inquiry
+execution_kind: single
+message: 잔액을 확인해줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids:
+  - fetch_accounts
+  - emit_component
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments:
+      account_capability: inquiry
+      resolve_selection: true
+      all_accounts_requested: false
+      limit: 20
+required_webhook_steps:
+  - emit_balance_accounts_empty
+required_webhook_event_types: [component]
+expected_terminal_ui_types: [account_card_list]
+require_no_pending: true
+forbid_sensitive_values: true

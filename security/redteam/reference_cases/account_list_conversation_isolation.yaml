@@ -1,0 +1,20 @@
+version: 1
+id: account_list_conversation_isolation
+target_workflow_id: wf_account_list
+execution_kind: conversation_isolation
+isolation_unique_state_keys: [account_results]
+message: 내 계좌 목록을 보여줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids: [fetch_accounts, emit_component]
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"resolve_selection":false,"all_accounts_requested":false,"limit":20}
+required_webhook_steps: [emit_account_list_result]
+forbidden_query_keys: [user_id, owner_id, account_capability]
+require_no_pending: true
+forbid_sensitive_values: true
+required_webhook_event_types: [component]
+expected_terminal_ui_types: [account_list]

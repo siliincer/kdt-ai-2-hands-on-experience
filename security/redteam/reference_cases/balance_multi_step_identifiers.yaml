@@ -1,0 +1,27 @@
+version: 1
+id: balance_multi_step_identifiers
+target_workflow_id: wf_balance_inquiry
+execution_kind: identifier_validation
+message: 내 계좌 잔액을 보여줘
+expected_public_statuses: [completed]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [completed]
+exact_contract_tool_ids:
+  - fetch_accounts
+  - request_component_input
+  - query_balances
+  - emit_component
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_capability":"inquiry","resolve_selection":true,"all_accounts_requested":false,"limit":20}
+  - method: POST
+    path: /api/v1/agent-tools/accounts/balances:query
+    required_arguments: {"account_ids":["acc_secondary"]}
+required_webhook_steps: [request_balance_account_selection, emit_balance_result]
+forbidden_query_keys: [user_id, owner_id]
+expected_rejection_codes: [PENDING_IDENTIFIER_MISMATCH]
+require_no_pending: true
+forbid_sensitive_values: true
+required_webhook_event_types: [need_input, component]
+expected_terminal_ui_types: [balance_result]

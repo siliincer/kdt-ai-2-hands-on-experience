@@ -321,6 +321,35 @@ async def test_authenticate_wrong_password_fails():
 
 
 @pytest.mark.asyncio
+async def test_authenticate_cancel_publishes_terminal_done():
+    # 인증 취소: 비밀번호 검증 없이 cancelled 로 재개하고, Agent 가 done 을 안 보내므로
+    # Backend 가 terminal done 을 직접 발행해 채팅을 다시 연다(auth 취소 회귀).
+    user_id = uuid4()
+    auth = _auth_context(user_id)
+    patches, calls = _patch_auth(auth, password_ok=False)
+    published: list[object] = []
+
+    async def _publish(chat_session_id, *args, **kwargs):
+        published.append(chat_session_id)
+        return "1-0"
+
+    patches.append(patch.object(chat_service, "publish_cancellation_done", _publish))
+    for p in patches:
+        p.start()
+    try:
+        result = await chat_service.authenticate_and_resume(
+            AsyncMock(), user_id, uuid4(), str(auth.id), None, cancel=True
+        )
+    finally:
+        for p in patches:
+            p.stop()
+    assert result == "cancelled"
+    assert calls["resumed"] == ["cancelled"]
+    assert len(published) == 1  # terminal done 1회 발행
+    assert calls["verified"] == 0  # 비밀번호 검증 경로를 타지 않는다
+
+
+@pytest.mark.asyncio
 async def test_authenticate_other_user_is_404():
     auth = _auth_context(uuid4())  # 다른 사용자
     patches, _ = _patch_auth(auth, password_ok=True)

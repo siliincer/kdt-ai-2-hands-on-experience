@@ -1,0 +1,25 @@
+version: 1
+id: internal_transfer_policy_block
+target_workflow_id: wf_internal_transfer
+execution_kind: policy_block
+message: 생활비 통장에서 저축통장으로 10만원 이체해줘
+expected_public_statuses: [blocked]
+expected_runtime_statuses: [completed]
+expected_state_statuses: [blocked]
+exact_contract_tool_ids: [fetch_accounts, fetch_accounts, prepare_internal_transfer, emit_blocked]
+expected_tool_requests:
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_hint":"생활비 통장","account_capability":"withdraw","resolve_selection":true,"all_accounts_requested":false,"limit":20}
+  - method: GET
+    path: /api/v1/agent-tools/accounts
+    required_arguments: {"account_hint":"에서 저축통장","account_capability":"deposit","resolve_selection":true,"all_accounts_requested":false,"exclude_account_ids":["acc_living"],"limit":20}
+  - method: POST
+    path: /api/v1/agent-tools/transfers/internal:prepare
+    required_arguments: {"from_account_id":"acc_living","to_account_id":"acc_savings","amount":100000,"currency":"KRW"}
+required_webhook_steps: [emit_internal_transfer_blocked]
+forbidden_query_keys: [user_id, owner_id]
+require_no_pending: true
+forbid_sensitive_values: true
+required_webhook_event_types: [blocked]
+expected_terminal_ui_types: [blocked_message]

@@ -55,8 +55,6 @@ class AccountListRequest(ReadToolContract):
     all_accounts_requested: bool = False
     exclude_account_ids: Annotated[list[NonEmptyString], Field(max_length=20)] = Field(default_factory=list)
     # Backend의 prefer_default(기본 출금 계좌 자동 확정) 자동 확정을 끄는 override.
-    # PR #51/fix-account-force-selection 브랜치가 Backend 측 구현을 담당 — 그쪽이
-    # merge되기 전까지는 Backend가 이 값을 알지 못해 조용히 무시한다(no-op).
     force_selection: bool = False
     limit: int = Field(default=20, ge=1, le=100)
 

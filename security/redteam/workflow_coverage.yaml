@@ -1,0 +1,293 @@
+version: 1
+source:
+  main_commit: fa687b3d8388f0050f9f620aa0ebb51f75b29c2e
+  merged_contract_prs: [28, 29, 35, 36, 37, 39]
+  stacked_agent_prs: []
+
+workflows:
+  wf_external_transfer: 타인 송금
+  wf_balance_inquiry: 잔액 조회
+  wf_account_list: 계좌 목록
+  wf_transaction_history: 거래내역 조회
+  wf_period_amount_summary: 기간 거래 합계
+  wf_set_default_account: 기본 출금 계좌 변경
+  wf_set_account_alias: 계좌 별칭 변경
+  wf_internal_transfer: 본인 계좌 간 이체
+
+methods:
+  prompt_injection: prompt_injection.yaml
+  approval_bypass: approval_bypass.yaml
+  tool_governance: tool_governance.yaml
+  data_confidentiality: data_confidentiality.yaml
+  risk_manipulation: risk_manipulation.yaml
+  audit_log_tampering: audit_log_tampering.yaml
+  multi_step_attack: multi_step_attack.yaml
+  conversation_state: conversation_state.yaml
+
+# partial means at least one required integration or evidence boundary remains.
+coverage:
+  wf_external_transfer:
+    prompt_injection:
+      status: partial
+      evidence: []
+      reference_evidence: [external_transfer_generated_instruction_case]
+    approval_bypass:
+      status: partial
+      evidence:
+        - preapproved_claim_still_requires_confirmation
+        - auth_reply_cannot_replace_confirmation
+    tool_governance:
+      status: partial
+      evidence:
+        - direct_transfer_tool_still_requires_confirmation
+        - audit_tool_cannot_replace_authorization
+    data_confidentiality:
+      status: partial
+      evidence: []
+      reference_evidence: [external_transfer_generated_data_case]
+    risk_manipulation:
+      status: partial
+      evidence:
+        - claimed_low_risk_does_not_skip_confirmation
+        - claimed_review_does_not_override_risk_controls
+    audit_log_tampering:
+      status: partial
+      evidence:
+        - transfer_cannot_disable_audit_record
+        - user_cannot_rewrite_audit_outcome
+    multi_step_attack:
+      status: partial
+      evidence:
+        - edited_amount_requires_fresh_confirmation
+        - late_amount_text_cannot_change_approved_value
+    conversation_state:
+      status: partial
+      evidence:
+        - unrelated_followup_cancels_pending_transfer
+  wf_balance_inquiry:
+    prompt_injection:
+      status: implemented
+      evidence: []
+      reference_evidence: [balance_generated_instruction_case]
+    approval_bypass:
+      status: not_applicable
+      evidence: []
+      rationale: 조회 Workflow에는 사용자 승인 또는 추가 인증 단계가 없다.
+    tool_governance:
+      status: implemented
+      evidence: []
+      reference_evidence: [balance_generated_tool_case]
+    data_confidentiality:
+      status: implemented
+      evidence: []
+      reference_evidence: [balance_generated_data_case]
+    risk_manipulation:
+      status: not_applicable
+      evidence: []
+      rationale: 잔액 조회에는 위험도 평가나 금융 실행 정책 분기가 없다.
+    audit_log_tampering:
+      status: planned
+      evidence: []
+    multi_step_attack:
+      status: implemented
+      evidence: []
+      reference_evidence: [balance_multi_step_identifiers]
+    conversation_state:
+      status: implemented
+      evidence: []
+      reference_evidence: [balance_conversation_isolation]
+  wf_account_list:
+    prompt_injection:
+      status: implemented
+      evidence: []
+      reference_evidence: [account_list_generated_instruction_case]
+    approval_bypass:
+      status: not_applicable
+      evidence: []
+      rationale: 계좌 목록 조회에는 사용자 승인 또는 추가 인증 단계가 없다.
+    tool_governance:
+      status: implemented
+      evidence: []
+      reference_evidence: [account_list_generated_tool_case]
+    data_confidentiality:
+      status: implemented
+      evidence: []
+      reference_evidence: [account_list_generated_data_case]
+    risk_manipulation:
+      status: not_applicable
+      evidence: []
+      rationale: 계좌 목록 조회에는 위험도 평가나 금융 실행 정책 분기가 없다.
+    audit_log_tampering:
+      status: planned
+      evidence: []
+    multi_step_attack:
+      status: not_applicable
+      evidence: []
+      rationale: 계좌 목록은 입력 대기나 재개 단계가 없는 단일 조회 Workflow다.
+    conversation_state:
+      status: implemented
+      evidence: []
+      reference_evidence: [account_list_conversation_isolation]
+  wf_transaction_history:
+    prompt_injection:
+      status: implemented
+      evidence: []
+      reference_evidence: [transaction_history_generated_instruction_case]
+    approval_bypass:
+      status: not_applicable
+      evidence: []
+      rationale: 조회 Workflow에는 사용자 승인 또는 추가 인증 단계가 없다.
+    tool_governance:
+      status: implemented
+      evidence: []
+      reference_evidence: [transaction_history_generated_tool_case]
+    data_confidentiality:
+      status: implemented
+      evidence: []
+      reference_evidence: [transaction_history_generated_data_case]
+    risk_manipulation:
+      status: not_applicable
+      evidence: []
+      rationale: 거래내역 조회에는 위험도 평가나 금융 실행 정책 분기가 없다.
+    audit_log_tampering:
+      status: planned
+      evidence: []
+    multi_step_attack:
+      status: implemented
+      evidence: []
+      reference_evidence: [transaction_history_multi_step_identifiers]
+    conversation_state:
+      status: implemented
+      evidence: []
+      reference_evidence: [transaction_history_conversation_isolation]
+  wf_period_amount_summary:
+    prompt_injection:
+      status: implemented
+      evidence: []
+      reference_evidence: [period_summary_generated_instruction_case]
+    approval_bypass:
+      status: not_applicable
+      evidence: []
+      rationale: 조회 Workflow에는 사용자 승인 또는 추가 인증 단계가 없다.
+    tool_governance:
+      status: implemented
+      evidence: []
+      reference_evidence: [period_summary_generated_tool_case]
+    data_confidentiality:
+      status: implemented
+      evidence: []
+      reference_evidence: [period_summary_generated_data_case]
+    risk_manipulation:
+      status: not_applicable
+      evidence: []
+      rationale: 기간 거래 합계에는 위험도 평가나 금융 실행 정책 분기가 없다.
+    audit_log_tampering:
+      status: planned
+      evidence: []
+    multi_step_attack:
+      status: implemented
+      evidence: []
+      reference_evidence: [period_summary_multi_step_identifiers]
+    conversation_state:
+      status: implemented
+      evidence: []
+      reference_evidence: [period_summary_conversation_isolation]
+  wf_set_default_account:
+    prompt_injection:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_generated_instruction_case]
+    approval_bypass:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_approval_identifiers]
+    tool_governance:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_generated_tool_case]
+    data_confidentiality:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_generated_data_case]
+    risk_manipulation:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_policy_block]
+    audit_log_tampering:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_audit_sequence]
+    multi_step_attack:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_change_requested]
+    conversation_state:
+      status: partial
+      evidence: []
+      reference_evidence: [set_default_conversation_isolation]
+  wf_set_account_alias:
+    prompt_injection:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_generated_instruction_case]
+    approval_bypass:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_approval_identifiers]
+    tool_governance:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_generated_tool_case]
+    data_confidentiality:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_generated_data_case]
+    risk_manipulation:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_policy_block]
+    audit_log_tampering:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_audit_sequence]
+    multi_step_attack:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_change_requested]
+    conversation_state:
+      status: partial
+      evidence: []
+      reference_evidence: [set_alias_conversation_isolation]
+  wf_internal_transfer:
+    prompt_injection:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_generated_instruction_case]
+    approval_bypass:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_lifecycle]
+    tool_governance:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_generated_tool_case]
+    data_confidentiality:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_generated_data_case]
+    risk_manipulation:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_policy_block]
+    audit_log_tampering:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_lifecycle]
+    multi_step_attack:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_lifecycle]
+    conversation_state:
+      status: partial
+      evidence: []
+      reference_evidence: [internal_transfer_conversation_isolation]

@@ -27,12 +27,14 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
   const authContextId = a.authContextId;
 
   const [password, setPassword] = useState('');
-  const [phase, setPhase] = useState<'idle' | 'verifying' | 'done' | 'error'>(
-    'idle',
-  );
+  const [phase, setPhase] = useState<
+    'idle' | 'verifying' | 'cancelling' | 'done' | 'cancelled' | 'error'
+  >('idle');
+
+  const busy = phase === 'verifying' || phase === 'cancelling';
 
   const submit = async () => {
-    if (!authContextId || !password || phase === 'verifying') return;
+    if (!authContextId || !password || busy) return;
     setPhase('verifying');
     try {
       const status = await authenticate(authContextId, password);
@@ -43,14 +45,28 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
     setPassword('');
   };
 
-  const cancel = () => {
-    if (phase === 'verifying' || phase === 'done') return;
-    setPhase('done');
-    // 취소는 인증을 제출하지 않는다. 후속 흐름은 사용자가 다시 시도하거나 종료한다.
+  const cancel = async () => {
+    if (!authContextId || busy || phase === 'done' || phase === 'cancelled') {
+      return;
+    }
+    // 취소도 Backend 로 알려 Agent 를 cancelled 로 재개해야 한다. 그래야 워크플로우가
+    // 종료되고 terminal done 이 와서 채팅 입력이 다시 열린다(로컬 표시만 바꾸면 채팅이
+    // 계속 대기 상태로 잠긴다).
+    setPhase('cancelling');
+    try {
+      await authenticate(authContextId, '', { cancel: true });
+    } catch {
+      // 취소 통지 실패는 무시하고 UI 는 취소로 마감한다(사용자 관점 종료).
+    }
+    setPassword('');
+    setPhase('cancelled');
   };
 
   if (phase === 'done') {
     return <OutcomeChip variant="success">인증을 확인했어요.</OutcomeChip>;
+  }
+  if (phase === 'cancelled') {
+    return <OutcomeChip variant="cancel">인증을 취소했어요.</OutcomeChip>;
   }
 
   return (
@@ -76,7 +92,7 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
         onKeyDown={(event) => {
           if (event.key === 'Enter') void submit();
         }}
-        disabled={phase === 'verifying'}
+        disabled={busy}
         placeholder="비밀번호"
         className={`${HITL_INPUT} disabled:opacity-50`}
       />
@@ -84,16 +100,16 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
       <div className={HITL_ACTIONS_ROW}>
         <button
           type="button"
-          onClick={cancel}
-          disabled={phase === 'verifying'}
+          onClick={() => void cancel()}
+          disabled={busy}
           className={`${HITL_BTN_SECONDARY} disabled:opacity-50`}
         >
-          취소
+          {phase === 'cancelling' ? '취소 중...' : '취소'}
         </button>
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={!password || phase === 'verifying'}
+          disabled={!password || busy}
           className={HITL_BTN_PRIMARY}
         >
           {phase === 'verifying' ? '확인 중...' : '인증'}
