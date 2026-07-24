@@ -14,6 +14,7 @@ export async function approveAgentAction(
   decision: ApprovalDecision,
   args?: Record<string, unknown>,
   component?: string,
+  changeTarget?: string,
 ): Promise<{ decision: string }> {
   const token = sessionStorage.getItem('rf_access_token') ?? '';
   return customFetch<{ decision: string }>(APPROVE_URL, {
@@ -28,6 +29,9 @@ export async function approveAgentAction(
       decision,
       args: args ?? null,
       component: component ?? null,
+      // change_requested일 때 어떤 항목을 바꿀지 — backend는 이 필드를
+      // args가 아니라 최상위 change_target으로 읽는다(계약 3.7).
+      change_target: changeTarget ?? null,
     }),
   });
 }

@@ -49,6 +49,18 @@ async def get_confirmation_by_id(session: AsyncSession, confirmation_id: UUID) -
     return result.scalar_one_or_none()
 
 
+async def has_confirmation_for_execution_context(session: AsyncSession, execution_context_id: UUID) -> bool:
+    """이 실행 Context에 Confirmation이 (상태 무관) 한 번이라도 생성됐는지.
+
+    승인 화면까지 한 번이라도 도달했다는 뜻이라, 이후 재입력 화면에서 취소해도
+    "변경" 흐름(이전 승인 화면으로 복귀)일 가능성이 높다 — 진짜 최초 취소인지
+    판단하는 근거로 쓴다(_is_cancel_input 과 함께, chat_service 참고).
+    """
+    stmt = select(Confirmation.id).where(Confirmation.execution_context_id == execution_context_id).limit(1)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none() is not None
+
+
 _TRANSFER_OPERATIONS = (
     ConfirmationOperation.INTERNAL_TRANSFER,
     ConfirmationOperation.EXTERNAL_TRANSFER,

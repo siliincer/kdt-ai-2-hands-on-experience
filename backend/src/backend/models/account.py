@@ -29,7 +29,7 @@ class Account(Base):
     balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="KRW")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # 계정계가 부여한 은행명(단일 은행, 예: "KDT은행"). 정보계 balance 응답엔 없어
+    # 계정계가 부여한 은행명(다은행, 예: "신한은행"). 정보계 balance 응답엔 없어
     # 프로비저닝 시점에 저장해 balance 뷰/송금에서 재사용한다.
     bank_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # mock-financial-service(계정계) 원장의 account_id 매핑. 잔액/원장의 권위는

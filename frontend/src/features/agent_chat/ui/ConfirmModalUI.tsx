@@ -112,12 +112,7 @@ export const ConfirmModalUI: ToolCallMessagePartComponent = ({ args }) => {
   const respond = (decision: ApprovalDecision, changeTarget?: string) => {
     if (!approvalId || outcome) return;
     setOutcome(decision);
-    void approve(
-      approvalId,
-      decision,
-      changeTarget ? { change_target: changeTarget } : undefined,
-      purpose,
-    );
+    void approve(approvalId, decision, undefined, purpose, changeTarget);
   };
 
   if (outcome === 'cancelled') {
@@ -128,6 +123,15 @@ export const ConfirmModalUI: ToolCallMessagePartComponent = ({ args }) => {
   }
   if (outcome === 'approve') {
     return <OutcomeChip variant="success">변경을 승인했어요.</OutcomeChip>;
+  }
+  // 응답하지 않은 채로 같은 턴에서 새 확인 카드가 떠서 대체된 경우 — 예전
+  // 카드가 계속 상호작용 가능한 상태로 남아 화면에 두 개 겹쳐 보이지 않게 한다.
+  if (a.superseded) {
+    return (
+      <OutcomeChip variant="neutral">
+        최신 확인 화면으로 갱신됐어요.
+      </OutcomeChip>
+    );
   }
 
   const rows = buildRows(a);
