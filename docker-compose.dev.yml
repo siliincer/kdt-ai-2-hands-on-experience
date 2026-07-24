@@ -42,5 +42,54 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── 관측(Observability): 트레이스=Tempo, 메트릭=Prometheus, 대시보드=Grafana ──
+  # backend 는 dev 에서 호스트(`fastapi dev`)로 뜨므로:
+  #   backend → Tempo   : localhost:4317 (아래 published 포트)
+  #   Prometheus → backend: host.docker.internal:8000 (extra_hosts 로 리눅스 호환)
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: kdt-tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # Tempo HTTP API (트레이스 조회)
+      - "4317:4317" # OTLP gRPC (backend → Tempo)
+      - "4318:4318" # OTLP HTTP
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: kdt-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: kdt-grafana
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      # 로컬 개발 편의: 익명 접근 허용(운영 compose 에는 반영하지 않는다)
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tempo
+      - prometheus
+
 volumes:
   postgres-data:
+  tempo-data:
+  prometheus-data:
+  grafana-data:
