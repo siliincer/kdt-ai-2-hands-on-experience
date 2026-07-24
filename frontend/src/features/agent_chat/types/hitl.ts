@@ -122,7 +122,9 @@ export interface OptionItem {
 
 export interface OptionSelectArgs {
   title?: string;
-  options?: OptionItem[];
+  // Agent 는 두 형식을 혼용한다: 원시 enum 문자열 배열(예: ["from_account","amount"])과
+  // {value,label} 객체 배열(예: 합계 유형). UI 에서 정규화해 렌더한다.
+  options?: (OptionItem | string)[];
   actions?: string[];
   inputRequestId?: string;
   ui_contract_id?: string;
