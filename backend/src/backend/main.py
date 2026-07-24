@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api.account_api import account_router
 from .api.agent_tools import agent_tools_router
 from .api.chat_api import chat_router
 from .api.check_db_conn import health_router
@@ -46,6 +47,7 @@ app = FastAPI(
 )
 
 app.include_router(user_router, prefix="/api/v1")
+app.include_router(account_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(sse_router, prefix="/api/v1")
 app.include_router(webhook_router, prefix="/api/v1")

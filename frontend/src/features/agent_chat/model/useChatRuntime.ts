@@ -8,6 +8,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useAgentStream } from '@/features/agent_transfer/model/useAgentStream';
 
+import { addAccount } from '../api/addAccount';
 import { approveAgentAction } from '../api/approve';
 import { authenticateAgentAction } from '../api/authenticate';
 import { sendChat } from '../api/sendChat';
@@ -18,6 +19,9 @@ import { useChatStore } from './chatStore';
 import { extractText } from '../utils/extractText';
 
 import type { ApprovalDecision, ChatRuntime } from '../types/interface';
+
+/** `/add_account <은행명>` — 그룹1이 은행명(공백만이면 빈 문자열). */
+const ADD_ACCOUNT_COMMAND = /^\/add_account(?:\s+(.*))?$/;
 
 /**
  * assistant-ui external store 런타임 + SSE 파이프라인 연결.
@@ -35,6 +39,7 @@ export function useChatRuntime(): ChatRuntime {
   const setMessages = useChatStore((state) => state.setMessages);
   const startTurn = useChatStore((state) => state.startTurn);
   const foldIntoRunning = useChatStore((state) => state.foldIntoRunning);
+  const completeRunning = useChatStore((state) => state.completeRunning);
   const failRunning = useChatStore((state) => state.failRunning);
   const reset = useChatStore((state) => state.reset);
 
@@ -89,6 +94,10 @@ export function useChatRuntime(): ChatRuntime {
         vars.cancel ?? false,
       ),
   });
+  const addAccountMutation = useMutation({
+    throwOnError: false,
+    mutationFn: (bankName: string) => addAccount(bankName),
+  });
   const verifyRecipientMutation = useMutation({
     throwOnError: false,
     mutationFn: (vars: {
@@ -135,6 +144,30 @@ export function useChatRuntime(): ChatRuntime {
       const text = extractText(message);
       if (!text) return;
 
+      // 슬래시 명령은 Agent 로 보내지 않고 Backend 를 직접 호출한다(계좌 추가 워크플로우 신설 전 임시).
+      const addAccountArg = ADD_ACCOUNT_COMMAND.exec(text)?.[1]?.trim();
+      if (addAccountArg !== undefined) {
+        startTurn(text);
+        if (!addAccountArg) {
+          failRunning(
+            '사용법: /add_account <은행명>  (예: /add_account 신한은행)',
+          );
+          return;
+        }
+        try {
+          const added = await addAccountMutation.mutateAsync(addAccountArg);
+          completeRunning(`${added.bank_name} 계좌 1개가 추가되었습니다.`);
+        } catch (error) {
+          // Backend 가 사유(미지원 은행/계정계 장애)를 문구로 내려주면 그대로 보여준다.
+          failRunning(
+            error instanceof Error && error.message
+              ? error.message
+              : '계좌 추가에 실패하였습니다. 나중에 다시 시도해주세요.',
+          );
+        }
+        return;
+      }
+
       startTurn(text);
       try {
         const { chat_session_id } = await sendMutation.mutateAsync({
@@ -154,7 +187,14 @@ export function useChatRuntime(): ChatRuntime {
         failRunning(reason);
       }
     },
-    [agent, startTurn, sendMutation, failRunning],
+    [
+      agent,
+      startTurn,
+      sendMutation,
+      failRunning,
+      completeRunning,
+      addAccountMutation,
+    ],
   );
 
   const approve = useCallback(

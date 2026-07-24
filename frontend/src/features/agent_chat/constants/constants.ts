@@ -8,6 +8,8 @@ export const AGENT_AUTHENTICATE_URL = '/backendApi/api/v1/agent/authenticate';
 // 응답으로 recipient_candidate_id 참조를 받는다(계약 부록 29.2).
 export const RECIPIENT_CANDIDATE_VERIFY_URL =
   '/backendApi/api/v1/recipient-candidates:verify';
+// 계좌 추가(슬래시 명령 `/add_account <은행명>`) — Agent 워크플로우 신설 전 임시 경로.
+export const ADD_ACCOUNT_URL = '/backendApi/api/v1/accounts';
 
 // UI Data API (BFF) — component 시그널 이후 카드 데이터 조회(ADR-002)
 export const UI_BALANCE_URL = '/backendApi/api/v1/ui/balance';

@@ -58,6 +58,8 @@ export interface ChatState {
   startTurn: (userText: string) => void;
   /** SSE 이벤트들을 running assistant 메시지에 접어 넣는다 */
   foldIntoRunning: (events: AgentStreamEvent[]) => void;
+  /** running assistant 를 성공 메시지로 마감하고 runningId 를 푼다(슬래시 명령 결과 등) */
+  completeRunning: (text: string) => void;
   /** 전송/재개 실패 시 running assistant 를 에러 메시지로 마감하고 runningId 를 푼다 */
   failRunning: (text: string) => void;
   reset: () => void;
