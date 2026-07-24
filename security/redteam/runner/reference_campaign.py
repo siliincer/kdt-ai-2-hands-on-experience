@@ -27,6 +27,7 @@ from security.redteam.runner.reference_cases import (
     ReferenceCaseEvaluation,
     ReferenceExecutionKind,
 )
+from security.redteam.runner.target_model import TargetModelTelemetry
 
 
 class ReferenceOperationKind(StrEnum):
@@ -63,6 +64,7 @@ class ReferenceAdaptiveAttempt(BaseModel):
 
     iteration: int = Field(ge=1, le=10)
     candidate: GeneratedCandidate | None = None
+    target_model_evidence: TargetModelTelemetry | None = None
     evaluation: ReferenceCaseEvaluation
     rule_evaluation: ReferenceCaseEvaluation | None = None
     steps: list[ReferenceExecutionStep] = Field(default_factory=list, max_length=8)
@@ -101,6 +103,7 @@ class ReferenceCampaignEntry(BaseModel):
     evaluation: ReferenceCaseEvaluation | None = None
     rule_evaluation: ReferenceCaseEvaluation | None = None
     candidate: GeneratedCandidate | None = None
+    target_model_evidence: TargetModelTelemetry | None = None
     responses: list[AgentResponse] = Field(default_factory=list, max_length=8)
     steps: list[ReferenceExecutionStep] = Field(default_factory=list, max_length=8)
     model_judgment: ModelJudgment | None = None
@@ -215,6 +218,7 @@ class ReferenceCampaignEntry(BaseModel):
                 self.candidate != final.candidate
                 or self.evaluation != final.evaluation
                 or self.rule_evaluation != final.rule_evaluation
+                or self.target_model_evidence != final.target_model_evidence
                 or self.steps != final.steps
                 or self.model_judgment != final.model_judgment
                 or self.judgment_agrees_with_rules != final.judgment_agrees_with_rules
@@ -308,6 +312,9 @@ class ReferenceCampaignMetadata(BaseModel):
     case_set_sha256: Sha256Digest
     generator_model: str
     generator_model_digest: Sha256Digest
+    target_model: str | None = None
+    target_model_digest: Sha256Digest | None = None
+    target_model_telemetry: TargetModelTelemetry | None = None
     judgment_model: str
     judgment_model_digest: Sha256Digest
     max_iterations_per_generated_case: int = Field(default=1, ge=1, le=10)
@@ -318,6 +325,18 @@ class ReferenceCampaignMetadata(BaseModel):
     def telemetry_models_match_roles(self) -> ReferenceCampaignMetadata:
         if self.generator_telemetry.model != self.generator_model:
             raise ValueError("generator telemetry model does not match campaign model")
+
+        target_values = (
+            self.target_model,
+            self.target_model_digest,
+            self.target_model_telemetry,
+        )
+        if any(value is not None for value in target_values) != all(value is not None for value in target_values):
+            raise ValueError("Target model metadata must be complete")
+
+        if self.target_model_telemetry is not None and self.target_model_telemetry.model != self.target_model:
+            raise ValueError("Target telemetry model does not match campaign model")
+
         if self.judgment_telemetry.model != self.judgment_model:
             raise ValueError("judgment telemetry model does not match campaign model")
         return self
@@ -363,6 +382,40 @@ class ReferenceCampaignResult(BaseModel):
             raise ValueError("generator telemetry does not match preserved candidates")
         if judgment_count != self.metadata.judgment_telemetry.successes:
             raise ValueError("judgment telemetry does not match preserved judgments")
+
+        target_telemetry = self.metadata.target_model_telemetry
+        if target_telemetry is not None:
+            target_evidence = []
+
+            for entry in self.entries:
+                if entry.adaptive_attempts:
+                    target_evidence.extend(
+                        item.target_model_evidence
+                        for item in entry.adaptive_attempts
+                        if item.target_model_evidence is not None
+                    )
+                elif entry.target_model_evidence is not None:
+                    target_evidence.append(entry.target_model_evidence)
+
+            if any(evidence.model != target_telemetry.model for evidence in target_evidence):
+                raise ValueError("Target evidence contains another model")
+
+            preserved = (
+                sum(item.attempts for item in target_evidence),
+                sum(item.successes for item in target_evidence),
+                sum(item.failures for item in target_evidence),
+                sum(item.fallbacks for item in target_evidence),
+            )
+            reported = (
+                target_telemetry.attempts,
+                target_telemetry.successes,
+                target_telemetry.failures,
+                target_telemetry.fallbacks,
+            )
+
+            if preserved != reported:
+                raise ValueError("Target telemetry does not match preserved evidence")
+
         return self
 
 

@@ -66,7 +66,7 @@ _TRANSFER_ACTION = re.compile(r"송금|이체|보내")
 _TRANSFER_PROCEDURE = re.compile(r"(?:송금|이체)\s*요청\s*(?:절차|방법|지침|기록|정책|과정)")
 
 
-def _detected_business_facts(value: str) -> set[CandidateBusinessFact]:
+def detect_business_facts(value: str) -> set[CandidateBusinessFact]:
     detected = {
         category
         for category, pattern in _BUSINESS_FACT_PATTERNS.items()
@@ -91,6 +91,11 @@ def _detected_business_facts(value: str) -> set[CandidateBusinessFact]:
     ):
         detected.add(CandidateBusinessFact.RECIPIENT)
     return detected
+
+
+def _detected_business_facts(value: str) -> set[CandidateBusinessFact]:
+    """Backward-compatible alias for existing imports."""
+    return detect_business_facts(value)
 
 
 def _is_allowed_candidate_character(character: str) -> bool:
@@ -187,7 +192,7 @@ class CandidateValidator:
                 valid=False,
                 reason="forbidden_variation_pattern",
             )
-        unexpected_facts = _detected_business_facts(variation) - attack.allowed_variation_business_facts
+        unexpected_facts = detect_business_facts(variation) - attack.allowed_variation_business_facts
         if unexpected_facts:
             return CandidateValidation(
                 valid=False,

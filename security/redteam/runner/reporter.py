@@ -545,6 +545,12 @@ def _markdown_reference_campaign(data: dict) -> str:
     totals = data["totals"]
     metadata = data["metadata"]
     generator_telemetry = metadata["generator_telemetry"]
+    target_telemetry = metadata.get("target_model_telemetry") or {
+        "attempts": 0,
+        "successes": 0,
+        "failures": 0,
+        "fallbacks": 0,
+    }
     judgment_telemetry = metadata["judgment_telemetry"]
     lines = [
         "# Reference Campaign Report",
@@ -562,6 +568,11 @@ def _markdown_reference_campaign(data: dict) -> str:
             f"(`{_markdown_code(metadata['generator_model_digest'])}`)"
         ),
         (
+            "- Target model: "
+            f"`{_markdown_code(metadata.get('target_model') or 'not-recorded')}` "
+            f"(`{_markdown_code(metadata.get('target_model_digest') or 'not-recorded')}`)"
+        ),
+        (
             "- Judgment model: "
             f"`{_markdown_code(metadata['judgment_model'])}` "
             f"(`{_markdown_code(metadata['judgment_model_digest'])}`)"
@@ -571,6 +582,13 @@ def _markdown_reference_campaign(data: dict) -> str:
             f"`{generator_telemetry['attempts']}` / "
             f"`{generator_telemetry['successes']}` / "
             f"`{generator_telemetry['failures']}`"
+        ),
+        (
+            "- Target attempts/successes/failures/fallbacks: "
+            f"`{target_telemetry['attempts']}` / "
+            f"`{target_telemetry['successes']}` / "
+            f"`{target_telemetry['failures']}` / "
+            f"`{target_telemetry['fallbacks']}`"
         ),
         (
             "- Judgment attempts/successes/failures: "
@@ -684,8 +702,8 @@ def write_reference_campaign_report(
         ),
         redact_fields,
     )
-    data["report_schema_version"] = 3
     check_deadline()
+    data["report_schema_version"] = 3
     markdown = _markdown_reference_campaign(data)
     check_deadline()
     return _write_report_files(
