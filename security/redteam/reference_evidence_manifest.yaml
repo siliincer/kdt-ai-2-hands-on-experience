@@ -1,7 +1,7 @@
 version: 1
 status: completed
 agent_source_commit: fa687b3d8388f0050f9f620aa0ebb51f75b29c2e
-case_set_sha256: 0617d358cf4f38692f793199b50beaa6816e99b5ce9b0d7401fd1f47703a8ad4
+case_set_sha256: 21f1797327537394749637b46c4e92f76d58e756e69ad4f70ee7fe3f9d5168dd
 verification_test: security/redteam/tests/test_agent_reference_integration.py
 case_ids:
   - account_list_contract_baseline
