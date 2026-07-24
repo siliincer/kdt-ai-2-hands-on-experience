@@ -196,6 +196,29 @@ async def test_resolve_withdraw_with_hint_still_selects(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_resolve_withdraw_force_selection_skips_default(monkeypatch):
+    # force_selection=True 면 기본 출금 계좌가 있어도 자동 확정하지 않고 항상
+    # selection_required — 승인 화면 "계좌 변경" 재진입 시 매번 같은 기본 계좌로
+    # 되돌아가 버튼이 무효해지는 것을 막는다.
+    default = _acct(is_default=True)
+    other = _acct(is_default=False)
+    _patch_mapped(monkeypatch, [default, other])
+
+    data = await account_service.list_accounts(
+        _NO_SESSION,
+        _ctx(),
+        None,
+        AccountCapability.WITHDRAW,
+        20,
+        resolve_selection=True,
+        force_selection=True,
+    )
+
+    assert data.account_resolution_outcome == "selection_required"
+    assert data.account_ids == []
+
+
+@pytest.mark.asyncio
 async def test_resolve_all_accounts_requested_is_resolved(monkeypatch):
     a1, a2 = _acct(), _acct()
     _patch_mapped(monkeypatch, [a1, a2])

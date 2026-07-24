@@ -34,6 +34,7 @@ async def list_accounts_endpoint(
     resolve_selection: bool = Query(default=False),
     all_accounts_requested: bool = Query(default=False),
     exclude_account_ids: list[str] = Query(default=[]),
+    force_selection: bool = Query(default=False),
     limit: int = Query(default=20, ge=1, le=100),
     context: ResolvedExecutionContext = Depends(require_scope(SCOPE_ACCOUNT_READ)),
     session: AsyncSession = Depends(get_db),
@@ -42,6 +43,8 @@ async def list_accounts_endpoint(
 
     resolve_selection=True 면 계좌 해소 결과(account_resolution_outcome·account_ids)를
     함께 반환한다(계약 9.2). Agent read/transfer 워크플로우의 계좌 확정 관문이다.
+    force_selection=True 면 기본 출금 계좌 자동 확정을 끄고 항상 선택을 요구한다
+    (승인 화면 "계좌 변경" 재진입 시 사용).
     """
     data = await account_service.list_accounts(
         session,
@@ -52,6 +55,7 @@ async def list_accounts_endpoint(
         resolve_selection=resolve_selection,
         all_accounts_requested=all_accounts_requested,
         exclude_account_ids=exclude_account_ids,
+        force_selection=force_selection,
     )
     return agent_success_response(message="계좌 목록을 조회했습니다.", data=data)
 
