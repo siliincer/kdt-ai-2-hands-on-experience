@@ -9,6 +9,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from agent.workflows.slot_extraction_support import scrub_generic_account_hint
+
 _ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+)\s*(은행|통장|계좌)")
 _EXPLICIT_DATES = re.compile(r"(?P<start>\d{4}-\d{2}-\d{2}).*?(?P<end>\d{4}-\d{2}-\d{2})")
 _PERIOD_MARKERS = (
@@ -36,10 +38,7 @@ def extract_account_hint(message: str) -> str | None:
     match = _ACCOUNT_HINT.search(message)
     if match is None:
         return None
-    hint = match.group(0).strip()
-    if hint.replace(" ", "") in {"내계좌", "전체계좌", "모든계좌", "전계좌"}:
-        return None
-    return hint
+    return scrub_generic_account_hint(match.group(0).strip())
 
 
 def requests_all_accounts(message: str) -> bool:
