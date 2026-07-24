@@ -80,11 +80,22 @@ def build_set_default_account_graph(
             "workflow_id": WORKFLOW_ID,
             "current_step_id": "extract_default_account_slots",
             "route_key": "always",
-            "data": {"account_hint": extracted.get("account_hint")},
+            "data": {
+                "account_hint": extracted.get("account_hint"),
+                "unset_default_account": bool(extracted.get("unset")),
+            },
         }
 
     async def resolve_default_account(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
+        # 해제(unset)는 대상 계좌를 고를 필요가 없다 — 계좌 조회 자체를 건너뛰고
+        # 바로 Prepare로 간다(현재 기본 계좌 존재 여부는 Backend가 판정한다).
+        if data.get("unset_default_account"):
+            return {
+                "current_step_id": "resolve_default_account",
+                "route_key": "unset",
+                "data": {},
+            }
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
                 "fetch_accounts",
@@ -208,6 +219,9 @@ def build_set_default_account_graph(
         idempotency_key = (
             f"default_account_prepare:{_config_context(config, 'execution_context_id')}:{data.get('prepare_attempt')}"
         )
+        arguments: dict[str, Any] = (
+            {"unset": True} if data.get("unset_default_account") else {"account_id": data.get("account_id")}
+        )
         try:
             result = await dependencies.tool_registry.invoke_by_tool(
                 "prepare_default_account_change",
@@ -215,7 +229,7 @@ def build_set_default_account_graph(
                     config,
                     dependencies=dependencies,
                     step_id="prepare_default_account_change",
-                    arguments={"account_id": data.get("account_id")},
+                    arguments=arguments,
                     idempotency_key=idempotency_key,
                 ),
             )
@@ -252,18 +266,20 @@ def build_set_default_account_graph(
 
     async def emit_default_account_unchanged(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
+        unset = bool(data.get("unset_default_account"))
+        payload: dict[str, Any] = {"purpose": "default_account", "outcome": "unchanged"}
+        if not unset:
+            payload["account"] = {"account_id": data.get("account_id")}
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
             step_id="emit_default_account_unchanged",
             ui_contract_id="UI-DEFAULT-ACCOUNT-RESULT",
             ui_type="setting_result",
-            content="이미 기본 출금 계좌로 설정되어 있습니다.",
-            payload={
-                "purpose": "default_account",
-                "outcome": "unchanged",
-                "account": {"account_id": data.get("account_id")},
-            },
+            content=(
+                "이미 기본 출금 계좌가 지정되어 있지 않습니다." if unset else "이미 기본 출금 계좌로 설정되어 있습니다."
+            ),
+            payload=payload,
         )
         await _publish(dependencies, event, config)
         return _terminal_update("emit_default_account_unchanged")
@@ -398,19 +414,23 @@ def build_set_default_account_graph(
     async def emit_default_account_result(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         data = _data(state)
         view = data.get("confirmation_view") or {}
+        unset = bool(data.get("unset_default_account"))
+        new_default_account = view.get("new_default_account")
+        payload: dict[str, Any] = {
+            "purpose": "default_account",
+            "outcome": "completed",
+            "completed_at": data.get("completed_at"),
+        }
+        if not unset:
+            payload["account"] = new_default_account or {"account_id": data.get("account_id")}
         event = dependencies.webhook_builder.component(
             chat_session_id=_config_context(config, "chat_session_id"),
             workflow_id=WORKFLOW_ID,
             step_id="emit_default_account_result",
             ui_contract_id="UI-DEFAULT-ACCOUNT-RESULT",
             ui_type="setting_result",
-            content="기본 출금 계좌를 변경했습니다.",
-            payload={
-                "purpose": "default_account",
-                "outcome": "completed",
-                "account": view.get("new_default_account") or {"account_id": data.get("account_id")},
-                "completed_at": data.get("completed_at"),
-            },
+            content=("기본 출금 계좌 지정을 해제했습니다." if unset else "기본 출금 계좌를 변경했습니다."),
+            payload=payload,
         )
         await _publish(dependencies, event, config)
         return _terminal_update("emit_default_account_result")
@@ -453,6 +473,7 @@ def build_set_default_account_graph(
         _route_key,
         {
             "resolved": "start_default_account_prepare",
+            "unset": "start_default_account_prepare",
             "selection_required": "request_default_account_selection",
             "no_accounts": "emit_default_account_selection_empty",
             "error": "emit_default_account_error",

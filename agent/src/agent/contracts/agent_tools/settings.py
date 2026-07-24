@@ -58,12 +58,20 @@ class AccountAliasCorrectionView(SettingToolContract):
 
 
 class DefaultAccountPrepareRequest(SettingToolContract):
-    account_id: NonEmptyString
+    account_id: NonEmptyString | None = None
+    unset: bool = False
+
+    @model_validator(mode="after")
+    def _account_id_xor_unset(self) -> Self:
+        if self.unset == bool(self.account_id):
+            raise ValueError("account_id와 unset 중 정확히 하나만 지정해야 합니다.")
+        return self
 
 
 class DefaultAccountConfirmationView(SettingToolContract):
     current_default_account: DefaultAccountView | None = None
-    new_default_account: DefaultAccountView
+    # 해제(unset) 승인 화면에서는 새 기본 계좌가 없다.
+    new_default_account: DefaultAccountView | None = None
     expires_at: datetime
 
 
@@ -89,8 +97,8 @@ class DefaultAccountPrepareResult(SettingToolContract):
             ):
                 raise ValueError("승인 준비 응답에 다른 Outcome 필드가 포함됐습니다.")
         elif self.outcome == "unchanged":
-            if self.account_id is None:
-                raise ValueError("변경 없음 응답에는 account_id가 필요합니다.")
+            # account_id 는 계좌 지정 unchanged 에서만 채워진다(계약 19.4). 해제(unset)
+            # unchanged 는 대상 계좌가 없으므로 account_id 가 없다.
             if _has_value(
                 self.reason,
                 self.confirmation_id,
@@ -137,8 +145,10 @@ class DefaultAccountExecuteResult(SettingToolContract):
     @model_validator(mode="after")
     def validate_outcome_shape(self) -> Self:
         if self.outcome == "completed":
-            if self.account_id is None or self.completed_at is None:
-                raise ValueError("완료 응답에는 계좌 ID와 완료시각이 필요합니다.")
+            # account_id 는 계좌 지정 완료에서만 채워진다. 해제(unset) 완료는
+            # 대상 계좌가 없으므로 account_id 가 없다.
+            if self.completed_at is None:
+                raise ValueError("완료 응답에는 완료시각이 필요합니다.")
             if _has_value(self.reason, self.correction_view, self.blocked_view):
                 raise ValueError("완료 응답에 다른 Outcome 필드가 포함됐습니다.")
         elif self.outcome == "correction_required":

@@ -32,6 +32,7 @@ from ...repository.account_repository import (
     get_owned_account,
     set_account_alias,
     set_default_account,
+    unset_default_account,
 )
 from ...schemas.agent_tools.common import AccountDisplayRef, CorrectionView
 from ...schemas.agent_tools.setting import (
@@ -110,12 +111,50 @@ def _alias_correction(title: str) -> CorrectionView:
 # ── #11 기본 출금 계좌 변경 Prepare ──────────────────────────────────────────
 
 
+async def _prepare_default_account_unset(
+    session: AsyncSession,
+    context: ResolvedExecutionContext,
+) -> DefaultAccountPrepareData:
+    """기본 출금 계좌 '해제' Prepare. 현재 기본 계좌가 없으면 unchanged."""
+    current_default = await get_default_account(session, context.user_id)
+    if current_default is None:
+        return DefaultAccountPrepareData(outcome=SettingOutcome.UNCHANGED)
+
+    confirmation = await confirmation_service.create_pending(
+        session,
+        context,
+        ConfirmationOperation.DEFAULT_ACCOUNT_CHANGE,
+        fixed_data={"unset": True},
+    )
+    await financial_audit_service.record(
+        session,
+        context,
+        event_type=EVENT_CONFIRMATION_CREATED,
+        operation=_OP_DEFAULT_PREPARE,
+        outcome=SettingOutcome.READY_FOR_CONFIRMATION,
+        contract_id=_CONTRACT_DEFAULT_PREPARE,
+        confirmation_id=confirmation.id,
+    )
+    return DefaultAccountPrepareData(
+        outcome=SettingOutcome.READY_FOR_CONFIRMATION,
+        confirmation_id=str(confirmation.id),
+        confirmation_view=DefaultAccountConfirmationView(
+            current_default_account=_account_ref(current_default),
+            new_default_account=None,
+            expires_at=confirmation.expires_at,
+        ),
+    )
+
+
 async def prepare_default_account(
     session: AsyncSession,
     context: ResolvedExecutionContext,
     req: DefaultAccountPrepareRequest,
 ) -> DefaultAccountPrepareData:
     """기본 출금 계좌 변경 조건을 평가하고 Confirmation 을 고정한다."""
+    if req.unset:
+        return await _prepare_default_account_unset(session, context)
+
     account = await _load_owned_account(session, context, req.account_id)
 
     # 활성·출금 가능해야 기본 출금 계좌가 될 수 있다(계약 19.6).
@@ -172,6 +211,22 @@ async def execute_default_account(
         req.confirmation_id,
         ConfirmationOperation.DEFAULT_ACCOUNT_CHANGE,
     )
+    if confirmation.fixed_data.get("unset"):
+        await unset_default_account(session, context.user_id)
+        won = await confirmation_service.mark_executed(session, confirmation)
+        completed_at = datetime.now(timezone.utc)
+        if won:  # C2: 동시 실행에서 진 요청은 중복 Audit 을 남기지 않는다.
+            await financial_audit_service.record(
+                session,
+                context,
+                event_type=EVENT_SETTING_CHANGE_COMPLETED,
+                operation=_OP_DEFAULT_EXECUTE,
+                outcome=SettingOutcome.COMPLETED,
+                contract_id=_CONTRACT_DEFAULT_EXECUTE,
+                confirmation_id=confirmation.id,
+            )
+        return DefaultAccountExecuteData(outcome=SettingOutcome.COMPLETED, completed_at=completed_at)
+
     account_id = str(confirmation.fixed_data["account_id"])
     account = await get_owned_account(session, context.user_id, UUID(account_id))
 

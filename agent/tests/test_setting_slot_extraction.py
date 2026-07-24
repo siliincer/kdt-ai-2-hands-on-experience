@@ -42,7 +42,7 @@ async def test_default_account_llm_fills_account_hint(monkeypatch) -> None:
 
     result = await setting_slot_extraction.extract_default_account_slots_llm_first(message)
 
-    assert result == {"account_hint": "급여 통장"}
+    assert result == {"account_hint": "급여 통장", "unset": False}
     assert "오타 교정" in fake.prompts[0]
 
 
@@ -54,7 +54,7 @@ async def test_default_account_ungrounded_correction_is_rejected(monkeypatch) ->
 
     result = await setting_slot_extraction.extract_default_account_slots_llm_first(message)
 
-    assert result == {"account_hint": "신후은행 계좌"}
+    assert result == {"account_hint": "신후은행 계좌", "unset": False}
 
 
 @pytest.mark.asyncio

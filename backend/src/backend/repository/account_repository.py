@@ -132,6 +132,15 @@ async def set_default_account(session: AsyncSession, user_id: UUID, account: Acc
     return account
 
 
+async def unset_default_account(session: AsyncSession, user_id: UUID) -> int:
+    """user 의 기본 출금 계좌 지정을 전부 해제한다. 해제된 행 수를 반환한다."""
+    result = await session.execute(
+        update(Account).where(Account.user_id == user_id, Account.is_default.is_(True)).values(is_default=False)
+    )
+    await session.commit()
+    return result.rowcount or 0
+
+
 async def set_account_alias(session: AsyncSession, account: Account, alias: str) -> Account:
     """계좌 별칭을 변경한다(로컬이 정본, D4)."""
     account.alias = alias

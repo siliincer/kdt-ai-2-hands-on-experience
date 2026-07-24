@@ -25,6 +25,7 @@ from agent.workflows.slot_extraction_support import (
 SettingSlotExtractor: TypeAlias = Callable[[str], Awaitable[Mapping[str, Any]]]
 
 _ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))")
+_DEFAULT_ACCOUNT_UNSET_KEYWORDS = ("해제", "없애", "해지", "지정 취소", "취소해")
 _ALIAS_QUOTED = re.compile(r"[\"'“”‘’『』「」]([^\"'“”‘’『』「」]{1,30})[\"'“”‘’『』「」]")
 _ALIAS_AFTER_KEYWORD = re.compile(r"별[칭명](?:을|를)?\s*([^,.\n]{1,30}?)\s*(?:으로|로)\s*(?:바꿔|바꾸|변경|수정|설정)")
 _ALIAS_BEFORE_KEYWORD = re.compile(
@@ -47,6 +48,13 @@ class DefaultAccountSlots(_StrictSlots):
             "사용자가 실제로 말한, 새 기본 출금 계좌로 지정할 계좌의 은행명·별칭·"
             "계좌 유형 원문 구절. 오타를 고치거나 동의어를 만들지 말고, 표현이 "
             "없으면 null."
+        ),
+    )
+    unset: bool = Field(
+        default=False,
+        description=(
+            "사용자가 기본 출금 계좌 '지정을 해제/취소'하려는 의도면 true. 특정 "
+            "계좌를 새 기본으로 '지정'하려는 의도면 false."
         ),
     )
 
@@ -76,8 +84,10 @@ class AccountAliasSlots(_StrictSlots):
 def extract_default_account_slots_by_rule(message: str) -> Mapping[str, Any]:
     """기본 출금 계좌 변경의 결정적 폴백 추출 (테스트와 장애 폴백용)."""
 
+    if any(keyword in message for keyword in _DEFAULT_ACCOUNT_UNSET_KEYWORDS):
+        return {"account_hint": None, "unset": True}
     match = _ACCOUNT_HINT.search(message)
-    return {"account_hint": match.group(1).strip() if match else None}
+    return {"account_hint": match.group(1).strip() if match else None, "unset": False}
 
 
 def extract_account_alias_slots_by_rule(message: str) -> Mapping[str, Any]:
@@ -116,8 +126,12 @@ async def extract_default_account_slots_llm_first(
     if extracted is None:
         return fallback
 
+    unset = extracted.unset or bool(fallback.get("unset"))
     return {
-        "account_hint": (_grounded_phrase(extracted.account_hint, message) or fallback.get("account_hint")),
+        "account_hint": (
+            None if unset else (_grounded_phrase(extracted.account_hint, message) or fallback.get("account_hint"))
+        ),
+        "unset": unset,
     }
 
 

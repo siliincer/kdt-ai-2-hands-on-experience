@@ -220,6 +220,78 @@ async def test_execute_default_inactive_invalidates_confirmation(monkeypatch):
     assert invalidated["done"] is True  # 기존 Confirmation 재사용 불가 처리
 
 
+# ── #11·#12 기본계좌 해제(unset) ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_prepare_default_unset_ready_for_confirmation(monkeypatch):
+    ctx = _ctx()
+    current = _acct(is_default=True, alias="생활비 통장")
+
+    async def _get_default(session, user_id):
+        return current
+
+    monkeypatch.setattr(setting_service, "get_default_account", _get_default)
+    _patch_confirmation_create(monkeypatch, _confirmation({"unset": True}))
+
+    data = await setting_service.prepare_default_account(_NO_SESSION, ctx, DefaultAccountPrepareRequest(unset=True))
+
+    assert data.outcome == "ready_for_confirmation"
+    assert data.confirmation_id
+    view = data.confirmation_view
+    assert view is not None
+    assert view.new_default_account is None
+    assert view.current_default_account is not None
+    assert view.current_default_account.account_alias == "생활비 통장"
+
+
+@pytest.mark.asyncio
+async def test_prepare_default_unset_when_already_unset_is_unchanged(monkeypatch):
+    async def _get_default(session, user_id):
+        return None
+
+    monkeypatch.setattr(setting_service, "get_default_account", _get_default)
+
+    data = await setting_service.prepare_default_account(_NO_SESSION, _ctx(), DefaultAccountPrepareRequest(unset=True))
+
+    assert data.outcome == "unchanged"
+    assert data.account_id is None
+    assert data.confirmation_id is None
+
+
+@pytest.mark.asyncio
+async def test_execute_default_unset_completed(monkeypatch):
+    ctx = _ctx()
+    conf = _confirmation({"unset": True})
+    applied = {}
+
+    async def _load(session, context, cid, operation):
+        assert operation is ConfirmationOperation.DEFAULT_ACCOUNT_CHANGE
+        return conf
+
+    async def _unset(session, user_id):
+        applied["unset"] = True
+        return 1
+
+    async def _mark(session, confirmation):
+        applied["executed"] = True
+        return confirmation
+
+    monkeypatch.setattr(setting_service.confirmation_service, "load_for_execute", _load)
+    monkeypatch.setattr(setting_service, "unset_default_account", _unset)
+    monkeypatch.setattr(setting_service.confirmation_service, "mark_executed", _mark)
+
+    data = await setting_service.execute_default_account(
+        _NO_SESSION, ctx, ExecuteByConfirmationRequest(confirmation_id=str(conf.id))
+    )
+
+    assert data.outcome == "completed"
+    assert data.account_id is None
+    assert data.completed_at is not None
+    assert applied["unset"] is True
+    assert applied["executed"] is True
+
+
 # ── #13 별칭 Prepare ─────────────────────────────────────────────────────────
 
 

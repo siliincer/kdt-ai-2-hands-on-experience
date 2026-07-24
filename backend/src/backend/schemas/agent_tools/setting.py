@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .common import AccountDisplayRef, CorrectionView
 
@@ -37,8 +37,15 @@ class SettingReason:
 
 
 class DefaultAccountPrepareRequest(BaseModel):
-    account_id: str
+    account_id: str | None = None
+    unset: bool = False
     # 현재 기본 계좌는 Backend 가 확인하므로 Agent 가 전달하지 않는다(계약 19.2).
+
+    @model_validator(mode="after")
+    def _account_id_xor_unset(self) -> "DefaultAccountPrepareRequest":
+        if self.unset == bool(self.account_id):
+            raise ValueError("account_id 와 unset 중 정확히 하나만 지정해야 합니다.")
+        return self
 
 
 class AccountAliasPrepareRequest(BaseModel):
@@ -70,7 +77,8 @@ class AliasAccountRef(BaseModel):
 class DefaultAccountConfirmationView(BaseModel):
     # 사용자에게 기본계좌가 아직 없으면 None.
     current_default_account: AccountDisplayRef | None
-    new_default_account: AccountDisplayRef
+    # 해제(unset) 승인 화면에서는 새 기본 계좌가 없다.
+    new_default_account: AccountDisplayRef | None
     expires_at: datetime
 
 
