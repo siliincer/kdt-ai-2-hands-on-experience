@@ -34,7 +34,8 @@ def test_agent_v3_source_is_read_from_current_checkout() -> None:
     api = _load_agent_api()
 
     assert len(api.source_commit) >= 40
-    assert api.source_root.name == "kdt-ai-2-hands-on-experience"
+    assert (api.source_root / "pyproject.toml").is_file()
+    assert (api.source_root / "agent").is_dir()
     assert api.source_dirty is False
 
 
