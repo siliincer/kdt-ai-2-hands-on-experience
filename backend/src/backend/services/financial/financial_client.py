@@ -109,15 +109,24 @@ class FinancialServiceClient:
             raise FinancialServiceError(f"카드 원장 조회 실패: HTTP {response.status_code}")
         return response.json()
 
-    async def create_account(self, owner: str, initial_balance: int = 0) -> dict:
+    async def create_account(
+        self,
+        owner: str,
+        initial_balance: int = 0,
+        bank_name: str | None = None,
+    ) -> dict:
         """계정계 계좌 생성(POST /accounts, 무인증). 실패 시 FinancialServiceError.
 
-        프로비저닝 전용. 반환 dict 의 account_id 를 로컬 매핑에 저장한다.
+        프로비저닝·부계좌 추가에서 쓴다. 반환 dict 의 account_id 를 로컬 매핑에 저장한다.
+        bank_name 을 생략하면 계정계 기본 은행으로 만들어진다.
         """
+        body: dict = {"owner": owner, "initial_balance": initial_balance}
+        if bank_name:
+            body["bank_name"] = bank_name
         response = await self._request(
             "POST",
             _ACCOUNTS_PATH,
-            json={"owner": owner, "initial_balance": initial_balance},
+            json=body,
         )
         if response.status_code >= 400:
             raise FinancialServiceError(f"계좌 생성 실패: HTTP {response.status_code}")

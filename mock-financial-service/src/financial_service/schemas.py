@@ -18,6 +18,8 @@ class ErrorResponse(BaseModel):
 class AccountCreate(BaseModel):
     owner: str = Field(..., min_length=1, max_length=255)
     initial_balance: int = Field(default=0, ge=0)
+    # 생략 시 계정계 기본 은행(BANK_NAME). 부계좌 추가에서 은행을 지정할 때 쓴다.
+    bank_name: str | None = Field(default=None, min_length=1, max_length=50)
 
 
 class AccountResponse(BaseModel):

@@ -2,6 +2,9 @@
 // (구 features/mockData 에서 이동 — 목 샘플이 아닌 실제 UI 옵션 상수)
 
 const BANKS = [
+  // 샌드박스 계정계(mock-financial-service) 시드 계좌의 은행. 실제 데이터에 존재하므로
+  // 수취인 은행 선택지에도 포함한다.
+  'KDT은행',
   '카카오뱅크',
   '토스뱅크',
   '케이뱅크',
@@ -20,6 +23,7 @@ const BANKS = [
 ];
 
 const BANK_KOR: Record<string, string> = {
+  KDT은행: 'KDT은행',
   신한: '신한은행',
   국민: '국민은행',
   하나: '하나은행',

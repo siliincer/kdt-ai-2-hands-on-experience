@@ -78,7 +78,8 @@ def _append_audit(
 
 
 def create_account(db: Session, payload: AccountCreate) -> tuple[Account, int]:
-    acct = Account(owner=payload.owner)
+    # bank_name 미지정이면 모델 기본값(BANK_NAME)을 그대로 쓴다.
+    acct = Account(owner=payload.owner, **({"bank_name": payload.bank_name} if payload.bank_name else {}))
     db.add(acct)
     db.flush()  # get account_id before ledger entry
 

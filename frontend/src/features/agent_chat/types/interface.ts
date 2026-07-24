@@ -58,6 +58,8 @@ export interface ChatState {
   startTurn: (userText: string) => void;
   /** SSE 이벤트들을 running assistant 메시지에 접어 넣는다 */
   foldIntoRunning: (events: AgentStreamEvent[]) => void;
+  /** running assistant 를 성공 메시지로 마감하고 runningId 를 푼다(슬래시 명령 결과 등) */
+  completeRunning: (text: string) => void;
   /** 전송/재개 실패 시 running assistant 를 에러 메시지로 마감하고 runningId 를 푼다 */
   failRunning: (text: string) => void;
   reset: () => void;
@@ -88,8 +90,13 @@ export interface ChatRuntime {
   /**
    * 추가 인증(auth_request) UI 에서 비밀번호 재확인 제출 시 호출(계약 3.8).
    * 비밀번호는 Backend 까지만 전달되고 후속은 SSE 로 흘러온다. 반환값은 검증 상태.
+   * options.cancel=true 면 비밀번호 없이 인증을 취소하고 송금을 중단한다(반환 'cancelled').
    */
-  authenticate: (authContextId: string, password: string) => Promise<string>;
+  authenticate: (
+    authContextId: string,
+    password: string,
+    options?: { cancel?: boolean },
+  ) => Promise<string>;
   /**
    * recipient_select UI 의 신규 계좌 입력 시 호출(계약 부록 29.2).
    * 은행·계좌번호 원문을 Backend 로 검증해 recipient_candidate_id 를 받는다.

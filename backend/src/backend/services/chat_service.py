@@ -243,13 +243,18 @@ async def authenticate_and_resume(
     user_id: UUID,
     chat_session_id: UUID,
     auth_context_id: str,
-    password: str,
+    password: str | None,
+    cancel: bool = False,
 ) -> str:
-    """추가 인증(비밀번호 재확인) → 검증 후 에이전트를 재개한다(계약 3.8·7.2).
+    """추가 인증(비밀번호 재확인) → 검증/취소 후 에이전트를 재개한다(계약 3.8·7.2).
 
     인증 원문(비밀번호)은 Backend 까지만 오고 Agent 로 전달하지 않는다. Backend 가
-    검증한 결과 상태(verified/failed)만 재개에 사용한다. 반환값은 결과 상태다.
+    검증한 결과 상태(verified/failed/cancelled)만 재개에 사용한다. 반환값은 결과 상태다.
     검증 실패(세션·인증 상태)는 HTTPException 으로 같은 UI 에서 처리한다.
+
+    cancel=True 면 비밀번호 검증 없이 인증을 취소 상태로 두고 Agent 를 cancelled 로
+    재개한다. Agent 는 취소 시 done 을 보내지 않는 계약이므로(item #6) 이 경로에서
+    Backend 가 terminal done 을 직접 발행해 SSE(=채팅 입력)를 다시 연다.
     """
     await verify_chat_session_owner(session, user_id, chat_session_id)
 
@@ -278,15 +283,20 @@ async def authenticate_and_resume(
             detail="이미 처리된 인증 요청입니다.",
         )
 
-    user = await get_user_by_id(session, str(user_id))
-    verified = bool(user and password and verify_password(password, user.password_hash))
-
-    if verified:
-        await auth_context_service.mark_verified(session, auth_context)
-        auth_status = "verified"
+    if cancel:
+        # 취소: 비밀번호를 검증하지 않고 인증을 취소 상태로 둔다(재사용 불가).
+        await set_auth_context_status(session, auth_context, AuthContextStatus.CANCELLED)
+        auth_status = "cancelled"
     else:
-        await set_auth_context_status(session, auth_context, AuthContextStatus.FAILED)
-        auth_status = "failed"
+        user = await get_user_by_id(session, str(user_id))
+        verified = bool(user and password and verify_password(password, user.password_hash))
+
+        if verified:
+            await auth_context_service.mark_verified(session, auth_context)
+            auth_status = "verified"
+        else:
+            await set_auth_context_status(session, auth_context, AuthContextStatus.FAILED)
+            auth_status = "failed"
 
     # 인증은 Confirmation 에 딸린 추가 관문이다. auth_context → confirmation → 실행
     # Context 로 Agent thread 를 찾아 재개한다.
@@ -300,6 +310,9 @@ async def authenticate_and_resume(
         auth_context_id=auth_context_id,
         auth_status=auth_status,
     )
+    # 취소 종료는 Backend 책임(계약: Agent 는 cancelled 시 done 을 보내지 않음).
+    if auth_status == "cancelled":
+        await publish_cancellation_done(chat_session_id)
     return auth_status
 
 
