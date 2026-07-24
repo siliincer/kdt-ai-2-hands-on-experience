@@ -133,7 +133,7 @@ services:
       dockerfile: mock-financial-service/Dockerfile
     container_name: kdt-mock-financial-service
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     networks:
       default:
         aliases:
