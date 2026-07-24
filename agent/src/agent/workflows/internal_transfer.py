@@ -60,6 +60,15 @@ _RESET_STEP_BY_TARGET = {
     "amount": "reset_internal_transfer_amount",
 }
 
+# option_select UI(OptionSelectUI.tsx)는 options를 {value,label} 객체로,
+# 제출값을 {option_selection_outcome, option}으로 주고받는다(계약 3.6) —
+# 정정 대상 문자열 그대로 보내면 라벨 없는 빈 버튼이 뜬다.
+_CORRECTION_TARGET_LABELS = {
+    "from_account": "출금 계좌",
+    "to_account": "입금 계좌",
+    "amount": "금액",
+}
+
 
 def extract_internal_transfer_slots_from_text(message: str) -> Mapping[str, Any]:
     """테스트와 장애 폴백용 결정적 본인이체 Slot 추출."""
@@ -654,13 +663,13 @@ def build_internal_transfer_graph(
             content="무엇을 수정할지 선택해 주세요.",
             payload={
                 "title": view.get("title") or "수정할 항목을 선택해 주세요.",
-                "options": targets,
+                "options": [{"value": t, "label": _CORRECTION_TARGET_LABELS.get(t, t)} for t in targets],
             },
         )
         resumed = _resume_data(state, dependencies.interaction_runtime, event)
-        outcome = resumed.get("correction_selection_outcome")
+        outcome = resumed.get("option_selection_outcome")
         if outcome == "selected":
-            target = resumed.get("change_target")
+            target = resumed.get("option")
             if target not in _RESET_STEP_BY_TARGET or target not in targets:
                 return _tool_error_update(
                     "request_internal_transfer_correction",
@@ -791,18 +800,22 @@ def build_internal_transfer_graph(
             content="인증에 실패했습니다. 다시 시도하시겠어요?",
             payload={
                 "title": "인증을 다시 시도하시겠어요?",
-                "options": ["retry", "cancel"],
+                "options": [
+                    {"value": "retry", "label": "다시 시도"},
+                    {"value": "cancel", "label": "취소"},
+                ],
             },
         )
         resumed = _resume_data(state, dependencies.interaction_runtime, event)
-        outcome = resumed.get("auth_retry_outcome")
-        if outcome == "retry":
+        outcome = resumed.get("option_selection_outcome")
+        selected_option = resumed.get("option")
+        if outcome == "selected" and selected_option == "retry":
             return {
                 "current_step_id": "request_internal_auth_retry",
                 "route_key": "retry",
                 "data": _resume_update(resumed, input_request_id=None),
             }
-        if outcome == "cancelled":
+        if outcome == "selected" and selected_option == "cancel":
             return {
                 "current_step_id": "request_internal_auth_retry",
                 "route_key": "cancelled",

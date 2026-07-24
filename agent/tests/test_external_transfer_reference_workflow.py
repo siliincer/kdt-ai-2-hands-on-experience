@@ -655,8 +655,8 @@ async def test_external_transfer_correction_multiple_targets_user_selects() -> N
             execution_context_id="exec_1",
             input_request_id=input_request_id,
             value={
-                "correction_selection_outcome": "selected",
-                "change_target": "recipient",
+                "option_selection_outcome": "selected",
+                "option": "recipient",
             },
         )
 
@@ -901,7 +901,7 @@ async def test_external_transfer_auth_retry_then_verified() -> None:
             chat_session_id="chat_1",
             execution_context_id="exec_1",
             input_request_id=retry_input_id,
-            value={"auth_retry_outcome": "retry"},
+            value={"option_selection_outcome": "selected", "option": "retry"},
         )
         assert waiting_auth_2.pending_interaction is not None
         auth_context_id_2 = waiting_auth_2.pending_interaction["auth_context_id"]
