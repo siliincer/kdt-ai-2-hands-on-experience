@@ -88,6 +88,7 @@ async def list_accounts(
     resolve_selection: bool = False,
     all_accounts_requested: bool = False,
     exclude_account_ids: list[str] | None = None,
+    force_selection: bool = False,
 ) -> AccountListData:
     """사용자 소유 계좌를 검색·필터해 반환한다.
 
@@ -97,6 +98,11 @@ async def list_accounts(
     resolve_selection=True 면 후보로부터 계좌 해소 결과(account_resolution_outcome·
     account_ids)를 함께 채운다(계약 9.2). Agent read/transfer 워크플로우가 이 값으로
     바로 조회할지(resolved)·사용자에게 선택을 물을지(selection_required)를 결정한다.
+
+    force_selection=True 면 기본 출금 계좌가 있어도 자동 확정하지 않고 항상
+    selection_required 를 반환한다. 승인 화면에서 사용자가 명시적으로 "계좌 변경"을
+    눌러 들어온 경우 사용 — prefer_default 로 매번 같은 기본 계좌가 자동 확정되면
+    선택 화면 자체가 뜨지 않아 그 버튼이 무효해진다.
     """
     accounts = await get_mapped_accounts(session, context.user_id)
 
@@ -117,7 +123,8 @@ async def list_accounts(
         return AccountListData(accounts=items)
 
     # 힌트 없는 출금 계좌 해소(송금 from-account)에서는 사용자의 기본 출금 계좌를 존중한다.
-    prefer_default = account_capability == AccountCapability.WITHDRAW and not account_hint
+    # force_selection 이면 이 자동 확정을 끄고 항상 선택 화면을 보여준다.
+    prefer_default = account_capability == AccountCapability.WITHDRAW and not account_hint and not force_selection
     outcome, resolved_ids = _resolve_accounts(
         accounts,
         all_accounts_requested=all_accounts_requested,
