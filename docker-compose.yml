@@ -62,6 +62,10 @@ services:
       AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:-change-me-agent-webhook}
       SSE_TICKET_RATE_LIMIT: ${SSE_TICKET_RATE_LIMIT:-30/minute}
       SSE_CONNECT_RATE_LIMIT: ${SSE_CONNECT_RATE_LIMIT:-60/minute}
+      MOCK_FINANCIAL_SERVICE_URL: ${MOCK_FINANCIAL_SERVICE_URL:-http://mock-financial-service:8002}
+      AGENT_SERVICE_URL: ${AGENT_SERVICE_URL:-http://agent:8001}
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-change-me-agent-service-token}
+      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN:-change-me-backend-service-token}
     ports:
       - "127.0.0.1:8000:8000"
     networks:
