@@ -220,6 +220,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-jose" },
     { name = "redis" },
+    { name = "secure" },
     { name = "slowapi" },
     { name = "sqlalchemy" },
     { name = "tenacity" },
@@ -263,6 +264,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-jose", specifier = ">=3.5.0" },
     { name = "redis", specifier = ">=5.2.0" },
+    { name = "secure", specifier = "==2.0.1" },
     { name = "slowapi", specifier = ">=0.1.10" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "tenacity", specifier = ">=9.1.4" },
@@ -2687,6 +2689,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/10/9b/5f14927848d2fd4aa891fd88d883788c5a7baba561c7874732364045708c/ruff-0.15.20-py3-none-win32.whl", hash = "sha256:ed65ef510e43a137207e0f01cfcf998aeddb1aeeda5c9d35023e910284d7cf21", size = 10857322, upload-time = "2026-06-25T17:20:28.612Z" },
     { url = "https://files.pythonhosted.org/packages/fa/f0/fe47c501f9dea92a26d788ff98bb5d92ed4cb4c88792c5c88af6b697dc8e/ruff-0.15.20-py3-none-win_amd64.whl", hash = "sha256:a525c81c70fb0380344dd1d8745d8cc1c890b7fc94a58d5a07bd8eb9557b8415", size = 11993274, upload-time = "2026-06-25T17:20:31.871Z" },
     { url = "https://files.pythonhosted.org/packages/d7/2b/9555445e1201d92b3195f45cdb153a0b68f24e0a4273f6e3d5ab46e212bb/ruff-0.15.20-py3-none-win_arm64.whl", hash = "sha256:2f5b2a6d614e8700388806a14996c40fab2c47b819ef57d790a34878858ed9ca", size = 11343498, upload-time = "2026-06-25T17:20:35.03Z" },
+]
+
+[[package]]
+name = "secure"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/88/84b861346a6a23d75900b493de7458cf89605262e6e19876dc0b576b11ff/secure-2.0.1.tar.gz", hash = "sha256:bb492b9ca2ae66d04f4718675a18de1d1a29217aaded3d6cb5bd8b4ba2e2a645", size = 39787, upload-time = "2026-04-22T09:49:07.225Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/16/b5040aa7644a99f9bd0b08d393b49edaa8d48062ae4757ee107737b60030/secure-2.0.1-py3-none-any.whl", hash = "sha256:12794037e2c4d0b54697045b50285a37faf26ba026cb34a68cd55e96d472898b", size = 53983, upload-time = "2026-04-22T09:49:05.8Z" },
 ]
 
 [[package]]

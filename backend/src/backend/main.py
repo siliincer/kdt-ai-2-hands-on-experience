@@ -17,6 +17,7 @@ from .core.config import CORS_OPTIONS, configure_app
 from .core.exceptions import exception_handlers
 from .core.logging_config import setup_logging
 from .core.observability import setup_tracing
+from .core.security_headers import SecureHeadersMiddleware
 from .db.redis import close_redis_pools
 from .migration.migration import run_migrations
 from .services.agent_client import close_agent_client
@@ -61,6 +62,9 @@ configure_app(app)  # 일괄적인 설정값 주입
 
 # 분산추적(OTEL_ENABLED=true 일 때만 계측이 붙는다. 꺼져 있으면 no-op)
 setup_tracing(app)
+
+# 보안 응답 헤더(secure 라이브러리). 본문을 건드리지 않는 ASGI 미들웨어라 SSE 스트리밍 안전.
+app.add_middleware(SecureHeadersMiddleware)
 
 # CORS 설정은 앱 전체의 가장 바깥에 둬서
 # 검증 / 서버 에러 응답에도 헤더가 붙게 한다.
