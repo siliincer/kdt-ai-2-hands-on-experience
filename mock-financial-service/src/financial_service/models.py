@@ -46,9 +46,7 @@ class Account(Base):
     # (real name) and bank_name; purely a display label, no business logic
     # depends on it.
     alias: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    bank_name: Mapped[str] = mapped_column(
-        String(50), nullable=False, default=lambda: random.choice(REAL_BANK_NAMES)
-    )
+    bank_name: Mapped[str] = mapped_column(String(50), nullable=False, default=lambda: random.choice(REAL_BANK_NAMES))
     account_number: Mapped[str] = mapped_column(
         String(20), nullable=False, unique=True, default=_generate_account_number
     )
