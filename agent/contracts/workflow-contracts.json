@@ -2,7 +2,7 @@
   "manifest_version": "1.0.0",
   "source": {
     "workbook": "docs/agent-management-sheet-v3.xlsx",
-    "sha256": "27795a968e6867d5fccb5172509cc3819dda36a4b3a38e8468a269dfabc70b78"
+    "sha256": "9d5c6e6f62a8f477cdffe167ff344492ed2fcfe6af0a806660eb89d2b462379f"
   },
   "common_state_schema": [
     {
@@ -8617,12 +8617,11 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
@@ -8637,13 +8636,13 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
-            "auth_attempt"
+            "auth_attempt",
+            "option"
           ],
           "route_summary": "항상 → resolve_internal_from_account",
           "validation_result": "OK"
@@ -8673,12 +8672,11 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
@@ -8693,13 +8691,13 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
-            "auth_attempt"
+            "auth_attempt",
+            "option"
           ],
           "route_summary": "항상 → resolve_internal_to_account",
           "validation_result": "OK"
@@ -8725,12 +8723,11 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
@@ -8741,13 +8738,13 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
-            "auth_attempt"
+            "auth_attempt",
+            "option"
           ],
           "route_summary": "항상 → request_internal_transfer_amount",
           "validation_result": "OK"
@@ -8789,8 +8786,8 @@
             "correction_view"
           ],
           "output_state_keys": [
-            "correction_selection_outcome",
-            "change_target",
+            "option_selection_outcome",
+            "option",
             "input_request_id"
           ],
           "route_summary": "selected → 대상별 reset Step | cancelled → END | 계약 오류 → emit_internal_transfer_error",
@@ -8813,14 +8810,14 @@
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
+            "option_selection_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
+            "option_selection_outcome",
             "auth_attempt"
           ],
           "route_summary": "항상 → create_internal_auth_context",
@@ -8891,8 +8888,9 @@
             "auth_request_view"
           ],
           "output_state_keys": [
-            "auth_retry_outcome",
-            "input_request_id"
+            "option_selection_outcome",
+            "input_request_id",
+            "option"
           ],
           "route_summary": "retry → start_internal_auth | cancelled → END | 계약 오류 → emit_internal_transfer_error",
           "validation_result": "OK"
@@ -9776,7 +9774,7 @@
           "data_type": "string",
           "nullable": true,
           "default_value": "null",
-          "description": "사용자가 수정할 본인송금 조건",
+          "description": "사용자가 수정할 대상",
           "retention_scope": "interaction",
           "clear_when": "수정 Route 진입, 초기화 또는 Workflow 종료",
           "sensitive": false,
@@ -9800,16 +9798,16 @@
         {
           "schema_scope": "workflow",
           "workflow_id": "wf_internal_transfer",
-          "state_key": "correction_selection_outcome",
+          "state_key": "option_selection_outcome",
           "data_type": "string",
           "nullable": true,
           "default_value": "null",
-          "description": "복수 수정 대상 선택 UI의 검증된 재개 결과",
+          "description": "정정 대상 선택 또는 재인증 재시도 선택 UI의 검증된 재개 결과",
           "retention_scope": "interaction",
           "clear_when": "수정 Route 진입, 초기화 또는 Workflow 종료",
           "sensitive": false,
           "log_policy": "allow",
-          "notes": "selected, cancelled"
+          "notes": "selected"
         },
         {
           "schema_scope": "workflow",
@@ -9870,20 +9868,6 @@
         {
           "schema_scope": "workflow",
           "workflow_id": "wf_internal_transfer",
-          "state_key": "auth_retry_outcome",
-          "data_type": "string",
-          "nullable": true,
-          "default_value": "null",
-          "description": "재인증 선택 UI의 검증된 재개 결과",
-          "retention_scope": "interaction",
-          "clear_when": "Route 결정, 재인증 또는 Workflow 종료",
-          "sensitive": false,
-          "log_policy": "allow",
-          "notes": "retry, cancelled"
-        },
-        {
-          "schema_scope": "workflow",
-          "workflow_id": "wf_internal_transfer",
           "state_key": "prepare_attempt",
           "data_type": "integer",
           "nullable": false,
@@ -9936,6 +9920,20 @@
           "sensitive": false,
           "log_policy": "allow",
           "notes": "Backend Execute 응답 기준"
+        },
+        {
+          "schema_scope": "workflow",
+          "workflow_id": "wf_internal_transfer",
+          "state_key": "option",
+          "data_type": "string",
+          "nullable": true,
+          "default_value": "null",
+          "description": "정정 대상 선택 또는 재인증 선택(retry/cancel) UI의 선택값",
+          "retention_scope": "interaction",
+          "clear_when": "수정 Route·재인증 또는 Workflow 종료",
+          "sensitive": false,
+          "log_policy": "allow",
+          "notes": "from_account, to_account, amount, retry, cancel"
         }
       ],
       "step_data_mappings": [
@@ -10438,8 +10436,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "request_internal_transfer_correction",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "resume.value.correction_selection_outcome",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "resume.value.option_selection_outcome",
           "required_at_step": true,
           "mapping_description": "수정 대상 선택 또는 취소 결과를 저장한다.",
           "notes": null,
@@ -10449,8 +10447,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "request_internal_transfer_correction",
           "direction": "output",
-          "state_key": "change_target",
-          "contract_field_path": "resume.value.change_target",
+          "state_key": "option",
+          "contract_field_path": "resume.value.option",
           "required_at_step": false,
           "mapping_description": "선택한 수정 대상을 저장한다.",
           "notes": "selected일 때 필수",
@@ -10493,8 +10491,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "start_internal_auth",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": false,
           "mapping_description": "기존 재인증 선택 결과를 제거한다.",
           "notes": null,
@@ -10614,8 +10612,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "request_internal_auth_retry",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "resume.value.auth_retry_outcome",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "resume.value.option_selection_outcome",
           "required_at_step": true,
           "mapping_description": "재인증 또는 취소 선택 결과를 저장한다.",
           "notes": "retry, cancelled",
@@ -10900,8 +10898,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "reset_internal_from_account",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "agent.state.correction_selection_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -10955,8 +10953,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "reset_internal_from_account",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -11098,8 +11096,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "reset_internal_to_account",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "agent.state.correction_selection_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -11153,8 +11151,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "reset_internal_to_account",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -11252,8 +11250,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "reset_internal_transfer_amount",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "agent.state.correction_selection_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -11307,8 +11305,8 @@
           "workflow_id": "wf_internal_transfer",
           "step_id": "reset_internal_transfer_amount",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -11378,6 +11376,50 @@
           "required_at_step": true,
           "mapping_description": "Agent가 새 일반 입력 요청 ID를 생성하여 State와 Webhook에 동일하게 저장한다.",
           "notes": "Backend는 같은 ID에 Execution Context, Agent Thread와 ui_contract_id를 연결하고 Resume에서 검증",
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_internal_transfer",
+          "step_id": "request_internal_auth_retry",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "resume.value.option",
+          "required_at_step": true,
+          "mapping_description": "선택한 옵션(retry/cancel)을 저장한다.",
+          "notes": null,
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_internal_transfer",
+          "step_id": "reset_internal_from_account",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "agent.state.option=null",
+          "required_at_step": true,
+          "mapping_description": "정정 완료·초기화 시 정정 대상 선택값을 지운다.",
+          "notes": null,
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_internal_transfer",
+          "step_id": "reset_internal_to_account",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "agent.state.option=null",
+          "required_at_step": true,
+          "mapping_description": "정정 완료·초기화 시 정정 대상 선택값을 지운다.",
+          "notes": null,
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_internal_transfer",
+          "step_id": "reset_internal_transfer_amount",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "agent.state.option=null",
+          "required_at_step": true,
+          "mapping_description": "정정 완료·초기화 시 정정 대상 선택값을 지운다.",
+          "notes": null,
           "validation_result": "OK"
         }
       ],
@@ -11826,12 +11868,11 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
@@ -11846,13 +11887,13 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
-            "auth_attempt"
+            "auth_attempt",
+            "option"
           ],
           "route_summary": "항상 → resolve_external_from_account",
           "validation_result": "OK"
@@ -11882,12 +11923,11 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
@@ -11902,13 +11942,13 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
-            "auth_attempt"
+            "auth_attempt",
+            "option"
           ],
           "route_summary": "항상 → request_recipient_selection",
           "validation_result": "OK"
@@ -11934,12 +11974,11 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
@@ -11950,13 +11989,13 @@
             "confirmation_view",
             "approval_outcome",
             "change_target",
-            "correction_selection_outcome",
+            "option_selection_outcome",
             "blocked_view",
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
-            "auth_attempt"
+            "auth_attempt",
+            "option"
           ],
           "route_summary": "항상 → request_external_transfer_amount",
           "validation_result": "OK"
@@ -11998,8 +12037,8 @@
             "correction_view"
           ],
           "output_state_keys": [
-            "correction_selection_outcome",
-            "change_target",
+            "option_selection_outcome",
+            "option",
             "input_request_id"
           ],
           "route_summary": "selected → 대상별 reset Step | cancelled → END | 계약 오류 → emit_external_transfer_error",
@@ -12022,14 +12061,14 @@
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
+            "option_selection_outcome",
             "auth_attempt"
           ],
           "output_state_keys": [
             "auth_context_id",
             "auth_request_view",
             "auth_status",
-            "auth_retry_outcome",
+            "option_selection_outcome",
             "auth_attempt"
           ],
           "route_summary": "항상 → create_external_auth_context",
@@ -12100,8 +12139,9 @@
             "auth_request_view"
           ],
           "output_state_keys": [
-            "auth_retry_outcome",
-            "input_request_id"
+            "option_selection_outcome",
+            "input_request_id",
+            "option"
           ],
           "route_summary": "retry → start_external_auth | cancelled → END | 계약 오류 → emit_external_transfer_error",
           "validation_result": "OK"
@@ -13032,7 +13072,7 @@
           "data_type": "string",
           "nullable": true,
           "default_value": "null",
-          "description": "사용자가 수정할 타인송금 조건",
+          "description": "사용자가 수정할 대상",
           "retention_scope": "interaction",
           "clear_when": "수정 Route·초기화 또는 Workflow 종료",
           "sensitive": false,
@@ -13056,16 +13096,16 @@
         {
           "schema_scope": "workflow",
           "workflow_id": "wf_external_transfer",
-          "state_key": "correction_selection_outcome",
+          "state_key": "option_selection_outcome",
           "data_type": "string",
           "nullable": true,
           "default_value": "null",
-          "description": "복수 수정 대상 선택 UI 재개 결과",
+          "description": "정정 대상 선택 또는 재인증 재시도 선택 UI의 검증된 재개 결과",
           "retention_scope": "interaction",
           "clear_when": "수정 Route·초기화 또는 Workflow 종료",
           "sensitive": false,
           "log_policy": "allow",
-          "notes": "selected, cancelled"
+          "notes": "selected"
         },
         {
           "schema_scope": "workflow",
@@ -13126,20 +13166,6 @@
         {
           "schema_scope": "workflow",
           "workflow_id": "wf_external_transfer",
-          "state_key": "auth_retry_outcome",
-          "data_type": "string",
-          "nullable": true,
-          "default_value": "null",
-          "description": "재인증 선택 UI 재개 결과",
-          "retention_scope": "interaction",
-          "clear_when": "Route 결정·재인증 또는 Workflow 종료",
-          "sensitive": false,
-          "log_policy": "allow",
-          "notes": "retry, cancelled"
-        },
-        {
-          "schema_scope": "workflow",
-          "workflow_id": "wf_external_transfer",
           "state_key": "prepare_attempt",
           "data_type": "integer",
           "nullable": false,
@@ -13192,6 +13218,20 @@
           "sensitive": false,
           "log_policy": "allow",
           "notes": "Backend Execute 응답 기준"
+        },
+        {
+          "schema_scope": "workflow",
+          "workflow_id": "wf_external_transfer",
+          "state_key": "option",
+          "data_type": "string",
+          "nullable": true,
+          "default_value": "null",
+          "description": "정정 대상 선택 또는 재인증 선택(retry/cancel) UI의 선택값",
+          "retention_scope": "interaction",
+          "clear_when": "수정 Route·재인증 또는 Workflow 종료",
+          "sensitive": false,
+          "log_policy": "allow",
+          "notes": "from_account, recipient, amount, retry, cancel"
         }
       ],
       "step_data_mappings": [
@@ -13694,8 +13734,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "request_external_transfer_correction",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "resume.value.correction_selection_outcome",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "resume.value.option_selection_outcome",
           "required_at_step": true,
           "mapping_description": "수정 선택 또는 취소 결과를 저장한다.",
           "notes": null,
@@ -13705,8 +13745,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "request_external_transfer_correction",
           "direction": "output",
-          "state_key": "change_target",
-          "contract_field_path": "resume.value.change_target",
+          "state_key": "option",
+          "contract_field_path": "resume.value.option",
           "required_at_step": false,
           "mapping_description": "선택한 수정 대상을 저장한다.",
           "notes": null,
@@ -13749,8 +13789,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "start_external_auth",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": false,
           "mapping_description": "기존 재인증 선택 결과를 제거한다.",
           "notes": null,
@@ -13870,8 +13910,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "request_external_auth_retry",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "resume.value.auth_retry_outcome",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "resume.value.option_selection_outcome",
           "required_at_step": true,
           "mapping_description": "재인증 또는 취소 결과를 저장한다.",
           "notes": null,
@@ -14156,8 +14196,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "reset_external_from_account",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "agent.state.correction_selection_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -14211,8 +14251,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "reset_external_from_account",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -14354,8 +14394,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "reset_external_recipient",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "agent.state.correction_selection_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -14409,8 +14449,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "reset_external_recipient",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -14508,8 +14548,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "reset_external_transfer_amount",
           "direction": "output",
-          "state_key": "correction_selection_outcome",
-          "contract_field_path": "agent.state.correction_selection_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -14563,8 +14603,8 @@
           "workflow_id": "wf_external_transfer",
           "step_id": "reset_external_transfer_amount",
           "direction": "output",
-          "state_key": "auth_retry_outcome",
-          "contract_field_path": "agent.state.auth_retry_outcome=null",
+          "state_key": "option_selection_outcome",
+          "contract_field_path": "agent.state.option_selection_outcome=null",
           "required_at_step": true,
           "mapping_description": "수정 전에 오래된 입력·승인·인증 임시 State를 제거한다.",
           "notes": "correction_view와 prepare_attempt는 유지",
@@ -14634,6 +14674,50 @@
           "required_at_step": true,
           "mapping_description": "Agent가 새 일반 입력 요청 ID를 생성하여 State와 Webhook에 동일하게 저장한다.",
           "notes": "Backend는 같은 ID에 Execution Context, Agent Thread와 ui_contract_id를 연결하고 Resume에서 검증",
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_external_transfer",
+          "step_id": "request_external_auth_retry",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "resume.value.option",
+          "required_at_step": true,
+          "mapping_description": "선택한 옵션(retry/cancel)을 저장한다.",
+          "notes": null,
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_external_transfer",
+          "step_id": "reset_external_from_account",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "agent.state.option=null",
+          "required_at_step": true,
+          "mapping_description": "정정 완료·초기화 시 정정 대상 선택값을 지운다.",
+          "notes": null,
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_external_transfer",
+          "step_id": "reset_external_recipient",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "agent.state.option=null",
+          "required_at_step": true,
+          "mapping_description": "정정 완료·초기화 시 정정 대상 선택값을 지운다.",
+          "notes": null,
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_external_transfer",
+          "step_id": "reset_external_transfer_amount",
+          "direction": "output",
+          "state_key": "option",
+          "contract_field_path": "agent.state.option=null",
+          "required_at_step": true,
+          "mapping_description": "정정 완료·초기화 시 정정 대상 선택값을 지운다.",
+          "notes": null,
           "validation_result": "OK"
         }
       ],
