@@ -26,13 +26,13 @@ from agent.workflows.inquiry_support import (
     requests_all_accounts,
 )
 from agent.workflows.slot_extraction_support import (
-    compact as _compact,
-)
-from agent.workflows.slot_extraction_support import (
     grounded_phrase as _grounded_phrase,
 )
 from agent.workflows.slot_extraction_support import (
     invoke_structured,
+)
+from agent.workflows.slot_extraction_support import (
+    scrub_generic_account_hint as _scrub_generic_hint,
 )
 
 AccountSlotExtractor: TypeAlias = Callable[
@@ -67,7 +67,6 @@ SummaryType: TypeAlias = Literal["spending", "income"]
 
 _ACCOUNT_HINT = re.compile(r"([가-힣A-Za-z0-9]+(?:\s+[가-힣A-Za-z0-9]+)?\s*(?:은행|통장|계좌))")
 _ALL_BALANCE_MARKERS = ("전체", "모든", "전부", "다 보여", "모두")
-_GENERIC_ACCOUNT_HINTS = {"내계좌", "전체계좌", "모든계좌", "전계좌"}
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
@@ -83,7 +82,9 @@ class AccountListSlots(_StrictSlots):
         max_length=100,
         description=(
             "사용자가 실제로 말한 은행명, 계좌 별칭 또는 계좌 유형의 원문 구절. "
-            "오타를 고치거나 동의어를 만들지 말고, 특정 계좌 표현이 없으면 null."
+            "오타를 고치거나 동의어를 만들지 말고, 특정 계좌 표현이 없으면 null. "
+            "'계좌', '통장', '목록', '계좌목록', '내 계좌', '전체'처럼 특정 계좌를 "
+            "지칭하지 않는 일반어는 힌트가 아니므로 null로 둔다."
         ),
     )
 
@@ -123,7 +124,9 @@ class TransactionHistorySlots(_PeriodSlots):
         max_length=100,
         description=(
             "사용자가 실제로 말한 은행명, 계좌 별칭 또는 계좌 유형의 원문 구절. "
-            "오타를 고치거나 후보를 확장하지 말고, 없으면 null."
+            "오타를 고치거나 후보를 확장하지 말고, 없으면 null. "
+            "'계좌', '통장', '내 계좌', '전체'처럼 특정 계좌를 지칭하지 않는 "
+            "일반어는 힌트가 아니므로 null로 둔다."
         ),
     )
     all_accounts_requested: bool = Field(
@@ -152,7 +155,9 @@ class PeriodAmountSummarySlots(_PeriodSlots):
         max_length=100,
         description=(
             "사용자가 실제로 말한 은행명, 계좌 별칭 또는 계좌 유형의 원문 구절. "
-            "오타를 고치거나 후보를 확장하지 말고, 없으면 null."
+            "오타를 고치거나 후보를 확장하지 말고, 없으면 null. "
+            "'계좌', '통장', '내 계좌', '전체'처럼 특정 계좌를 지칭하지 않는 "
+            "일반어는 힌트가 아니므로 null로 둔다."
         ),
     )
     keyword: str | None = Field(
@@ -174,9 +179,7 @@ def extract_account_list_slots_by_rule(message: str) -> Mapping[str, Any]:
 
     match = _ACCOUNT_HINT.search(message)
     account_hint = match.group(1).strip() if match is not None else None
-    if _compact(account_hint) in _GENERIC_ACCOUNT_HINTS:
-        account_hint = None
-    return {"account_hint": account_hint}
+    return {"account_hint": _scrub_generic_hint(account_hint)}
 
 
 def extract_balance_slots_by_rule(message: str) -> Mapping[str, Any]:
@@ -246,7 +249,7 @@ async def extract_account_list_slots_llm_first(
             message,
         ),
     )
-    llm_hint = _grounded_phrase(extracted.account_hint, message) if extracted is not None else None
+    llm_hint = _scrub_generic_hint(_grounded_phrase(extracted.account_hint, message)) if extracted is not None else None
     return {"account_hint": llm_hint or fallback.get("account_hint")}
 
 
@@ -267,7 +270,7 @@ async def extract_balance_slots_llm_first(
         return fallback
 
     all_accounts_requested = bool(extracted.all_accounts_requested or fallback.get("all_accounts_requested", False))
-    llm_hint = _grounded_phrase(extracted.account_hint, message)
+    llm_hint = _scrub_generic_hint(_grounded_phrase(extracted.account_hint, message))
     return {
         "account_hint": (None if all_accounts_requested else llm_hint or fallback.get("account_hint")),
         "all_accounts_requested": all_accounts_requested,
@@ -294,7 +297,7 @@ async def extract_transaction_slots_llm_first(
 
     start_date, end_date = _normalized_period(extracted, requested_date)
     all_accounts_requested = bool(extracted.all_accounts_requested or fallback.get("all_accounts_requested", False))
-    account_hint = _grounded_phrase(extracted.account_hint, message)
+    account_hint = _scrub_generic_hint(_grounded_phrase(extracted.account_hint, message))
     return {
         "account_hint": (None if all_accounts_requested else account_hint or fallback.get("account_hint")),
         "all_accounts_requested": all_accounts_requested,
@@ -325,7 +328,9 @@ async def extract_amount_summary_slots_llm_first(
         return fallback
 
     start_date, end_date = _normalized_period(extracted, requested_date)
-    account_hint = _grounded_phrase(extracted.account_hint, message) or fallback.get("account_hint")
+    account_hint = _scrub_generic_hint(_grounded_phrase(extracted.account_hint, message)) or fallback.get(
+        "account_hint"
+    )
     return {
         "account_hint": account_hint,
         "all_accounts_requested": account_hint is None,

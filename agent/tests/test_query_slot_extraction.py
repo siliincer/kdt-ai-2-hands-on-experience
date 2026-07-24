@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from agent.workflows import query_slot_extraction
+from agent.workflows.slot_extraction_support import scrub_generic_account_hint
 
 
 class _FakeStructuredLlm:
@@ -44,6 +45,95 @@ async def test_account_hint_uses_llm_before_rule_fallback(monkeypatch) -> None:
 
     assert result == {"account_hint": "주거래"}
     assert "오타 교정" in fake.prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_generic_llm_hint_is_scrubbed_for_account_list(monkeypatch) -> None:
+    """'계좌목록' 같은 일반어 힌트가 필터로 전달돼 빈 목록이 되는 회귀 방지."""
+
+    fake = _FakeStructuredLlm({"account_hint": "계좌목록"})
+    monkeypatch.setattr(query_slot_extraction, "get_llm", lambda **_: fake)
+
+    result = await query_slot_extraction.extract_account_list_slots_llm_first("내 계좌목록 보여줘")
+
+    assert result == {"account_hint": None}
+
+
+@pytest.mark.asyncio
+async def test_generic_llm_hint_list_word_is_scrubbed(monkeypatch) -> None:
+    fake = _FakeStructuredLlm({"account_hint": "목록"})
+    monkeypatch.setattr(query_slot_extraction, "get_llm", lambda **_: fake)
+
+    result = await query_slot_extraction.extract_account_list_slots_llm_first("내 계좌 목록 보여줘")
+
+    assert result == {"account_hint": None}
+
+
+@pytest.mark.asyncio
+async def test_generic_llm_hint_is_scrubbed_for_balance(monkeypatch) -> None:
+    fake = _FakeStructuredLlm(
+        {
+            "account_hint": "내 계좌",
+            "all_accounts_requested": False,
+        }
+    )
+    monkeypatch.setattr(query_slot_extraction, "get_llm", lambda **_: fake)
+
+    result = await query_slot_extraction.extract_balance_slots_llm_first("내 계좌 잔액 알려줘")
+
+    assert result == {
+        "account_hint": None,
+        "all_accounts_requested": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_generic_llm_hint_scrub_marks_summary_all_accounts(monkeypatch) -> None:
+    fake = _FakeStructuredLlm(
+        {
+            "account_hint": "계좌",
+            "period_preset": "this_month",
+            "start_date": None,
+            "end_date": None,
+            "keyword": None,
+            "summary_type": "spending",
+        }
+    )
+    monkeypatch.setattr(query_slot_extraction, "get_llm", lambda **_: fake)
+
+    result = await query_slot_extraction.extract_amount_summary_slots_llm_first(
+        "이번 달 내 계좌에서 얼마 썼어?",
+        date(2026, 7, 19),
+    )
+
+    assert result["account_hint"] is None
+    assert result["all_accounts_requested"] is True
+
+
+@pytest.mark.asyncio
+async def test_specific_llm_hint_survives_generic_scrub(monkeypatch) -> None:
+    fake = _FakeStructuredLlm(
+        {
+            "account_hint": "생활비 계좌",
+            "all_accounts_requested": False,
+        }
+    )
+    monkeypatch.setattr(query_slot_extraction, "get_llm", lambda **_: fake)
+
+    result = await query_slot_extraction.extract_balance_slots_llm_first("생활비 계좌 잔액 알려줘")
+
+    assert result == {
+        "account_hint": "생활비 계좌",
+        "all_accounts_requested": False,
+    }
+
+
+def test_scrub_generic_account_hint_whole_match_only() -> None:
+    assert scrub_generic_account_hint(None) is None
+    assert scrub_generic_account_hint("계좌 목록") is None
+    assert scrub_generic_account_hint("내 통장") is None
+    assert scrub_generic_account_hint("생활비 계좌") == "생활비 계좌"
+    assert scrub_generic_account_hint("신한은행") == "신한은행"
 
 
 @pytest.mark.asyncio

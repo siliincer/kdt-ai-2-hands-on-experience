@@ -2,7 +2,7 @@
   "manifest_version": "1.0.0",
   "source": {
     "workbook": "docs/agent-management-sheet-v3.xlsx",
-    "sha256": "27795a968e6867d5fccb5172509cc3819dda36a4b3a38e8468a269dfabc70b78"
+    "sha256": "b10d447d4586801b302258264b5c4fbfc70d381e01a17e2477277cf6375ec9f4"
   },
   "common_state_schema": [
     {
@@ -8298,7 +8298,7 @@
         "workflow_name": "본인 계좌 간 이체",
         "workflow_type": "transfer",
         "description": "사용자 본인 소유 계좌 사이에서 자금을 이체한다.",
-        "example_utterances": "생활비 통장에서 저축 통장으로 10만 원 옮겨줘",
+        "example_utterances": "생활비 통장에서 저축 통장으로 10만 원 옮겨줘 | 내 계좌끼리 5만 원 송금해줘",
         "entry_step_id": "extract_internal_transfer_slots",
         "max_risk_level": "R4",
         "approval_policy": "required",
