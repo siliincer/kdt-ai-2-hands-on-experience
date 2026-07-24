@@ -122,6 +122,9 @@ def test_fastapi_lifespan_initializes_and_closes_execution_runtime() -> None:
         response = client.get("/health")
         assert response.status_code == 200
         assert client.post("/chat", json={"message": "잔액 알려줘"}).status_code == 404
+        paths = client.get("/openapi.json").json()["paths"]
+        assert "/chat" not in paths
+        assert "/internal/v1/executions" in paths
         assert app.state.execution_runtime is resources.execution_runtime
         assert resources.closed is False
 

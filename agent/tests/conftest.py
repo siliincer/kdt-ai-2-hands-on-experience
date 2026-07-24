@@ -7,14 +7,9 @@ get_llm의 lru_cache를 비운다.
 
 from __future__ import annotations
 
-import copy
-
 import pytest
-from fastapi.testclient import TestClient
 
 import agent.llm
-from agent.bank_client import get_bank_client
-from agent.data.mock_bank import AUDIT_LOG, MOCK_ACCOUNTS
 
 
 @pytest.fixture(autouse=True)
@@ -29,29 +24,3 @@ def no_openai_key(monkeypatch):
     agent.llm.get_llm.cache_clear()
     yield
     agent.llm.get_llm.cache_clear()
-
-
-@pytest.fixture(autouse=True)
-def local_bank_client(monkeypatch):
-    """BANK_CLIENT env 누출 방지 — 테스트는 항상 로컬 원장을 쓴다."""
-    monkeypatch.delenv("BANK_CLIENT", raising=False)
-    get_bank_client.cache_clear()
-    yield
-    get_bank_client.cache_clear()
-
-
-@pytest.fixture(autouse=True)
-def restore_mock_bank():
-    """execute_transfer가 잔액을 실제로 차감하므로 테스트마다 원장을 복원한다."""
-    snapshot = copy.deepcopy(MOCK_ACCOUNTS)
-    yield
-    MOCK_ACCOUNTS.clear()
-    MOCK_ACCOUNTS.update(snapshot)
-    AUDIT_LOG.clear()
-
-
-@pytest.fixture()
-def client() -> TestClient:
-    from agent.main import app
-
-    return TestClient(app)

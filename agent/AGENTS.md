@@ -116,7 +116,7 @@ Agent가 담당하지 않는다.
 다음 파일은 여러 Workflow가 공유하므로 지정된 통합 담당자만 최종 수정한다.
 
 - 공통 State와 Schema
-- Graph Builder와 Workflow Loader
+- 상위 계약 Graph와 Contract Store
 - Backend Base Client
 - Webhook과 HITL Adapter
 - Tool과 Workflow Registry
@@ -137,8 +137,8 @@ notebooks/testbed/<number>_<workflow_name>_testbed.ipynb
 
 ## 8. 금지된 우회 구현
 
-- 기존 `bank_client.py` 또는 Mock 원장을 신규 Workflow의 금융 처리 경로로 사용
-- `bank_tools.py`에 신규 Workflow 기능을 계속 누적
+- 삭제된 `bank_client.py` 또는 Mock 원장 역할을 신규 Workflow에 다시 추가
+- 삭제된 `bank_tools.py` 형태의 단일 Tool 모음에 기능을 누적
 - API 명세와 다른 임시 필드명 추가
 - Backend 미구현을 이유로 Workflow 내부에 금융 판단 로직 추가
 - UI Payload를 자유 형식 `dict`로만 처리하고 계약 검증 생략

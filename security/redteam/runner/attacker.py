@@ -26,7 +26,11 @@ from security.redteam.models import (
 from security.redteam.runner.client import RequestBudget, RequestBudgetError
 from security.redteam.runner.json_io import decode_bounded_json
 from security.redteam.runner.planner import AdaptivePlanner
-from security.redteam.runner.validator import CandidateValidation, CandidateValidator
+from security.redteam.runner.validator import (
+    CandidateValidation,
+    CandidateValidator,
+    detect_business_facts,
+)
 
 MAX_GENERATION_PROMPT_BYTES = 65_536
 
@@ -164,7 +168,7 @@ class OllamaAttackGenerator:
             try:
                 if not isinstance(draft, dict):
                     raise TypeError("candidate draft must be an object")
-                variation = self._draft_variation(draft)
+                variation = self._draft_variation(draft, template)
                 strategy = draft.get("strategy")
                 if not isinstance(strategy, str) or not strategy.strip():
                     raise ValueError("candidate did not contain a strategy")
@@ -181,7 +185,7 @@ class OllamaAttackGenerator:
                 intent = self._classify_intent(variation)
                 mentions = intent.get("business_fact_mentions")
 
-                if attack.constrain_variation_to_examples:
+                if self._constrain_variation_to_examples(attack):
                     if attack.expected_intent_action is not None:
                         intent["requested_action"] = attack.expected_intent_action.value
 
@@ -266,7 +270,7 @@ class OllamaAttackGenerator:
                 candidate_count,
             )
 
-            if attack.constrain_variation_to_examples:
+            if self._constrain_variation_to_examples(attack):
                 used_variations = {
                     result.generation_variation
                     for result in history
@@ -339,6 +343,16 @@ class OllamaAttackGenerator:
         raise RuntimeError("local Ollama generator exhausted retries: " + ", ".join(sorted(details)))
 
     @staticmethod
+    def _constrain_variation_to_examples(attack: AttackCase) -> bool:
+        return bool(
+            getattr(
+                attack,
+                "constrain_variation_to_examples",
+                False,
+            )
+        )
+
+    @staticmethod
     def _variation_schema(
         body: dict[str, object],
     ) -> dict[str, object]:
@@ -375,12 +389,51 @@ class OllamaAttackGenerator:
             "candidate variation schema",
         )
 
-    @staticmethod
-    def _draft_variation(draft: dict[str, object]) -> str:
+    @classmethod
+    def _draft_variation(
+        cls,
+        draft: dict[str, object],
+        template: str,
+    ) -> str:
         variation = draft.get("variation")
+
         if not isinstance(variation, str) or not variation.strip():
             raise ValueError("candidate did not contain a variation")
-        return variation.strip()
+
+        return cls._normalize_generated_variation(
+            variation,
+            template,
+        )
+
+    @staticmethod
+    def _normalize_generated_variation(
+        value: str,
+        template: str,
+    ) -> str:
+        variation = value.strip()
+
+        if len(variation) >= 2 and variation[0] == variation[-1] and variation[0] in {"'", '"'}:
+            variation = variation[1:-1].strip()
+
+        if template.count("{variation}") != 1:
+            return variation
+
+        prefix, suffix = template.split(
+            "{variation}",
+            1,
+        )
+
+        if not variation.startswith(prefix):
+            return variation
+
+        if suffix and not variation.endswith(suffix):
+            return variation
+
+        end = len(variation) - len(suffix) if suffix else len(variation)
+
+        extracted = variation[len(prefix) : end].strip()
+
+        return extracted or variation
 
     @staticmethod
     def _feedback(history: Sequence[AttackResult]) -> list[dict[str, object]]:
@@ -454,7 +507,13 @@ class OllamaAttackGenerator:
             "target": classified.get("target"),
             "polarity": classified.get("polarity"),
             "reported_speech": classified.get("reported_speech"),
-            "business_fact_mentions": classified.get("business_fact_mentions"),
+            "business_fact_mentions": [
+                fact.value
+                for fact in sorted(
+                    detect_business_facts(variation),
+                    key=lambda item: item.value,
+                )
+            ],
         }
 
     def _request_body(
@@ -480,7 +539,7 @@ class OllamaAttackGenerator:
             if variation_examples
             else []
         )
-        constrain_examples = attack.constrain_variation_to_examples and bool(variation_choices)
+        constrain_examples = self._constrain_variation_to_examples(attack) and bool(variation_choices)
         example_instruction = (
             "variation_examples are constrained phrase slots. Select exactly "
             "one phrase from every non-empty group and return one of the "

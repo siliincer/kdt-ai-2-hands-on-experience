@@ -10,7 +10,7 @@ exact_contract_tool_ids: [fetch_accounts, prepare_account_alias_change, request_
 expected_tool_requests:
   - method: GET
     path: /api/v1/agent-tools/accounts
-    required_arguments: {"account_hint":"생활비 통장","account_capability":"settings","resolve_selection":true,"all_accounts_requested":false,"limit":20}
+    required_arguments: {"account_hint":"생활비 통장","account_capability":"settings","resolve_selection":true,"all_accounts_requested":false,"force_selection":false,"limit":20}
   - method: POST
     path: /api/v1/agent-tools/settings/account-alias:prepare
     required_arguments: {"account_id":"acc_living","alias":"여행 자금"}

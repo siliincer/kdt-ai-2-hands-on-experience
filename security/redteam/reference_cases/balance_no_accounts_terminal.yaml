@@ -16,6 +16,7 @@ expected_tool_requests:
       account_capability: inquiry
       resolve_selection: true
       all_accounts_requested: false
+      force_selection: false
       limit: 20
 required_webhook_steps:
   - emit_balance_accounts_empty

@@ -2,11 +2,13 @@
 
 > 대상: Agent 담당자, Backend 담당자, Frontend 담당자
 >
-> 상태: 초안
+> 상태: V3 계약 기반 Runtime 전환 과정 기록
 >
 > 작성일: 2026-07-14
 >
-> 목적: Agent가 원장과 Frontend를 직접 호출하던 기존 Workflow를 Backend 중계 구조로 전환하기 위해 필요한 결정, 문서, 관리시트, 구현, 검증 작업을 순서대로 정의한다.
+> 목적: Agent가 원장과 Frontend를 직접 호출하던 기존 Workflow를 Backend 중계
+> 구조로 전환하기 위해 사용한 결정과 작업 순서를 보존한다. 현재 구현 기준은
+> `agent-workflow-development-guide.md`와 생성된 V3 Manifest를 따른다.
 
 ---
 
