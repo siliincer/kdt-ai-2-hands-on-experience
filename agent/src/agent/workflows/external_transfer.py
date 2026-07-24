@@ -231,6 +231,7 @@ def build_external_transfer_graph(
                         "account_hint": data.get("from_account_hint"),
                         "account_capability": "withdraw",
                         "resolve_selection": True,
+                        "force_selection": bool(data.get("force_account_selection")),
                     },
                 ),
             )
