@@ -1,4 +1,4 @@
-"""워크플로우 매칭 검증 (키워드 폴백 경로).
+"""V3 계약 Manifest 기반 워크플로우 매칭 검증.
 
 conftest가 OPENAI_API_KEY를 제거하므로 LLM 분류는 항상 실패하고
 _KEYWORD_RULES 폴백이 동작한다.
@@ -13,8 +13,8 @@ from agent.workflow_matcher import (
 )
 
 
-def test_choices_include_example_utterance():
-    """카탈로그 재료에 시트의 example_utterance가 포함된다."""
+def test_choices_include_manifest_example_utterances():
+    """카탈로그 재료에 V3 계약의 example_utterances가 포함된다."""
     choices = {wid: example for wid, _, _, example in _load_workflow_choices()}
     assert "보내줘" in choices["wf_external_transfer"]
     assert "잔액" in choices["wf_balance_inquiry"]
