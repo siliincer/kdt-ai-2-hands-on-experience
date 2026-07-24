@@ -571,7 +571,7 @@ async def test_internal_transfer_correction_multiple_targets_user_selects() -> N
             "outcome": "correction_required",
             "reason": "insufficient_balance",
             "correction_view": {
-                "title": "출금 계좌 또는 금액을 변경해 주세요.",
+                "title": "잔액이 부족합니다. 출금 계좌 또는 금액을 변경해 주세요.",
                 "allowed_change_targets": ["from_account", "amount"],
             },
         },

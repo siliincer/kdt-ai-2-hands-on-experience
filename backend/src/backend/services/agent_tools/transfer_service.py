@@ -146,7 +146,7 @@ async def _evaluate_internal_transfer(
         return _correction(
             TransferReason.INSUFFICIENT_BALANCE,
             ["from_account", "amount"],
-            "출금 계좌 또는 금액을 변경해 주세요.",
+            "잔액이 부족합니다. 출금 계좌 또는 금액을 변경해 주세요.",
         )
 
     already = await _daily_transferred_amount(session, context)
@@ -341,7 +341,7 @@ async def _evaluate_withdrawal(
         return _correction(
             TransferReason.INSUFFICIENT_BALANCE,
             ["from_account", "amount"],
-            "출금 계좌 또는 금액을 변경해 주세요.",
+            "잔액이 부족합니다. 출금 계좌 또는 금액을 변경해 주세요.",
         )
     already = await _daily_transferred_amount(session, context)
     if already + amount > MAX_DAILY_TRANSFER_KRW:
