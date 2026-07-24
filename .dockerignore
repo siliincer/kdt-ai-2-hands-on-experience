@@ -5,3 +5,10 @@ __pycache__
 .venv
 dist
 build
+
+# Local SQLite runtime files
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.sqlite
+**/*.sqlite3
