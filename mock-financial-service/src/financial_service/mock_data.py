@@ -35,6 +35,7 @@ MOCK_ACCOUNTS: list[dict] = [
         "owner": "김지훈",
         "alias": "김지훈 생활비통장",
         "account_number": "110-001-000001",
+        "bank_name": "국민은행",
         "currency": "KRW",
     },
     # 김지훈 부계좌 2종 — 다계좌 선택(account_card_list) UX 및 seed_qa_personas 페르소나와
@@ -60,6 +61,7 @@ MOCK_ACCOUNTS: list[dict] = [
         "owner": "박서연",
         "alias": "박서연 메인통장",
         "account_number": "110-002-000002",
+        "bank_name": "신한은행",
         "currency": "KRW",
     },
     {
@@ -67,6 +69,7 @@ MOCK_ACCOUNTS: list[dict] = [
         "owner": "이도윤",
         "alias": "이도윤 프리랜서통장",
         "account_number": "110-003-000003",
+        "bank_name": "우리은행",
         "currency": "KRW",
     },
     {
@@ -74,6 +77,7 @@ MOCK_ACCOUNTS: list[dict] = [
         "owner": "최수아",
         "alias": "최수아 통장",
         "account_number": "110-004-000004",
+        "bank_name": "하나은행",
         "currency": "KRW",
     },
     {
@@ -81,6 +85,7 @@ MOCK_ACCOUNTS: list[dict] = [
         "owner": "정도윤",
         "alias": "정도윤 통장",
         "account_number": "110-005-000005",
+        "bank_name": "농협은행",
         "currency": "KRW",
     },
 ]
@@ -491,6 +496,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
         "owner": "통신사",
         "alias": "통신비·구독료 자동납부",
         "account_number": "990-001-000001",
+        "bank_name": "신한은행",
         "currency": "KRW",
     },
     {
@@ -498,6 +504,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
         "owner": "헬스장",
         "alias": "헬스장 회비",
         "account_number": "990-002-000002",
+        "bank_name": "국민은행",
         "currency": "KRW",
     },
     {
@@ -505,6 +512,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
         "owner": "학원",
         "alias": "자녀 학원비",
         "account_number": "990-003-000003",
+        "bank_name": "우리은행",
         "currency": "KRW",
     },
     {
@@ -512,6 +520,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
         "owner": "관리사무소",
         "alias": "월세·관리비",
         "account_number": "990-004-000004",
+        "bank_name": "하나은행",
         "currency": "KRW",
     },
     {
@@ -519,6 +528,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
         "owner": "저축은행",
         "alias": "저축 이체",
         "account_number": "990-005-000005",
+        "bank_name": "농협은행",
         "currency": "KRW",
     },
     {
@@ -526,6 +536,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
         "owner": "증권사",
         "alias": "투자 자동이체",
         "account_number": "990-006-000006",
+        "bank_name": "신한은행",
         "currency": "KRW",
     },
     {
@@ -533,6 +544,7 @@ MOCK_BILLER_ACCOUNTS: list[dict] = [
         "owner": "대출은행",
         "alias": "대출이자",
         "account_number": "990-007-000007",
+        "bank_name": "국민은행",
         "currency": "KRW",
     },
 ]
@@ -1131,6 +1143,7 @@ MOCK_EXTERNAL_SOURCE_ACCOUNTS: list[dict] = [
         "owner": "외부입금원(급여/지인송금)",
         "alias": "급여·지인 입금",
         "account_number": "999-000-000099",
+        "bank_name": "우리은행",
         "currency": "KRW",
     },
 ]

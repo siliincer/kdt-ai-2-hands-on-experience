@@ -19,7 +19,7 @@ config = context.config
 # asyncpg 드라이버 그대로 넘기면 greenlet 컨텍스트 없이 await_only()가 호출되어
 # MissingGreenlet 에러가 난다. 마이그레이션 전용으로 동기 드라이버(psycopg2)로 치환.
 sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg2")
-config.set_main_option("sqlalchemy.url", sync_url)
+config.set_main_option("sqlalchemy.url", sync_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # this is basically a fileConfig object.

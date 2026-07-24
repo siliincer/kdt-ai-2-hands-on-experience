@@ -41,6 +41,24 @@ export const useChatStore = create<ChatState>((set) => ({
       };
     }),
 
+  completeRunning: (text) =>
+    set((state) => {
+      const targetId = state.runningId;
+      if (!targetId) return state;
+      return {
+        runningId: null,
+        messages: state.messages.map((message) =>
+          message.id === targetId
+            ? {
+                ...message,
+                parts: [...message.parts, { type: 'text', text }],
+                status: 'complete',
+              }
+            : message,
+        ),
+      };
+    }),
+
   failRunning: (text) =>
     set((state) => {
       const targetId = state.runningId;

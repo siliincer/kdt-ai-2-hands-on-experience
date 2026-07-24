@@ -1,2 +1,5 @@
 financial.db
+financial.db-shm
+financial.db-wal
+financial.db*.bak*
 financial_service.egg-info/

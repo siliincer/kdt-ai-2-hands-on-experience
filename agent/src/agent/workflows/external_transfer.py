@@ -34,6 +34,9 @@ from agent.workflows.workflow_support import masked_account_options as _account_
 from agent.workflows.workflow_support import (
     new_input_request_id as _default_input_request_id,
 )
+from agent.workflows.workflow_support import (
+    preserve_value_on_reset as _preserve_value,
+)
 from agent.workflows.workflow_support import publish_event as _publish
 from agent.workflows.workflow_support import resume_data_update as _resume_update
 from agent.workflows.workflow_support import resume_state_data as _resume_data
@@ -47,8 +50,12 @@ WORKFLOW_ID = "wf_external_transfer"
 _tool_error_update = build_tool_error_update("송금을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.")
 
 # 관리시트 route_key=limit_exceeded(1회 송금 한도) 스펙 — Prepare 호출 전에 먼저 걸러
-# 백엔드까지 안 보내고 바로 차단한다.
-_TRANSFER_LIMIT = 50_000_000
+# 백엔드까지 안 보내고 바로 차단한다. backend/src/backend/services/agent_tools/
+# policy_constants.py의 MAX_SINGLE_TRANSFER_KRW와 반드시 같은 값이어야 한다 —
+# 여기서 걸러지지 않은 초과 금액은 결국 backend에서 correction_required(단일
+# target=["amount"])로 조용히 반려되는데, 그 경로는 사유를 사용자에게 보여주지
+# 않고 바로 금액 재입력으로 넘어간다(별도 버그, 아직 안 고침).
+_TRANSFER_LIMIT = 5_000_000
 
 # 승인·수정 화면의 정정 대상 3종 — route_external_transfer_correction,
 # request_external_transfer_approval, request_external_transfer_correction이 공유한다.
@@ -185,11 +192,26 @@ def build_external_transfer_graph(
                 "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
+            # "수취인 변경"으로 들어왔다가 취소하면(원래 수취인이 보존돼 있음)
+            # 전체 요청을 끝내지 않고 그 값 그대로 Prepare를 다시 호출해 새
+            # confirmation을 받는다 — 예전 confirmation은 이미 폐기돼 재사용하면
+            # 승인 시 409가 난다(계약 7.6). 최초 수취인 확정 단계에서 취소하면
+            # 기존대로 종료한다.
+            has_prior_recipient = (
+                data.get("to_recipient_id") is not None or data.get("to_recipient_candidate_id") is not None
+            )
+            cancel_update = _resume_update(resumed, input_request_id=None)
+            if has_prior_recipient:
+                # FE 취소 제출값이 to_recipient_id/candidate_id를 명시적으로
+                # null로 보내(RecipientSelectUI) 보존해 둔 값을 지워버린다 —
+                # Prepare 재호출 직전에 원래 값으로 복원한다.
+                cancel_update["to_recipient_id"] = data.get("to_recipient_id")
+                cancel_update["to_recipient_candidate_id"] = data.get("to_recipient_candidate_id")
             return {
                 "current_step_id": "request_recipient_selection",
-                "route_key": "cancelled",
-                "status": "completed",
-                "data": _resume_update(resumed, input_request_id=None),
+                "route_key": "cancelled_return" if has_prior_recipient else "cancelled",
+                "status": "running" if has_prior_recipient else "completed",
+                "data": cancel_update,
             }
         return _tool_error_update(
             "request_recipient_selection",
@@ -209,6 +231,7 @@ def build_external_transfer_graph(
                         "account_hint": data.get("from_account_hint"),
                         "account_capability": "withdraw",
                         "resolve_selection": True,
+                        "force_selection": bool(data.get("force_account_selection")),
                     },
                 ),
             )
@@ -222,9 +245,26 @@ def build_external_transfer_graph(
                 ValueError("출금 계좌 확인 결과가 올바르지 않습니다."),
             )
         account_ids = list(result.get("account_ids") or [])
+        accounts = list(result.get("accounts") or [])
+        # 발화에 출금 계좌를 콕 집지 않았고 후보가 여러 개라도, 기본 출금 계좌가
+        # 있으면 매번 물어보지 않고 그걸로 확정한다 — 승인 화면에서 언제든
+        # ERow(수정 진입점)로 바꿀 수 있으니 선택 단계를 강제할 필요가 없다.
+        # 단, 사용자가 승인 화면에서 직접 "계좌 변경"을 눌러 들어온 경우
+        # (force_account_selection)는 자동 확정하지 않고 선택 화면을 보여준다 —
+        # 안 그러면 같은 기본 계좌로 계속 되돌아가 버튼이 무효해 보인다.
+        if (
+            outcome == "selection_required"
+            and not data.get("from_account_hint")
+            and not data.get("force_account_selection")
+        ):
+            default_account = next((a for a in accounts if a.get("is_default")), None)
+            if default_account is not None:
+                outcome = "resolved"
+                account_ids = [default_account["account_id"]]
         update: dict[str, Any] = {
             "account_resolution_outcome": outcome,
-            "accounts": list(result.get("accounts") or []),
+            "accounts": accounts,
+            "force_account_selection": None,
         }
         if outcome == "resolved":
             if len(account_ids) != 1:
@@ -281,11 +321,22 @@ def build_external_transfer_graph(
                 "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
+            # "계좌 변경"으로 들어왔다가 취소하면(원래 계좌가 보존돼 있음) 전체
+            # 요청을 끝내지 않고 그 계좌 그대로 Prepare를 다시 호출해 새
+            # confirmation을 받는다 — 예전 confirmation은 이미 폐기돼 재사용하면
+            # 승인 시 409가 난다(계약 7.6). 최초 계좌 확정 단계에서 취소하면
+            # 기존대로 종료한다.
+            has_prior_account = data.get("from_account_id") is not None
+            cancel_update = _resume_update(resumed, input_request_id=None)
+            if has_prior_account:
+                # account_ids가 빈 배열이면 ResumeStateMapper가 account_ids[0]을
+                # None으로 매핑해 넣는다 — 보존해 둔 값을 지워버리므로 복원한다.
+                cancel_update["from_account_id"] = data.get("from_account_id")
             return {
                 "current_step_id": "request_external_from_account_selection",
-                "route_key": "cancelled",
-                "status": "completed",
-                "data": _resume_update(resumed, input_request_id=None),
+                "route_key": "cancelled_return" if has_prior_account else "cancelled",
+                "status": "running" if has_prior_account else "completed",
+                "data": cancel_update,
             }
         return _tool_error_update(
             "request_external_from_account_selection",
@@ -336,6 +387,7 @@ def build_external_transfer_graph(
         }
 
     async def request_external_transfer_amount(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        data = _data(state)
         input_request_id = dependencies.input_request_id_factory()
         event = dependencies.webhook_builder.need_input(
             chat_session_id=_config_context(config, "chat_session_id"),
@@ -365,11 +417,22 @@ def build_external_transfer_graph(
                 "data": _resume_update(resumed, input_request_id=None),
             }
         if outcome == "cancelled":
+            # "금액 변경"으로 들어왔다가 취소하면(원래 금액이 보존돼 있음) 전체
+            # 요청을 끝내지 않고 그 금액 그대로 Prepare를 다시 호출해 새
+            # confirmation을 받는다 — 예전 confirmation은 이미 폐기돼 재사용하면
+            # 승인 시 409가 난다(계약 7.6). 최초 금액 확정 단계에서 취소하면
+            # 기존대로 종료한다.
+            has_prior_amount = data.get("amount") is not None
+            cancel_update = _resume_update(resumed, input_request_id=None)
+            if has_prior_amount:
+                # FE 취소 제출값이 amount를 명시적으로 null로 보내(NumberInputUI)
+                # 보존해 둔 값을 지워버린다 — Prepare 재호출 직전에 복원한다.
+                cancel_update["amount"] = data.get("amount")
             return {
                 "current_step_id": "request_external_transfer_amount",
-                "route_key": "cancelled",
-                "status": "completed",
-                "data": _resume_update(resumed, input_request_id=None),
+                "route_key": "cancelled_return" if has_prior_amount else "cancelled",
+                "status": "running" if has_prior_amount else "completed",
+                "data": cancel_update,
             }
         return _tool_error_update(
             "request_external_transfer_amount",
@@ -511,34 +574,54 @@ def build_external_transfer_graph(
 
         return node
 
-    reset_external_from_account = _make_reset_node(
-        "reset_external_from_account",
-        clears=(
-            "from_account_hint",
-            "from_account_id",
-            "account_resolution_outcome",
-            "accounts",
-            "account_selection_outcome",
-        ),
-    )
+    async def reset_external_from_account(state: AgentState) -> dict[str, Any]:
+        data = _data(state)
+        base = await _make_reset_node(
+            "reset_external_from_account",
+            clears=(
+                "from_account_hint",
+                "from_account_id",
+                "account_resolution_outcome",
+                "accounts",
+                "account_selection_outcome",
+            ),
+        )(state)
+        # 사용자가 승인 화면에서 직접 "계좌 변경"을 눌렀을 때는 기본 계좌로 또
+        # 자동 확정하지 않고 선택 화면을 보여준다(resolve_external_from_account
+        # 참고) — 그렇지 않으면 바꾸기 버튼이 같은 계좌로 계속 되돌아가 아무
+        # 효과가 없어 보인다.
+        base["data"]["force_account_selection"] = True
+        base["data"] = _preserve_value(data, base["data"], keys=("from_account_id",))
+        return base
+
+    async def reset_external_recipient(state: AgentState) -> dict[str, Any]:
+        data = _data(state)
+        base = await _make_reset_node(
+            "reset_external_recipient",
+            clears=(
+                "recipient_name_hint",
+                "recipient_resolution_outcome",
+                "recipient_selection_reason",
+                "recipient_selection_outcome",
+                "to_recipient_id",
+                "to_recipient_candidate_id",
+            ),
+        )(state)
+        base["data"] = _preserve_value(data, base["data"], keys=("to_recipient_id", "to_recipient_candidate_id"))
+        return base
+
+    async def reset_external_transfer_amount(state: AgentState) -> dict[str, Any]:
+        data = _data(state)
+        base = await _make_reset_node(
+            "reset_external_transfer_amount",
+            clears=("amount", "amount_input_outcome"),
+        )(state)
+        base["data"] = _preserve_value(data, base["data"], keys=("amount",))
+        return base
+
     # 수취인 수정은 항상 request_recipient_selection(초기 화면)으로 간다 — 같은
     # 이름 힌트로는 자동 재확정만 반복되므로 resolve_recipient_hint로 되돌아가지
     # 않는다(roadmap §2691 그대로).
-    reset_external_recipient = _make_reset_node(
-        "reset_external_recipient",
-        clears=(
-            "recipient_name_hint",
-            "recipient_resolution_outcome",
-            "recipient_selection_reason",
-            "recipient_selection_outcome",
-            "to_recipient_id",
-            "to_recipient_candidate_id",
-        ),
-    )
-    reset_external_transfer_amount = _make_reset_node(
-        "reset_external_transfer_amount",
-        clears=("amount", "amount_input_outcome"),
-    )
 
     async def route_external_transfer_correction(state: AgentState) -> dict[str, Any]:
         view = _data(state).get("correction_view") or {}
@@ -549,14 +632,12 @@ def build_external_transfer_graph(
                 "current_step_id": "route_external_transfer_correction",
                 "route_key": "invalid",
             }
-        if len(valid_targets) == 1:
-            return {
-                "current_step_id": "route_external_transfer_correction",
-                "route_key": f"single:{valid_targets[0]}",
-            }
+        # 대상이 하나뿐이어도 곧장 재입력으로 넘어가지 않는다 — 반려 사유(title,
+        # 예: "1회 이체 한도를 초과했습니다")를 보여주고 사용자가 확인을 눌러야
+        # 다음으로 진행된다(사유 없이 조용히 재입력창만 뜨던 버그 수정).
         return {
             "current_step_id": "route_external_transfer_correction",
-            "route_key": "multiple",
+            "route_key": "valid",
         }
 
     async def request_external_transfer_correction(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -899,6 +980,7 @@ def build_external_transfer_graph(
         {
             "selected": "resolve_external_from_account",
             "cancelled": END,
+            "cancelled_return": "start_external_transfer_prepare",
             "error": "emit_external_transfer_error",
         },
     )
@@ -919,6 +1001,7 @@ def build_external_transfer_graph(
         {
             "selected": "check_external_transfer_amount",
             "cancelled": END,
+            "cancelled_return": "start_external_transfer_prepare",
             "error": "emit_external_transfer_error",
         },
     )
@@ -939,6 +1022,7 @@ def build_external_transfer_graph(
         {
             "submitted": "check_external_transfer_amount",
             "cancelled": END,
+            "cancelled_return": "start_external_transfer_prepare",
             "error": "emit_external_transfer_error",
         },
     )
@@ -974,10 +1058,7 @@ def build_external_transfer_graph(
         "route_external_transfer_correction",
         _route_key,
         {
-            "single:from_account": "reset_external_from_account",
-            "single:recipient": "reset_external_recipient",
-            "single:amount": "reset_external_transfer_amount",
-            "multiple": "request_external_transfer_correction",
+            "valid": "request_external_transfer_correction",
             "invalid": "emit_external_transfer_error",
         },
     )
@@ -1056,6 +1137,10 @@ def _confirmation_payload(raw_view: Any) -> dict[str, Any]:
         "variant": view.get("variant"),
         "warning_codes": view.get("warning_codes"),
         "expires_at": view.get("expires_at"),
+        # FE ConfirmModalUI는 이 필드로 행별 수정 진입점(ERow)을 켠다 — "actions"는
+        # FE가 실제로 읽지 않는 죽은 필드였다(기본계좌 지정해도 출금계좌를 승인
+        # 화면에서 못 바꾸던 버그의 원인).
+        "allowed_change_targets": ["from_account", "recipient", "amount"],
         "actions": [
             "approve",
             "modify_from_account",
