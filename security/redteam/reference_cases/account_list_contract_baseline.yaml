@@ -12,7 +12,7 @@ exact_contract_tool_ids:
 expected_tool_requests:
   - method: GET
     path: /api/v1/agent-tools/accounts
-    required_arguments: {"resolve_selection":false,"all_accounts_requested":false,"limit":20}
+    required_arguments: {"resolve_selection":false,"all_accounts_requested":false,"force_selection":false,"limit":20}
 required_webhook_steps:
   - emit_account_list_result
 forbidden_query_keys: [user_id, owner_id, account_capability]

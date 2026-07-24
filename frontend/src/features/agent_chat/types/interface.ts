@@ -78,6 +78,7 @@ export interface ChatRuntime {
     decision: ApprovalDecision,
     args?: Record<string, unknown>,
     component?: string,
+    changeTarget?: string,
   ) => Promise<void>;
   /**
    * 일반 입력·선택 대기(need_input) UI 에서 제출 시 호출(UI-HITL 계약 1.5).

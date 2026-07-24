@@ -5,12 +5,21 @@ state에서 만들어 GuardrailEngine에 넘길 context dict를 구성한다.
 
 target_owner / action_type은 키워드 휴리스틱 MVP다. 가드레일 오탐은 정상 요청
 차단으로 이어지므로 '3인칭 소유 표현 + 계좌 단어 인접'처럼 보수적인 패턴만
-쓴다. (후속 과제: extract_transfer_slots처럼 LLM 우선 + 키워드 폴백으로 승격)
+쓴다.
+
+또한 Intent Gate(intent_gate.py) 분류 결과를 context에 함께 노출한다:
+  - intent_gate_status: ok | failed | skipped
+  - intent_attack: 분류가 공격으로 본 경우 True (실제 차단은 global_guardrail_node)
+  - intent_category / requested_action / target: 관측성·DevSecOps 인계용 라벨
+분류 라벨을 context에 넣어 두면 DevSecOps가 이후 guardrail_rules.yaml에
+`intent_attack == true` 같은 규칙을 추가할 여지가 생긴다.
 """
 
 from __future__ import annotations
 
 import re
+
+from agent.policy.intent_gate import classify_intent
 
 # "남편 계좌", "엄마의 통장", "친구 잔액"처럼 3인칭 소유 표현이 계좌 단어와
 # 인접한 경우만 타인 계좌 접근으로 본다 ("친구한테 보내줘"는 매칭되지 않음).
@@ -38,4 +47,18 @@ def build_global_context(state: dict) -> dict:
         context["target_owner"] = "other"
     if any(word in user_input for word in _INQUIRY_WORDS):
         context["action_type"] = "inquiry"
+
+    # Intent Gate: 공격 의도 분류 결과를 context에 노출한다.
+    # status "ok"(LLM) / "degraded"(정규식 폴백) 모두 판정이 확정된 상태다.
+    gate = classify_intent(user_input)
+    context["intent_gate_status"] = gate.status
+    if gate.status in ("ok", "degraded"):
+        context["intent_attack"] = gate.is_attack
+        context["intent_category"] = gate.category or "none"
+        if gate.reason:
+            context["intent_reason"] = gate.reason
+        # 라벨(requested_action, target 등)을 개별 변수로도 노출
+        for label_key, label_value in gate.labels.items():
+            context[label_key] = label_value
+
     return context

@@ -15,9 +15,17 @@ services:
       DATABASE_URL: ${COMPOSE_DATABASE_URL:?COMPOSE_DATABASE_URL is required for EC2}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required for EC2}
       AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:?AGENT_WEBHOOK_SECRET is required for EC2}
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN is required for EC2}
+      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN:?BACKEND_SERVICE_TOKEN is required for EC2}
+      AGENT_SERVICE_URL: http://agent-service:8001
+      MOCK_FINANCIAL_SERVICE_URL: http://mock-financial-service:8002
+      FINANCIAL_ANALYTICS_KEY: ${FINANCIAL_ANALYTICS_KEY:-analytics-demo-key}
     restart: unless-stopped
 
   agent:
+    restart: unless-stopped
+
+  mock-financial-service:
     restart: unless-stopped
 
   nginx:

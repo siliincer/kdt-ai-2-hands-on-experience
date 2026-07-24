@@ -83,6 +83,7 @@ class _Backend:
                 "request": {
                     "resolve_selection": "false",
                     "all_accounts_requested": "false",
+                    "force_selection": "false",
                     "limit": "20",
                 },
                 "response": {"account_ids": ["acc_living"]},

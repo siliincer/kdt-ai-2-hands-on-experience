@@ -106,6 +106,19 @@ export function foldEvent(
           payload?: Record<string, unknown>;
         }) ?? {};
       const uiType = ui.type ?? 'confirm_modal';
+      // 같은 턴 안에서 승인 카드가 여러 번 뜨면(금액 변경 → 재확인 등) 이전
+      // 카드가 상호작용 가능한 상태로 그대로 남아 화면에 두 개가 겹쳐 보인다
+      // — 새 카드가 뜰 때 이전 미해결 confirm 카드는 대체됐다고 표시한다.
+      for (let i = 0; i < parts.length; i += 1) {
+        const p = parts[i];
+        if (
+          p.type === 'tool-call' &&
+          p.toolName.startsWith('confirm_') &&
+          !p.args?.superseded
+        ) {
+          parts[i] = { ...p, args: { ...(p.args ?? {}), superseded: true } };
+        }
+      }
       parts.push({
         type: 'tool-call',
         toolCallId: newId(),
@@ -145,8 +158,25 @@ export function foldEvent(
       return { ...message, parts, status: 'error' };
     }
     case 'blocked': {
-      // 업무 차단 종료(workflow_failed, 예: 한도 초과). content 에 사유. terminal.
-      if (event.content) parts.push({ type: 'text', text: event.content });
+      // 업무 차단 종료(workflow_failed, 예: 한도 초과). ui.payload에 title·description
+      // (BlockedView)이 실려 온다 — component와 동일하게 tool-call로 라우팅해야
+      // BlockedMessageUI가 description(차단 사유)까지 그린다. terminal.
+      const ui =
+        (metadata?.ui as {
+          type?: string;
+          payload?: Record<string, unknown>;
+        }) ?? {};
+      const uiType = ui.type ?? 'blocked_message';
+      parts.push({
+        type: 'tool-call',
+        toolCallId: newId(),
+        toolName: `render_${uiType}`,
+        argsText: event.content,
+        args: {
+          ...(ui.payload ?? {}),
+          ui_contract_id: metadata?.ui_contract_id,
+        },
+      });
       return { ...message, parts, status: 'error' };
     }
     case 'done': {

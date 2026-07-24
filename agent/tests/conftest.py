@@ -7,14 +7,9 @@ get_llm의 lru_cache를 비운다.
 
 from __future__ import annotations
 
-import copy
-
 import pytest
-from fastapi.testclient import TestClient
 
 import agent.llm
-from agent.bank_client import get_bank_client
-from agent.data.mock_bank import AUDIT_LOG, MOCK_ACCOUNTS
 
 
 @pytest.fixture(autouse=True)
@@ -32,26 +27,13 @@ def no_openai_key(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def local_bank_client(monkeypatch):
-    """BANK_CLIENT env 누출 방지 — 테스트는 항상 로컬 원장을 쓴다."""
-    monkeypatch.delenv("BANK_CLIENT", raising=False)
-    get_bank_client.cache_clear()
+def disable_intent_gate(monkeypatch):
+    """기본 테스트 환경에서는 Intent Gate를 끈다.
+
+    이 환경은 LLM을 강제 실패시키는 결정적 경로다(no_openai_key). Intent Gate는
+    LLM 분류를 요구하므로 여기서는 동작할 수 없고, 켜 두면 fail-closed로 모든
+    요청이 차단되어 규칙 엔진 단위 테스트를 오염시킨다. 게이트 자체 동작은
+    test_intent_gate.py가 분류기를 monkeypatch하고 게이트를 켜서 검증한다.
+    """
+    monkeypatch.setenv("GUARDRAIL_INTENT_GATE_ENABLED", "false")
     yield
-    get_bank_client.cache_clear()
-
-
-@pytest.fixture(autouse=True)
-def restore_mock_bank():
-    """execute_transfer가 잔액을 실제로 차감하므로 테스트마다 원장을 복원한다."""
-    snapshot = copy.deepcopy(MOCK_ACCOUNTS)
-    yield
-    MOCK_ACCOUNTS.clear()
-    MOCK_ACCOUNTS.update(snapshot)
-    AUDIT_LOG.clear()
-
-
-@pytest.fixture()
-def client() -> TestClient:
-    from agent.main import app
-
-    return TestClient(app)

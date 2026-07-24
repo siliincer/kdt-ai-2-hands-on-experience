@@ -1,6 +1,6 @@
 # Agent와 Backend 연동 계약
 
-> 상태: 현재 구현을 기준으로 정리한 목표 계약
+> 상태: 2026-07-23 `main` 구현 기준 계약
 >
 > 대상: Agent, Backend, Frontend 개발자
 >
@@ -42,26 +42,25 @@ Frontend는 Agent를 직접 호출하지 않는다. Agent도 Frontend에 직접 
 | 구간 | API 또는 방식 | 상태 |
 | --- | --- | --- |
 | Frontend -> Backend | `POST /api/v1/chat` | 구현됨 |
-| Frontend -> Backend | `POST /api/v1/agent/approve` | 구현됨, 현재는 Mock Agent 재개 |
+| Frontend -> Backend | `POST /api/v1/agent/approve` | 구현됨, 실제 Agent 재개 |
+| Frontend -> Backend | `POST /api/v1/agent/input` | 구현됨 |
+| Frontend -> Backend | `POST /api/v1/agent/authenticate` | 구현됨 |
 | Frontend -> Backend | `GET /api/v1/sse/ticket` | 구현됨 |
 | Frontend -> Backend | `GET /api/v1/sse/connect` | 구현됨 |
 | Agent -> Backend | `POST /api/v1/webhooks/agent` | 구현됨 |
 | Backend -> Frontend | Redis Stream 기반 SSE 중계 | 구현됨 |
-| Frontend -> Backend | `GET /api/v1/ui/balance` | 구현됨, 현재 Mock 데이터 |
-| Backend -> Agent | 실행 시작 API 호출 | 미구현, Mock Driver 사용 중 |
-| Backend -> Agent | Workflow 재개 API 호출 | 미구현, Mock Driver 사용 중 |
-| Agent -> Backend | `/api/v1/agent-tools/*` | 미구현 |
-| 승인 Context | 생성, 검증, 만료, 변경 무효화 | 미구현 |
-| 추가 인증 Context | 생성, 검증, 만료 | 미구현 |
-| 금융 실행 멱등성 | `Idempotency-Key` 저장과 재사용 | 미구현 |
+| Frontend -> Backend | `GET /api/v1/ui/balance` | 구현됨, 계정계 조회 |
+| Backend -> Agent | 실행 시작 API 호출 | 구현됨, `agent_client.py` 사용 |
+| Backend -> Agent | Workflow 재개 API 호출 | 구현됨, `agent_client.py` 사용 |
+| Agent -> Backend | `/api/v1/agent-tools/*` | 구현됨 |
+| 승인 Context | 생성, 검증, 만료, 변경 무효화 | 구현됨 |
+| 추가 인증 Context | 생성, 검증, 만료 | 구현됨 |
+| 금융 실행 멱등성 | `Idempotency-Key` 저장과 재사용 | 구현됨 |
 
-### 2.2 이 문서에서 사용하는 상태 표기
+### 2.2 구현 기준
 
-- `현재`: 지금 코드로 호출할 수 있는 계약
-- `목표`: Backend와 Agent 연동을 위해 추가해야 하는 계약
-- `확장`: Frontend UI와 함께 이후 추가할 계약
-
-Agent는 `목표` 또는 `확장` 상태 API가 Backend에 배포되기 전에 호출하지 않는다.
+이 문서의 실행·재개·Webhook·Tool API는 현재 `main`에서 호출 가능한 계약이다.
+향후 확장 항목은 본문에서 별도로 표시한다.
 
 ### 2.3 Webhook 하나로 충분하지 않은 이유
 
@@ -521,9 +520,10 @@ Backend는 Chat Session 소유권과 현재 대기 중인 입력을 확인하고
 
 ---
 
-## 8. Backend -> Agent 내부 API 목표 계약
+## 8. Backend -> Agent 내부 API 계약
 
-현재 `backend/services/chat_service.py`의 Mock Driver 호출을 Agent HTTP Client 호출로 교체한다.
+`backend/services/chat_service.py`는 `agent_client.py`를 통해 Agent HTTP API를 호출한다.
+구형 Mock Driver는 런타임에서 사용하지 않는다.
 
 ### 8.1 실행 시작
 
@@ -793,13 +793,14 @@ Agent는 `2xx`가 아니거나 네트워크 오류가 발생하면 읽기 전용
 
 ---
 
-## 10. 일반 사용자 입력 이벤트 확장
+## 10. 일반 사용자 입력 이벤트
 
-현재 Backend와 Frontend는 승인 UI를 중심으로 구현되어 있다. 목표 계약에서는 계좌·수취인·금액·기간·별칭·선택 입력을 처리하기 위해 `need_input`과 UI 계약 Registry를 지원한다.
+Backend와 Frontend는 계좌·수취인·금액·기간·별칭·선택 입력을 처리하기 위해
+`need_input`과 UI 계약 Registry를 지원한다.
 
 일반 입력 요청은 `prompt_for`를 사용하지 않는다. Agent가 발급한 `input_request_id`가 요청 인스턴스를 식별하고, Backend가 Pending Input에 저장한 `ui_contract_id`가 제출값 Schema를 결정한다.
 
-목표 Payload:
+Payload:
 
 ```json
 {
@@ -822,7 +823,7 @@ Agent는 `2xx`가 아니거나 네트워크 오류가 발생하면 읽기 전용
 }
 ```
 
-지원 목표 UI:
+지원 UI:
 
 | `ui.type` | 목적 | Backend 검증 후 Resume 값 예시 |
 | --- | --- | --- |
@@ -834,7 +835,8 @@ Agent는 `2xx`가 아니거나 네트워크 오류가 발생하면 읽기 전용
 | `option_select` | 합계 유형·수정 대상·재인증 선택 | UI 계약별 Enum 값 |
 | `auth_request` | Backend 추가 인증 진행 | `{"auth_status":"verified"}` |
 
-`need_input`은 Backend SSE Schema, Frontend Type, 이벤트 Fold 로직, UI Registry와 `/api/v1/agent/input`이 함께 지원된 이후 사용한다.
+`need_input`은 Backend SSE Schema, Frontend 이벤트 처리, UI Registry와
+`/api/v1/agent/input`을 통해 전달·검증·재개한다.
 
 ### 10.1 `recipient_select`
 
@@ -889,7 +891,7 @@ Agent는 `2xx`가 아니거나 네트워크 오류가 발생하면 읽기 전용
 
 ---
 
-## 11. Agent -> Backend Tool API 목표 계약
+## 11. Agent -> Backend Tool API 계약
 
 Agent Tool API의 요청·응답 필드, 오류, 멱등성과 Backend 검증 항목은 `agent/docs/agent-tools-api-spec.md`를 정본으로 사용한다. 이 문서에서는 전체 통신 구조와 책임 경계만 정의하며 Endpoint별 Schema를 중복 정의하지 않는다.
 
@@ -1035,18 +1037,16 @@ Workflow 종료 후 State는 보존 정책에 따라 만료한다. 금융 감사
 
 ---
 
-## 15. Backend 추가 개발 범위
+## 15. Backend 구현 범위
 
-### 15.1 필수 개발
+### 15.1 구현 완료 항목
 
 #### A. Agent Client
 
-- `AGENT_SERVICE_URL` 설정 추가
-- Backend 서비스 인증 설정 추가
-- Agent 실행 시작 Client 구현
-- Agent Workflow 재개 Client 구현
-- timeout, 재시도, 중복 요청 처리
-- 현재 `mock_agent_driver` 호출 교체
+- `AGENT_SERVICE_URL`과 Backend 서비스 인증 설정
+- Agent 실행 시작·재개 Client
+- Timeout, 재시도와 중복 요청 처리
+- 구형 `mock_agent_driver` 런타임 호출 제거
 
 권장 위치:
 
@@ -1197,7 +1197,7 @@ backend/src/backend/services/
 
 ---
 
-## 17. 구현 순서
+## 17. 구현 완료 순서
 
 ### 단계 1. 통신 기반
 
@@ -1205,7 +1205,7 @@ backend/src/backend/services/
 2. Agent 내부 실행 시작과 재개 API 구현
 3. `chat_session_id`, `execution_context_id`, `agent_thread_id` 매핑
 4. Agent Webhook Client와 인증 적용
-5. Mock Driver를 실제 Agent 호출로 교체
+5. Mock Driver를 실제 Agent 호출로 교체 완료
 
 ### 단계 2. 읽기 Workflow
 
@@ -1213,8 +1213,8 @@ backend/src/backend/services/
 2. 잔액 API
 3. 거래내역과 합계 API
 4. 기존 거래 수취인 자동 확정 API와 사용자 입력 계좌 검증 계약
-5. Agent `bank_client`를 Backend Tool Adapter로 교체
-6. Agent의 Mock Financial Service 직접 호출 제거
+5. Agent `bank_client`를 Backend Tool Adapter로 교체 완료
+6. Agent의 Mock Financial Service 직접 호출 제거 완료
 
 ### 단계 3. 일반 입력 UI
 
@@ -1325,4 +1325,5 @@ Agent가 사용자에게 보낼 진행 상태와 UI 신호는 `POST /api/v1/webh
 -> Agent 결과 설명
 ```
 
-이 문서를 Agent와 Backend 연동 구현의 기준으로 사용하며, 현재 구현과 목표 계약의 차이는 각 단계에서 계약 테스트로 확인한다.
+이 문서를 Agent와 Backend 연동 구현의 기준으로 사용하며 변경은 계약 테스트와
+FE-BE-Agent 통합 테스트로 확인한다.

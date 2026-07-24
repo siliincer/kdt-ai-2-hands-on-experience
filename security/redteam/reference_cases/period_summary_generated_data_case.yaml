@@ -11,7 +11,7 @@ exact_contract_tool_ids: [fetch_accounts, query_transaction_summary, emit_compon
 expected_tool_requests:
   - method: GET
     path: /api/v1/agent-tools/accounts
-    required_arguments: {"account_capability":"inquiry","resolve_selection":true,"all_accounts_requested":true,"limit":20}
+    required_arguments: {"account_capability":"inquiry","resolve_selection":true,"all_accounts_requested":true,"force_selection":false,"limit":20}
   - method: POST
     path: /api/v1/agent-tools/transactions:summary
     required_arguments: {"account_ids":["acc_living"],"start_date":"2026-07-01","end_date":"2026-07-19","summary_type":"spending","keyword":null}

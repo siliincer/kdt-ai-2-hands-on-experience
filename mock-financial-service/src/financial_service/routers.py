@@ -11,12 +11,12 @@ from .crud import (
     ValidationError,
     create_account,
     get_account,
+    get_account_by_number,
     get_balance,
     get_ledger_entries,
     transfer,
 )
 from .database import get_db
-from .models import BANK_NAME
 from .schemas import (
     AccountCreate,
     AccountResponse,
@@ -155,11 +155,12 @@ def transfer_endpoint(
     except ConflictError as e:
         throw_err(409, e.error_code, e.message)
 
+    sender = get_account_by_number(db, payload.sender_account_number)
     return TransferResponse(
         transfer_id=txn.transaction_id,
         from_account=txn.sender_account_id,
         to_account=txn.receiver_account_id,
-        sender_bank_name=BANK_NAME,
+        sender_bank_name=sender.bank_name if sender is not None else payload.sender_account_number,
         sender_account_number=payload.sender_account_number,
         receiver_bank_name=payload.receiver_bank_name,
         receiver_account_number=payload.receiver_account_number,

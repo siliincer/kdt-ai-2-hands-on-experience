@@ -27,7 +27,7 @@ from security.redteam.models import (
     Verdict,
 )
 from security.redteam.runner.agent_reference import AgentReferenceExecutor
-from security.redteam.runner.cli import _canonical_sha256
+from security.redteam.runner.cli_common import _canonical_sha256
 from security.redteam.runner.client import RequestBudget, RequestBudgetError
 from security.redteam.runner.reference_campaign import (
     ReferenceCampaignMetadata,

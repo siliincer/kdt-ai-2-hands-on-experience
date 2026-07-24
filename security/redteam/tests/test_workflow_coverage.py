@@ -4,7 +4,7 @@ import yaml
 
 from security.redteam.config import load_scenario
 from security.redteam.models import BusinessWorkflow
-from security.redteam.runner.cli import _canonical_sha256
+from security.redteam.runner.cli_common import _canonical_sha256
 from security.redteam.runner.reference_cases import load_reference_case
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -60,6 +60,11 @@ services:
       AGENT_STREAM_MAXLEN: ${AGENT_STREAM_MAXLEN:-1000}
       AGENT_STREAM_TTL_SECONDS: ${AGENT_STREAM_TTL_SECONDS:-3600}
       AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET:-change-me-agent-webhook}
+      AGENT_SERVICE_URL: ${AGENT_SERVICE_URL:-http://agent-service:8001}
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-change-me-agent-service-token}
+      BACKEND_SERVICE_TOKEN: ${BACKEND_SERVICE_TOKEN:-change-me-backend-service-token}
+      MOCK_FINANCIAL_SERVICE_URL: ${MOCK_FINANCIAL_SERVICE_URL:-http://mock-financial-service:8002}
+      FINANCIAL_ANALYTICS_KEY: ${FINANCIAL_ANALYTICS_KEY:-analytics-demo-key}
       SSE_TICKET_RATE_LIMIT: ${SSE_TICKET_RATE_LIMIT:-30/minute}
       SSE_CONNECT_RATE_LIMIT: ${SSE_CONNECT_RATE_LIMIT:-60/minute}
     ports:
@@ -75,6 +80,8 @@ services:
         condition: service_healthy
       redis_stream:
         condition: service_healthy
+      mock-financial-service:
+        condition: service_started
     healthcheck:
       test:
         - CMD
@@ -133,7 +140,7 @@ services:
       dockerfile: mock-financial-service/Dockerfile
     container_name: kdt-mock-financial-service
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     networks:
       default:
         aliases:

@@ -20,8 +20,9 @@ pick_decision()으로 가장 심각한 액션의 규칙을 고른다.
 from __future__ import annotations
 
 import re
+from typing import Any
 
-from agent.workflow_loader import get_guardrail_rules
+from agent.policy.guardrail_rules import get_guardrail_rules
 
 # 절: `피연산자 연산자 피연산자` (피연산자는 공백 없는 토큰 또는 따옴표 문자열)
 _CLAUSE = re.compile(r"^\s*(\S+)\s*(==|!=|>=|<=|>|<)\s*(.+?)\s*$")
@@ -77,8 +78,8 @@ class GuardrailEngine:
         m = _CLAUSE.match(clause)
         if not m:
             return False
-        left = cls._resolve_operand(m.group(1), context)
-        right = cls._resolve_operand(m.group(3), context)
+        left: Any = cls._resolve_operand(m.group(1), context)
+        right: Any = cls._resolve_operand(m.group(3), context)
         if left is _MISSING or right is _MISSING:
             return False
         op = m.group(2)

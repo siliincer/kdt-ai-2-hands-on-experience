@@ -507,7 +507,6 @@ class ExecutionRuntime:
             "user_input": request.message,
             "status": "start",
             "data": {},
-            "logs": [],
             "execution_trace": [],
         }
 

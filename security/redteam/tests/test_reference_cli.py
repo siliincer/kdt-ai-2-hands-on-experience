@@ -78,7 +78,7 @@ def test_reference_request_plan_fits_dedicated_default_budget() -> None:
 
     required = reference_cli._required_reference_requests(config, cases)
 
-    assert required == 969
+    assert required == 970
     assert required <= config.execution.max_reference_requests_per_run
     assert required > config.execution.max_requests_per_run
 
@@ -88,9 +88,9 @@ def test_reference_request_plan_counts_only_generated_model_calls() -> None:
     generated = load_reference_case(ROOT / "reference_cases" / "account_list_generated_instruction_case.yaml")
     fixed = load_reference_case(ROOT / "reference_cases" / "account_list_contract_baseline.yaml")
 
-    assert reference_cli._required_reference_requests(config, [fixed]) == 3
-    assert reference_cli._required_reference_requests(config, [generated]) == 45
-    assert reference_cli._required_reference_requests(config, [fixed, generated]) == 45
+    assert reference_cli._required_reference_requests(config, [fixed]) == 4
+    assert reference_cli._required_reference_requests(config, [generated]) == 46
+    assert reference_cli._required_reference_requests(config, [fixed, generated]) == 46
 
 
 def test_reference_request_plan_allows_six_default_iterations() -> None:
@@ -100,7 +100,7 @@ def test_reference_request_plan_allows_six_default_iterations() -> None:
     config = type(config).model_validate(raw)
     cases = [load_reference_case(path) for path in sorted((ROOT / "reference_cases").glob("*.yaml"))]
 
-    assert reference_cli._required_reference_requests(config, cases) == 1935
+    assert reference_cli._required_reference_requests(config, cases) == 1936
 
 
 def test_reference_cli_accepts_commit_format_without_assuming_runner_checkout() -> None:

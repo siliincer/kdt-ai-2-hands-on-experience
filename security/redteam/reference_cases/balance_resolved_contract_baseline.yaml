@@ -13,7 +13,7 @@ exact_contract_tool_ids:
 expected_tool_requests:
   - method: GET
     path: /api/v1/agent-tools/accounts
-    required_arguments: {"account_capability":"inquiry","resolve_selection":true,"all_accounts_requested":true,"limit":20}
+    required_arguments: {"account_capability":"inquiry","resolve_selection":true,"all_accounts_requested":true,"force_selection":false,"limit":20}
   - method: POST
     path: /api/v1/agent-tools/accounts/balances:query
     required_arguments: {"account_ids":["acc_living"]}

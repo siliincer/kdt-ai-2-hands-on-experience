@@ -1,68 +1,45 @@
-"""Compatibility checks for the Agent team's public HTTP models."""
+"""Compatibility checks for the Agent V3 testing contract."""
 
 from __future__ import annotations
 
-import pytest
-from pydantic import ValidationError
+from security.redteam.models import BusinessWorkflow
+from security.redteam.runner.agent_reference import _load_agent_api
 
-from agent.schemas import ChatRequest, ChatResponse
-from security.redteam.models import AgentResponse
-
-
-def test_public_chat_request_fields_and_bounds():
-    request = ChatRequest(message="hello", user_id="user_001", thread_id=None)
-
-    assert request.model_dump() == {
-        "message": "hello",
-        "thread_id": None,
-        "user_id": "user_001",
-    }
-    with pytest.raises(ValidationError):
-        ChatRequest(message="x" * 2001, user_id="user_001", thread_id=None)
+EXPECTED_TESTBED_WORKFLOWS = {
+    BusinessWorkflow.ACCOUNT_LIST,
+    BusinessWorkflow.BALANCE_INQUIRY,
+    BusinessWorkflow.TRANSACTION_HISTORY,
+    BusinessWorkflow.PERIOD_AMOUNT_SUMMARY,
+    BusinessWorkflow.SET_DEFAULT_ACCOUNT,
+    BusinessWorkflow.SET_ACCOUNT_ALIAS,
+    BusinessWorkflow.INTERNAL_TRANSFER,
+    BusinessWorkflow.EXTERNAL_TRANSFER,
+}
 
 
-@pytest.mark.parametrize(
-    "status",
-    ["completed", "waiting_input", "blocked", "no_match", "failed"],
-)
-def test_public_statuses_are_consumable(status):
-    response = ChatResponse.model_validate(
-        {
-            "reply": "result",
-            "status": status,
-            "thread_id": "thread",
-            "prompt_for": None,
-            "ui": None,
-        }
-    )
+def test_agent_v3_testing_contract_is_available() -> None:
+    api = _load_agent_api()
 
-    consumed = AgentResponse.model_validate(response.model_dump(mode="json"))
+    assert set(api.factories) == EXPECTED_TESTBED_WORKFLOWS
+    assert callable(api.backend_config)
+    assert callable(api.mock_backend)
+    assert callable(api.contract_store)
+    assert callable(api.resume_request)
 
-    assert consumed.status == status
+    for factory in api.factories.values():
+        assert callable(factory)
 
 
-@pytest.mark.parametrize(
-    "ui",
-    [
-        {"type": "account_card_list", "options": [], "multi": False},
-        {"type": "search_select", "options": []},
-        {"type": "number_input"},
-        {"type": "confirm_modal", "display": {}, "actions": []},
-        {"type": "auth_request", "methods": [], "actions": []},
-    ],
-)
-def test_public_ui_variants_are_consumable(ui):
-    response = ChatResponse.model_validate(
-        {
-            "reply": "select",
-            "status": "waiting_input",
-            "thread_id": "thread",
-            "prompt_for": "opaque.state",
-            "ui": ui,
-        }
-    )
+def test_agent_v3_source_is_read_from_current_checkout() -> None:
+    api = _load_agent_api()
 
-    consumed = AgentResponse.model_validate(response.model_dump(mode="json"))
+    assert len(api.source_commit) >= 40
+    assert (api.source_root / "pyproject.toml").is_file()
+    assert (api.source_root / "agent").is_dir()
+    assert api.source_dirty is False
 
-    assert consumed.ui is not None
-    assert consumed.ui.type == ui["type"]
+
+def test_global_entry_is_not_a_business_testbed() -> None:
+    api = _load_agent_api()
+
+    assert BusinessWorkflow.GLOBAL_AGENT_ENTRY not in api.factories

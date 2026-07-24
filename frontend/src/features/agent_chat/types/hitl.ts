@@ -81,6 +81,8 @@ export interface ConfirmModalArgs {
   actions?: string[];
   /** convertMessage 가 실어 주는 need_approval 대기 id(= confirmation_id) */
   approvalId?: string;
+  /** 같은 턴에서 새 확인 카드가 떠서 이 카드가 더 이상 유효하지 않을 때. */
+  superseded?: boolean;
 }
 
 /** number_input need_input args(계약 3.4) */
@@ -207,6 +209,8 @@ export interface MessageArgs {
   title?: string;
   message?: string;
   content?: string;
+  /** blocked_message 전용 부가 설명(BlockedView.description) — 차단 사유. */
+  description?: string;
 }
 
 /** setting_result 결과 args(inline payload, 계약 4.6) */
