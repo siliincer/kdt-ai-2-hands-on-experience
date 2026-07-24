@@ -390,6 +390,15 @@ def test_is_cancel_input_detects_any_outcome():
     assert not chat_service._is_cancel_input({})
 
 
+def test_is_cancel_input_detects_option_select_cancel():
+    """option_select(재인증 재시도)는 outcome이 항상 'selected'로 오고, 실제
+    취소 여부는 option 필드에 담긴다(계약 3.6)."""
+    assert chat_service._is_cancel_input({"option_selection_outcome": "selected", "option": "cancel"})
+    assert not chat_service._is_cancel_input({"option_selection_outcome": "selected", "option": "retry"})
+    # 정정 대상 선택 화면도 같은 계약이지만 option이 실제 정정 대상이라 취소가 아니다.
+    assert not chat_service._is_cancel_input({"option_selection_outcome": "selected", "option": "amount"})
+
+
 def _patch_resume_input(cancel_value: bool, *, has_prior_confirmation: bool = False):
     """resume_after_input 의존성을 대체하고 publish 호출을 캡처한다."""
     calls = {"published": 0, "resumed": 0}
@@ -467,8 +476,9 @@ async def test_resume_input_cancel_with_prior_confirmation_skips_publish():
 
 @pytest.mark.asyncio
 async def test_resume_input_auth_retry_cancel_publishes_even_with_prior_confirmation():
-    """auth_retry_outcome 취소는 승인 화면으로 돌아가는 경로가 그래프에 없으므로
-    (항상 END) Confirmation 존재 여부와 무관하게 즉시 done을 보낸다."""
+    """재인증 재시도 화면의 취소(option_selection_outcome/option, 계약 3.6)는
+    승인 화면으로 돌아가는 경로가 그래프에 없으므로(항상 END) Confirmation
+    존재 여부와 무관하게 즉시 done을 보낸다."""
     patches, calls = _patch_resume_input(cancel_value=True, has_prior_confirmation=True)
     for p in patches:
         p.start()
@@ -478,7 +488,7 @@ async def test_resume_input_auth_retry_cancel_publishes_even_with_prior_confirma
             uuid4(),
             uuid4(),
             "input_1",
-            {"auth_retry_outcome": "cancelled"},
+            {"option_selection_outcome": "selected", "option": "cancel"},
         )
     finally:
         for p in patches:

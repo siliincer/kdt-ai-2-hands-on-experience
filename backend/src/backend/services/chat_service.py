@@ -64,8 +64,17 @@ def _new_request_id(kind: str) -> str:
 
 
 def _is_cancel_input(value: dict) -> bool:
-    """입력·선택 회신 value 가 취소인지 판정한다(어떤 `*_outcome` 이든 'cancelled')."""
-    return any(key.endswith("_outcome") and val == "cancelled" for key, val in value.items())
+    """입력·선택 회신 value 가 취소인지 판정한다.
+
+    - 어떤 `*_outcome` 이든 값이 'cancelled'인 경우(계좌/수취인/금액 재입력 취소).
+    - option_select 계열(정정 대상 선택·재인증 재시도)은 값이 항상 'selected'로
+      오고 실제 취소 여부는 `option` 필드에 담긴다(계약 3.6) — 재인증 재시도
+      화면의 "취소" 버튼만 `option: "cancel"`을 보낸다(정정 대상 선택 화면은
+      취소 옵션 자체가 없다).
+    """
+    if any(key.endswith("_outcome") and val == "cancelled" for key, val in value.items()):
+        return True
+    return value.get("option_selection_outcome") == "selected" and value.get("option") == "cancel"
 
 
 # 승인 화면 modify_* 재입력 취소만 "이전 승인 화면으로 되돌아갈 수 있음" — Workflow
