@@ -265,14 +265,13 @@ async def authenticate_and_resume(
     user_id: UUID,
     chat_session_id: UUID,
     auth_context_id: str,
-    password: str | None,
-    cancelled: bool = False,
+    password: str,
 ) -> str:
     """추가 인증(비밀번호 재확인) → 검증 후 에이전트를 재개한다(계약 3.8·7.2).
 
     인증 원문(비밀번호)은 Backend 까지만 오고 Agent 로 전달하지 않는다. Backend 가
-    검증한 결과 상태(verified/failed/cancelled)만 재개에 사용한다. 반환값은 결과
-    상태다. 검증 실패(세션·인증 상태)는 HTTPException 으로 같은 UI 에서 처리한다.
+    검증한 결과 상태(verified/failed)만 재개에 사용한다. 반환값은 결과 상태다.
+    검증 실패(세션·인증 상태)는 HTTPException 으로 같은 UI 에서 처리한다.
     """
     await verify_chat_session_owner(session, user_id, chat_session_id)
 
@@ -301,18 +300,15 @@ async def authenticate_and_resume(
             detail="이미 처리된 인증 요청입니다.",
         )
 
-    if cancelled:
-        await set_auth_context_status(session, auth_context, AuthContextStatus.CANCELLED)
-        auth_status = "cancelled"
+    user = await get_user_by_id(session, str(user_id))
+    verified = bool(user and password and verify_password(password, user.password_hash))
+
+    if verified:
+        await auth_context_service.mark_verified(session, auth_context)
+        auth_status = "verified"
     else:
-        user = await get_user_by_id(session, str(user_id))
-        verified = bool(user and password and verify_password(password, user.password_hash))
-        if verified:
-            await auth_context_service.mark_verified(session, auth_context)
-            auth_status = "verified"
-        else:
-            await set_auth_context_status(session, auth_context, AuthContextStatus.FAILED)
-            auth_status = "failed"
+        await set_auth_context_status(session, auth_context, AuthContextStatus.FAILED)
+        auth_status = "failed"
 
     # 인증은 Confirmation 에 딸린 추가 관문이다. auth_context → confirmation → 실행
     # Context 로 Agent thread 를 찾아 재개한다.
@@ -326,10 +322,6 @@ async def authenticate_and_resume(
         auth_context_id=auth_context_id,
         auth_status=auth_status,
     )
-    # 취소 종료는 Backend 책임(계약: Agent 는 cancelled 시 done 을 보내지 않음).
-    # 인증 취소는 항상 전체 종료다(승인 화면으로 돌아가는 "변경" 개념이 없음).
-    if cancelled:
-        await publish_cancellation_done(chat_session_id)
     return auth_status
 
 

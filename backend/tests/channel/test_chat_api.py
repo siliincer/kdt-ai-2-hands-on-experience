@@ -250,7 +250,7 @@ def _patch_auth(auth_context, password_ok):
     전달된 auth_status 를 캡처한다.
     """
     user = SimpleNamespace(password_hash="hash")
-    calls = {"verified": 0, "failed": 0, "resumed": [], "published": 0}
+    calls = {"verified": 0, "failed": 0, "resumed": []}
 
     async def _owner(session, uid, cid):
         return None
@@ -265,9 +265,6 @@ def _patch_auth(auth_context, password_ok):
 
     async def _set_status(session, ac, status, **kw):
         calls["failed"] += 1
-
-    async def _publish_cancellation_done(chat_session_id):
-        calls["published"] += 1
 
     # auth_context → confirmation → execution_context(agent_thread_id) 해소 경로.
     confirmation = SimpleNamespace(execution_context_id=uuid4())
@@ -287,7 +284,6 @@ def _patch_auth(auth_context, password_ok):
             AsyncMock(return_value=context),
         ),
         patch.object(chat_service, "get_agent_client", lambda: agent_stub),
-        patch.object(chat_service, "publish_cancellation_done", _publish_cancellation_done),
     ]
     return patches, calls
 
@@ -322,23 +318,6 @@ async def test_authenticate_wrong_password_fails():
             p.stop()
     assert result == "failed"
     assert calls["failed"] == 1 and calls["resumed"] == ["failed"]
-
-
-@pytest.mark.asyncio
-async def test_authenticate_cancelled_resumes_and_publishes_done():
-    user_id = uuid4()
-    auth = _auth_context(user_id)
-    patches, calls = _patch_auth(auth, password_ok=True)
-    for p in patches:
-        p.start()
-    try:
-        result = await chat_service.authenticate_and_resume(AsyncMock(), user_id, uuid4(), str(auth.id), None, True)
-    finally:
-        for p in patches:
-            p.stop()
-    assert result == "cancelled"
-    assert calls["resumed"] == ["cancelled"]
-    assert calls["published"] == 1
 
 
 @pytest.mark.asyncio

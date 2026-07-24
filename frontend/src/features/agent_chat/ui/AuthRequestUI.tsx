@@ -19,9 +19,7 @@ import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 /**
  * authentication_required(auth_request) 툴 파트 렌더러 (HITL, 계약 3.8).
  * 추가 인증은 비밀번호 재확인으로 처리한다. 비밀번호 원문은 Backend 인증 API 로만
- * 전달되고(계약 7.2), 결과 상태(verified/failed/cancelled)에 따라 후속이 SSE 로
- * 흘러온다. 취소도 Backend 에 제출해야 Agent 쪽 interrupt 가 정리된다 — 로컬에서만
- * 끝낸 것처럼 표시하면 Agent thread 가 그 Step 에 계속 멈춰 있어 이후 턴이 막힌다.
+ * 전달되고(계약 7.2), 결과 상태(verified/failed)에 따라 후속이 SSE 로 흘러온다.
  */
 export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
   const authenticate = useAuthenticate();
@@ -29,9 +27,9 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
   const authContextId = a.authContextId;
 
   const [password, setPassword] = useState('');
-  const [phase, setPhase] = useState<
-    'idle' | 'verifying' | 'done' | 'cancelled' | 'error'
-  >('idle');
+  const [phase, setPhase] = useState<'idle' | 'verifying' | 'done' | 'error'>(
+    'idle',
+  );
 
   const submit = async () => {
     if (!authContextId || !password || phase === 'verifying') return;
@@ -45,23 +43,14 @@ export const AuthRequestUI: ToolCallMessagePartComponent = ({ args }) => {
     setPassword('');
   };
 
-  const cancel = async () => {
-    if (!authContextId || phase === 'verifying' || phase === 'done') return;
-    setPhase('verifying');
-    try {
-      await authenticate(authContextId, undefined, true);
-      setPhase('cancelled');
-    } catch {
-      setPhase('error');
-    }
+  const cancel = () => {
+    if (phase === 'verifying' || phase === 'done') return;
+    setPhase('done');
+    // 취소는 인증을 제출하지 않는다. 후속 흐름은 사용자가 다시 시도하거나 종료한다.
   };
 
   if (phase === 'done') {
     return <OutcomeChip variant="success">인증을 확인했어요.</OutcomeChip>;
-  }
-
-  if (phase === 'cancelled') {
-    return <OutcomeChip variant="cancel">인증을 취소했어요.</OutcomeChip>;
   }
 
   return (
