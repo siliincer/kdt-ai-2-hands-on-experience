@@ -54,6 +54,7 @@ class AccountListRequest(ReadToolContract):
     resolve_selection: bool = False
     all_accounts_requested: bool = False
     exclude_account_ids: Annotated[list[NonEmptyString], Field(max_length=20)] = Field(default_factory=list)
+    force_selection: bool = False
     limit: int = Field(default=20, ge=1, le=100)
 
     @field_validator("exclude_account_ids")
