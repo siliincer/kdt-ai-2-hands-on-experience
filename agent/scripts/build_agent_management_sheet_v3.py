@@ -216,7 +216,7 @@ WORKFLOW_ROWS = [
         "workflow_name": "본인 계좌 간 이체",
         "workflow_type": "transfer",
         "description": "사용자 본인 소유 계좌 사이에서 자금을 이체한다.",
-        "example_utterances": "생활비 통장에서 저축 통장으로 10만 원 옮겨줘",
+        "example_utterances": ("생활비 통장에서 저축 통장으로 10만 원 옮겨줘 | 내 계좌끼리 5만 원 송금해줘"),
         "entry_step_id": "extract_internal_transfer_slots",
         "max_risk_level": "R4",
         "approval_policy": "required",
