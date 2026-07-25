@@ -1,28 +1,39 @@
 """Workflow Routing — 분류기·검증기 분리 라우팅 파이프라인.
 
-기존 단일 LLM 분류(match_workflow)의 두 문제를 함께 보완한다.
-  1. 결정론적 선가드(_is_own_account_transfer)가 LLM보다 먼저 워크플로우를
-     확정해, "부계좌"·"내 계좌" 같은 엔티티 표현이 설정·조회 발화까지
-     본인이체로 가로채는 과잉 포섭.
-  2. 단일 LLM 분류 결과를 검증 없이 그대로 실행하는 위험.
+핵심 원칙: 자연어의 의미는 LLM 분류기와 검증기가 판단하고, 두 판단 결과를
+어떻게 처리할지는 결정론적 Resolution 코드로 결정한다. 결정론은 세 번째
+분류기가 아니라 Resolution 정책이다.
 
-구조:
     Global Guardrail(별도 노드)
-      → LLM Workflow Classifier   (primary/alternatives/evidence/status)
-      → Deterministic Signal Extractor (의미 신호만 추출, 확정하지 않음)
-      → LLM Workflow Verifier     (accept/reject/ambiguous)
-      → Workflow Resolution       (합의 확정 / 조회·설정 오류 수정 / 실행형 충돌은 보류)
-      → (실패 시) Deterministic Fallback
+      → LLM Workflow Classifier   (primary / alternatives / evidence / status)
+      → LLM Workflow Verifier      (accept / reject / ambiguous, 수정 후보)
+      → Deterministic Resolution   (출력 검증 + 결과 결합 + 자동수정 정책)
+           - resolved   → Workflow Subgraph
+           - ambiguous  → 사용자 확인(라우팅 HITL)
+           - no_match   → 매칭 워크플로우 없음 안내
+           - failed     → 안전 실패 안내
 
-주의: 라우팅 단계의 사용자 재확인(HITL)은 아직 배선돼 있지 않다. 이 버전은
-ambiguous·실행형 충돌을 안전 폴백(no_match)으로 종료하고, 실제 되묻기는 후속
-작업으로 분리한다. resolve_workflow는 그 지점을 status=ambiguous로 표시한다.
+결정론이 담당하는 것: 분류기·검증기 출력이 유효한가 / 두 결과가 합의했는가 /
+충돌 시 자동 수정이 가능한가 / 사용자 확인이 필요한가 / 실패 시 안전하게
+종료하는가. 자연어 의미를 다시 판단하지 않는다(키워드·정규식 라우팅 금지).
+
+LLM 호출이 실패하면 키워드로 강제 확정하지 않고 status="failed"로 안전하게
+종료한다(금융 도메인 기본값). 결정론 키워드·정규식 폴백은 존재하지 않는다.
+
+환경변수:
+  WORKFLOW_VERIFIER_ENABLED=true(기본) | false
+    false면 검증 단계를 건너뛰고 분류기 결과를 유효성 검증 후 직접 사용한다.
+  WORKFLOW_VERIFIER_FAIL_MODE=closed(기본) | fallback
+    LLM 실패 시 동작. closed=안전 실패(failed). fallback=분류기가 resolved면
+    그 결과를 신뢰(가용성 우선). 금융 Agent 기본값은 closed.
+  WORKFLOW_QUERY_AUTO_CORRECTION_ENABLED=true(기본) | false
+    조회형→조회형 검증기 수정을 자동 적용할지. false면 사용자 확인으로 보류.
 """
 
 from __future__ import annotations
 
 import logging
-import re
+import os
 from functools import lru_cache
 from hashlib import sha256
 from typing import Literal, cast
@@ -35,6 +46,29 @@ from agent.workflow_contracts import WorkflowContractStore
 logger = logging.getLogger("agent.workflow_routing")
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 환경변수 (intent_gate.py 패턴 답습)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def verifier_enabled() -> bool:
+    """검증기 사용 여부. 기본 활성(true). false면 분류기 결과를 직접 사용한다."""
+    raw = os.getenv("WORKFLOW_VERIFIER_ENABLED", "true").strip().lower()
+    return raw not in ("false", "0", "no", "off")
+
+
+def _verifier_fail_mode() -> str:
+    """검증기·분류기 LLM 실패 시 동작. closed(기본) | fallback."""
+    raw = os.getenv("WORKFLOW_VERIFIER_FAIL_MODE", "closed").strip().lower()
+    return "fallback" if raw == "fallback" else "closed"
+
+
+def query_auto_correction_enabled() -> bool:
+    """조회형→조회형 검증기 수정 자동 적용 여부. 기본 활성(true)."""
+    raw = os.getenv("WORKFLOW_QUERY_AUTO_CORRECTION_ENABLED", "true").strip().lower()
+    return raw not in ("false", "0", "no", "off")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 스키마
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -44,11 +78,11 @@ class WorkflowClassification(BaseModel):
 
     primary_workflow_id: str | None = Field(
         default=None,
-        description="발화에 가장 적합한 워크플로우 id. 해당하는 것이 없으면 null.",
+        description="사용자 발화에 가장 적합한 Workflow ID. 없으면 null.",
     )
     alternative_workflow_ids: list[str] = Field(
         default_factory=list,
-        description="주 후보 외에 가능성이 있는 대안 워크플로우 id 목록. 없으면 빈 배열.",
+        description="주 후보 외에 가능성이 있는 대안 Workflow ID. 없으면 빈 배열.",
     )
     evidence_phrases: list[str] = Field(
         default_factory=list,
@@ -60,18 +94,15 @@ class WorkflowClassification(BaseModel):
     )
 
 
-class RoutingSignals(BaseModel):
-    """결정론적으로 추출한 의미 신호(확정하지 않고 검증·폴백에만 사용)."""
-
-    has_person_marker: bool = False
-    has_own_account_marker: bool = False
-    has_transfer_action: bool = False
-    has_setting_action: bool = False
-    has_query_action: bool = False
-    has_amount_expression: bool = False
-    has_destination_expression: bool = False
-    has_persistent_setting_expression: bool = False
-    has_alias_expression: bool = False
+VerificationReasonCode = Literal[
+    "VALID",
+    "ACTION_MISMATCH",
+    "INTERNAL_EXTERNAL_CONFLICT",
+    "QUERY_SETTING_CONFLICT",
+    "INSUFFICIENT_EVIDENCE",
+    "MULTIPLE_ACTIONS",
+    "INVALID_CLASSIFIER_OUTPUT",
+]
 
 
 class WorkflowVerification(BaseModel):
@@ -82,17 +113,24 @@ class WorkflowVerification(BaseModel):
     )
     corrected_workflow_id: str | None = Field(
         default=None,
-        description="reject일 때 제안하는 대체 워크플로우 id. 없으면 null.",
+        description="분류 결과가 잘못된 경우 제안하는 수정 Workflow ID. 없으면 null.",
     )
-    reason_code: Literal[
-        "VALID",
-        "ACTION_MISMATCH",
-        "INTERNAL_EXTERNAL_CONFLICT",
-        "QUERY_SETTING_CONFLICT",
-        "INSUFFICIENT_EVIDENCE",
-        "MULTIPLE_ACTIONS",
-    ] = Field(default="VALID")
+    reason_code: VerificationReasonCode = Field(default="VALID")
     evidence_phrases: list[str] = Field(default_factory=list)
+
+
+ResolutionSource = Literal[
+    "classifier_verified",
+    "verifier_corrected",
+    "classifier_verifier_conflict",
+    "classifier_no_match",
+    "classifier_ambiguous",
+    "invalid_classifier_output",
+    "invalid_verifier_output",
+    "classifier_failed",
+    "verifier_failed",
+    "user_selected",
+]
 
 
 class WorkflowResolution(BaseModel):
@@ -101,18 +139,12 @@ class WorkflowResolution(BaseModel):
     status: Literal["resolved", "ambiguous", "no_match", "failed"] = "no_match"
     workflow_id: str | None = None
     candidates: list[str] = Field(default_factory=list)
-    source: Literal[
-        "classifier_verified",
-        "verifier_corrected",
-        "classifier_verifier_conflict",
-        "deterministic_fallback",
-        "user_selected",
-        "no_match",
-    ] = "no_match"
+    source: ResolutionSource = "classifier_no_match"
+    reason_code: str | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 계약 카탈로그 (분류기 프롬프트용) + 워크플로우 타입 맵 (resolution용)
+# 계약 카탈로그 (분류기·검증기 프롬프트용) + 워크플로우 타입 맵 (resolution용)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -151,6 +183,14 @@ def _valid_ids() -> set[str]:
     return {c[0] for c in _load_choices()}
 
 
+def workflow_name(workflow_id: str) -> str:
+    """사용자 확인 UI 라벨용 워크플로우 표시명."""
+    for wid, name, _desc, _ex in _load_choices():
+        if wid == workflow_id:
+            return name or workflow_id
+    return workflow_id
+
+
 def _build_catalog(choices: tuple[tuple[str, str, str, str], ...]) -> str:
     lines = []
     for wid, name, desc, example in choices:
@@ -161,52 +201,20 @@ def _build_catalog(choices: tuple[tuple[str, str, str, str], ...]) -> str:
     return "\n".join(lines)
 
 
-def _is_execution_workflow(workflow_id: str | None) -> bool:
-    """실행형(자금 이동) 워크플로우인지. 실행형 간 충돌은 자동 수정하지 않는다."""
-    return bool(workflow_id) and _workflow_types().get(workflow_id or "") == "transfer"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 결정론적 Signal Extractor (확정하지 않음)
-# ─────────────────────────────────────────────────────────────────────────────
-
-_PERSON_MARKERS = ("에게", "한테")
-_OWN_ACCOUNT_MARKERS = (
-    "계좌끼리",
-    "통장끼리",
-    "본인 계좌",
-    "본인계좌",
-    "내 계좌",
-    "내 통장",
-    "제 계좌",
-    "제 통장",
-    "부계좌",
-    "계좌 간",
-)
-_TRANSFER_VERBS = ("이체", "송금", "보내", "옮겨", "쏴", "부쳐", "이체해")
-_SETTING_VERBS = ("바꿔", "바꾸", "변경", "설정", "지정", "등록")
-_QUERY_MARKERS = ("얼마", "잔액", "내역", "보여", "알려", "확인", "있어", "썼", "쓴")
-_PERSISTENT_MARKERS = ("이제부터", "앞으로", "기본", "나가게", "주로", "항상")
-_ALIAS_MARKERS = ("별칭", "별명", "라고 불러", "라고 해", "이라고 부", "라고 부", "이름 붙", "이름을 붙")
-
-_AMOUNT_RE = re.compile(r"\d[\d,]*\s*(?:원|만|천|억)|[영일이삼사오육칠팔구십백천만억]+\s*원")
-_DESTINATION_RE = re.compile(r"(?:부?계좌|통장|은행)\s*(?:으로|로)\b")
-
-
-def extract_routing_signals(text: str) -> RoutingSignals:
-    """발화의 의미 신호를 결정론적으로 추출한다. 워크플로우를 확정하지 않는다."""
-    t = text or ""
-    return RoutingSignals(
-        has_person_marker=any(m in t for m in _PERSON_MARKERS),
-        has_own_account_marker=any(m in t for m in _OWN_ACCOUNT_MARKERS),
-        has_transfer_action=any(m in t for m in _TRANSFER_VERBS),
-        has_setting_action=any(m in t for m in _SETTING_VERBS),
-        has_query_action=any(m in t for m in _QUERY_MARKERS),
-        has_amount_expression=bool(_AMOUNT_RE.search(t)),
-        has_destination_expression=bool(_DESTINATION_RE.search(t)),
-        has_persistent_setting_expression=any(m in t for m in _PERSISTENT_MARKERS),
-        has_alias_expression=any(m in t for m in _ALIAS_MARKERS),
-    )
+# 의미상 워크플로우 유형(자동수정 정책용). Manifest workflow_type을 그대로 쓴다.
+#   transfer      → execution (실행형, 실제 자금 이동)
+#   setting_change→ setting
+#   inquiry       → query
+def _risk_class(workflow_id: str | None) -> str | None:
+    """워크플로우의 의미 유형: execution | setting | query | None."""
+    if not workflow_id:
+        return None
+    mapping = {
+        "transfer": "execution",
+        "setting_change": "setting",
+        "inquiry": "query",
+    }
+    return mapping.get(_workflow_types().get(workflow_id, ""))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,6 +254,16 @@ _CLASSIFIER_PROMPT = (
 )
 
 
+# 일부 모델(예 gemini)이 JSON null 대신 문자열 "null"/"none"을 채우는 것을 흡수한다.
+_NULL_PLACEHOLDERS = {"null", "none", "n/a", "na", "nil", ""}
+
+
+def _normalize_workflow_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return None if value.strip().lower() in _NULL_PLACEHOLDERS else value
+
+
 def classify_workflow(text: str) -> WorkflowClassification:
     """LLM으로 워크플로우 후보를 분류한다. 실패 시 예외를 그대로 올린다."""
     catalog = _build_catalog(_load_choices())
@@ -254,12 +272,10 @@ def classify_workflow(text: str) -> WorkflowClassification:
         WorkflowClassification,
         llm.invoke(_CLASSIFIER_PROMPT.format(catalog=catalog, text=text)),
     )
+    # "null" 문자열을 실제 null로 정규화하고, 대안 ID만 유효성 필터한다(무효
+    # primary는 resolve_workflow가 failed로 처리한다).
     valid = _valid_ids()
-    # 무효 id 정리: primary가 카탈로그 밖이면 no_match로 낮추고, 대안도 필터한다.
-    if result.primary_workflow_id not in valid:
-        result.primary_workflow_id = None
-        if result.status == "resolved":
-            result.status = "no_match"
+    result.primary_workflow_id = _normalize_workflow_id(result.primary_workflow_id)
     result.alternative_workflow_ids = [w for w in result.alternative_workflow_ids if w in valid]
     return result
 
@@ -282,8 +298,7 @@ _VERIFIER_PROMPT = (
     "선택하지 않았는가.\n"
     "6. 분류기의 evidence_phrases가 실제 사용자 발화에 존재하고, 선택한 "
     "Workflow를 뒷받침하는가.\n"
-    "7. 결정론적 signal과 분류 결과가 명백히 충돌하지 않는가.\n"
-    "8. 근거가 부족하거나 두 개 이상의 Workflow가 가능하면 ambiguous로 판단하라.\n\n"
+    "7. 근거가 부족하거나 두 개 이상의 Workflow가 가능하면 ambiguous로 판단하라.\n\n"
     "분류기의 결과는 참고 정보일 뿐 정답이 아니다. 분류기의 결론을 반복하지 말고, "
     "사용자 발화와 선택된 Workflow 사이의 모순을 우선적으로 찾아라. 수정이 "
     "필요하면 corrected_workflow_id에 올바른 id를 넣어라.\n\n"
@@ -302,15 +317,13 @@ _VERIFIER_PROMPT = (
     "[워크플로우 목록]\n{catalog}\n\n"
     "[사용자 발화]\n{text}\n\n"
     "[분류기 결과]\nprimary={primary}\nalternatives={alternatives}\n"
-    "evidence={evidence}\nstatus={status}\n\n"
-    "[결정론 신호]\n{signals}"
+    "evidence={evidence}\nstatus={status}"
 )
 
 
 def verify_workflow(
     text: str,
     classification: WorkflowClassification,
-    signals: RoutingSignals,
 ) -> WorkflowVerification:
     """분류 결과와 발화의 모순을 검증한다. 실패 시 예외를 그대로 올린다."""
     catalog = _build_catalog(_load_choices())
@@ -325,158 +338,138 @@ def verify_workflow(
                 alternatives=classification.alternative_workflow_ids,
                 evidence=classification.evidence_phrases,
                 status=classification.status,
-                signals=signals.model_dump(),
             )
         ),
     )
+    result.corrected_workflow_id = _normalize_workflow_id(result.corrected_workflow_id)
     if result.corrected_workflow_id not in _valid_ids():
         result.corrected_workflow_id = None
     return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Resolution 정책
+# Resolution 정책 (결정론 — 자연어 재판단 없음, 결과 결합만)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _merge_candidates(
+def _merge_valid_candidates(*values: str | list[str] | None) -> list[str]:
+    """유효한 workflow_id를 순서 유지·중복 제거로 병합한다."""
+    valid = _valid_ids()
+    candidates: list[str] = []
+    for value in values:
+        items = [value] if isinstance(value, str) else (value or [])
+        for workflow_id in items:
+            if workflow_id in valid and workflow_id not in candidates:
+                candidates.append(workflow_id)
+    return candidates
+
+
+def _ambiguous(
     classification: WorkflowClassification,
     verification: WorkflowVerification,
-) -> list[str]:
-    seen: list[str] = []
-    for wid in (
-        classification.primary_workflow_id,
-        verification.corrected_workflow_id,
-        *classification.alternative_workflow_ids,
-    ):
-        if wid and wid not in seen:
-            seen.append(wid)
-    return seen
-
-
-def _requires_user_confirmation(original: str | None, corrected: str | None) -> bool:
-    """실행형(transfer) 간 수정은 자동 채택하지 않고 사용자 확인이 필요하다."""
-    return _is_execution_workflow(original) and _is_execution_workflow(corrected)
+    *,
+    source: ResolutionSource,
+) -> WorkflowResolution:
+    return WorkflowResolution(
+        status="ambiguous",
+        workflow_id=None,
+        candidates=_merge_valid_candidates(
+            classification.primary_workflow_id,
+            classification.alternative_workflow_ids,
+            verification.corrected_workflow_id,
+        ),
+        source=source,
+        reason_code=verification.reason_code,
+    )
 
 
 def resolve_workflow(
     classification: WorkflowClassification,
     verification: WorkflowVerification,
 ) -> WorkflowResolution:
-    """분류기·검증기 결과를 합쳐 최종 라우팅을 결정한다."""
-    if verification.verdict == "accept":
-        if classification.primary_workflow_id:
-            return WorkflowResolution(
-                status="resolved",
-                workflow_id=classification.primary_workflow_id,
-                source="classifier_verified",
-            )
-        # 분류기가 no_match인데 검증기가 accept한 모순 → 확정 불가.
-        return WorkflowResolution(status="no_match", source="no_match")
+    """분류기·검증기 결과를 결정론적으로 결합해 최종 라우팅을 정한다.
 
-    if verification.verdict == "ambiguous":
-        return WorkflowResolution(
-            status="ambiguous",
-            candidates=_merge_candidates(classification, verification),
-            source="classifier_verifier_conflict",
-        )
-
-    # verdict == "reject"
-    corrected = verification.corrected_workflow_id
-    if corrected is None:
-        return WorkflowResolution(
-            status="ambiguous",
-            candidates=_merge_candidates(classification, verification),
-            source="classifier_verifier_conflict",
-        )
-
-    if _requires_user_confirmation(classification.primary_workflow_id, corrected):
-        # 실행형 간 충돌 — 자동 수정하지 않고 확인 필요(현재는 안전 폴백에서 no_match).
-        return WorkflowResolution(
-            status="ambiguous",
-            candidates=[c for c in (classification.primary_workflow_id, corrected) if c],
-            source="classifier_verifier_conflict",
-        )
-
-    # 조회·설정형 수정은 검증기 제안을 채택한다.
-    return WorkflowResolution(
-        status="resolved",
-        workflow_id=corrected,
-        source="verifier_corrected",
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 결정론적 폴백 (LLM 실패 시에만)
-#
-# 설계 원칙(P0/P10): 기존의 결정론적 선가드(_is_own_account_transfer)와 키워드
-# 규칙을 "LLM보다 먼저 확정하는 선가드"에서 "LLM 실패 시에만 도는 폴백"으로
-# 옮긴다. 검증된 기존 규칙을 계승해 호환성을 유지하되, 본인이체 강가드에
-# 조회·설정 신호 제외를 추가해 과잉 포섭을 완화한다.
-# ─────────────────────────────────────────────────────────────────────────────
-
-# 기존 키워드 규칙(위에서부터 first-match). 구체 키워드가 위, 범용어는 맨 아래.
-_KEYWORD_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("에게", "한테"), "wf_external_transfer"),
-    # "부계좌"는 이체·설정·별칭·조회에 모두 등장하는 순수 엔티티라 internal 신호로
-    # 쓰지 않는다(진짜 본인이체는 위 강가드가 own_account+transfer로 이미 잡는다).
-    (
-        ("계좌끼리", "통장끼리", "옮겨", "본인 계좌", "내 계좌로", "통장으로", "계좌 간", "이체"),
-        "wf_internal_transfer",
-    ),
-    (("송금", "보내"), "wf_external_transfer"),
-    (("기본", "출금 계좌로", "나가게 해"), "wf_set_default_account"),
-    (("별칭", "라고 해", "라 해", "라고 불러", "라 불러", "이름 붙"), "wf_set_account_alias"),
-    (
-        (
-            "계좌 목록",
-            "계좌목록",
-            "계좌 뭐",
-            "무슨 계좌",
-            "어떤 계좌",
-            "계좌 다 보",
-            "계좌 확인",
-            "계좌를 보여",
-            "계좌 보여",
-            "내 계좌",
-        ),
-        "wf_account_list",
-    ),
-    (("거래내역", "거래 내역", "결제 내역", "이용 내역", "사용 내역", "입출금 내역"), "wf_transaction_history"),
-    (("얼마 썼", "얼마 쓴", "지출", "소비", "얼마 들어", "얼마 받", "수입", "입금 얼마"), "wf_period_amount_summary"),
-    (("잔액", "통장", "얼마 있어", "얼마야"), "wf_balance_inquiry"),
-)
-
-
-def _strong_internal_transfer_signal(signals: RoutingSignals) -> bool:
-    """사람 표지 없이 본인 계좌 신호와 이체 동사가 함께 있으면 본인이체.
-
-    기존 _is_own_account_transfer를 신호 기반으로 옮기되, 조회("얼마/내역")·
-    설정("바꿔/변경") 신호가 있으면 양보해 과잉 포섭을 줄인다.
+    자연어를 다시 판단하지 않는다. 출력 유효성 검증, 결과 합의, 자동수정 정책,
+    사용자 확인 여부, 안전 실패만 담당한다.
     """
-    if signals.has_person_marker:
-        return False
-    if signals.has_query_action or signals.has_setting_action:
-        return False
-    return signals.has_own_account_marker and signals.has_transfer_action
+    valid = _valid_ids()
+    primary = classification.primary_workflow_id
+    corrected = verification.corrected_workflow_id
 
+    # (a) primary가 유효하지 않으면(무효 id) 안전 실패.
+    if primary is not None and primary not in valid:
+        return WorkflowResolution(
+            status="failed",
+            source="invalid_classifier_output",
+            reason_code="INVALID_CLASSIFIER_OUTPUT",
+        )
+    # 검증기의 무효 수정 id는 이미 verify_workflow가 None으로 낮춘다(방어적 재확인).
+    if corrected is not None and corrected not in valid:
+        corrected = None
 
-def deterministic_fallback(text: str, signals: RoutingSignals) -> WorkflowResolution:
-    """LLM 실패 시 강가드 + 키워드 규칙으로 최소 라우팅을 수행한다."""
-    if _strong_internal_transfer_signal(signals):
+    # (b) 분류기 no_match: 검증기가 수정 후보를 제시하면 사용자 확인, 아니면 no_match.
+    if classification.status == "no_match":
+        if verification.verdict == "reject" and corrected is not None:
+            return WorkflowResolution(
+                status="ambiguous",
+                candidates=[corrected],
+                source="classifier_verifier_conflict",
+                reason_code=verification.reason_code,
+            )
+        return WorkflowResolution(
+            status="no_match",
+            source="classifier_no_match",
+            reason_code="NO_MATCH",
+        )
+
+    # (c) 분류기 ambiguous: 검증기가 accept여도 자동 확정하지 않는다.
+    if classification.status == "ambiguous":
+        return _ambiguous(classification, verification, source="classifier_ambiguous")
+
+    # 여기부터 classification.status == "resolved" 이고 primary 유효.
+    # (d) accept → 확정.
+    if verification.verdict == "accept":
         return WorkflowResolution(
             status="resolved",
-            workflow_id="wf_internal_transfer",
-            source="deterministic_fallback",
+            workflow_id=primary,
+            source="classifier_verified",
+            reason_code="VALID",
         )
-    for keywords, workflow_id in _KEYWORD_RULES:
-        if any(k in text for k in keywords):
-            return WorkflowResolution(
-                status="resolved",
-                workflow_id=workflow_id,
-                source="deterministic_fallback",
-            )
-    return WorkflowResolution(status="no_match", source="no_match")
+
+    # (e) 검증기 ambiguous → 사용자 확인.
+    if verification.verdict == "ambiguous":
+        return _ambiguous(classification, verification, source="classifier_verifier_conflict")
+
+    # (f) 검증기 reject.
+    if corrected is None:
+        return _ambiguous(classification, verification, source="classifier_verifier_conflict")
+
+    # reject인데 같은 워크플로우를 제시 → 검증기 출력 논리 오류(안전 실패).
+    if corrected == primary:
+        return WorkflowResolution(
+            status="failed",
+            source="invalid_verifier_output",
+            reason_code="INVALID_VERIFIER_OUTPUT",
+        )
+
+    # 조회형→조회형만 자동수정(근거가 충분할 때). 그 외(실행형·설정형·교차)는
+    # 결과가 크게 달라지므로 사용자 확인으로 통일한다.
+    original_type = _risk_class(primary)
+    corrected_type = _risk_class(corrected)
+    if (
+        query_auto_correction_enabled()
+        and original_type == "query"
+        and corrected_type == "query"
+        and verification.reason_code not in {"INSUFFICIENT_EVIDENCE", "MULTIPLE_ACTIONS"}
+    ):
+        return WorkflowResolution(
+            status="resolved",
+            workflow_id=corrected,
+            source="verifier_corrected",
+            reason_code=verification.reason_code,
+        )
+
+    return _ambiguous(classification, verification, source="classifier_verifier_conflict")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -485,52 +478,70 @@ def deterministic_fallback(text: str, signals: RoutingSignals) -> WorkflowResolu
 
 
 def route_workflow(user_input: str) -> WorkflowResolution:
-    """분류 → 신호 추출 → 검증 → resolution. LLM 실패 시 결정론 폴백."""
+    """분류 → 검증 → resolution. LLM 실패 시 안전 실패(failed)."""
     text = user_input or ""
-    signals = extract_routing_signals(text)
 
     try:
         classification = classify_workflow(text)
     except Exception:
-        resolution = deterministic_fallback(text, signals)
-        _log_routing(text, None, signals, None, resolution)
+        resolution = WorkflowResolution(
+            status="failed",
+            source="classifier_failed",
+            reason_code="CLASSIFIER_UNAVAILABLE",
+        )
+        _log_routing(text, None, None, resolution)
+        return resolution
+
+    # 검증기 비활성: 분류기 결과를 (유효성 검증 후) 직접 사용한다.
+    if not verifier_enabled():
+        verification = WorkflowVerification(verdict="accept", reason_code="VALID")
+        resolution = resolve_workflow(classification, verification)
+        _log_routing(text, classification, verification, resolution)
         return resolution
 
     try:
-        verification = verify_workflow(text, classification, signals)
+        verification = verify_workflow(text, classification)
     except Exception:
-        # 검증기만 실패: 분류기가 확정한 경우에만 신뢰하고, 아니면 폴백.
-        if classification.status == "resolved" and classification.primary_workflow_id:
+        can_trust_classifier = (
+            _verifier_fail_mode() == "fallback"
+            and classification.status == "resolved"
+            and classification.primary_workflow_id is not None
+        )
+        if can_trust_classifier:
             resolution = WorkflowResolution(
                 status="resolved",
                 workflow_id=classification.primary_workflow_id,
                 source="classifier_verified",
+                reason_code="VERIFIER_UNAVAILABLE",
             )
         else:
-            resolution = deterministic_fallback(text, signals)
-        _log_routing(text, classification, signals, None, resolution)
+            resolution = WorkflowResolution(
+                status="failed",
+                candidates=([classification.primary_workflow_id] if classification.primary_workflow_id else []),
+                source="verifier_failed",
+                reason_code="VERIFIER_UNAVAILABLE",
+            )
+        _log_routing(text, classification, None, resolution)
         return resolution
 
     resolution = resolve_workflow(classification, verification)
-    _log_routing(text, classification, signals, verification, resolution)
+    _log_routing(text, classification, verification, resolution)
     return resolution
 
 
 def _log_routing(
     text: str,
     classification: WorkflowClassification | None,
-    signals: RoutingSignals,
     verification: WorkflowVerification | None,
     resolution: WorkflowResolution,
 ) -> None:
-    """관측성: 분류·신호·검증·최종 결정을 구조화 로그로 남긴다(원문은 해시)."""
+    """관측성: 분류·검증·최종 결정을 구조화 로그로 남긴다(원문은 해시)."""
     logger.info(
-        "workflow_routing",
+        "workflow_resolution",
         extra={
             "routing": {
                 "user_input_hash": sha256(text.encode("utf-8")).hexdigest()[:16],
                 "classifier": classification.model_dump() if classification else None,
-                "signals": signals.model_dump(),
                 "verifier": verification.model_dump() if verification else None,
                 "resolution": resolution.model_dump(),
             }

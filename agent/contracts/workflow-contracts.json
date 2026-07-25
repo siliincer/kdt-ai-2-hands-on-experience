@@ -2,7 +2,7 @@
   "manifest_version": "1.0.0",
   "source": {
     "workbook": "docs/agent-management-sheet-v3.xlsx",
-    "sha256": "b10d447d4586801b302258264b5c4fbfc70d381e01a17e2477277cf6375ec9f4"
+    "sha256": "3e9452f7214c8e529bad807575c8b4b1078dbbc7677d89ffc2663a299b50672f"
   },
   "common_state_schema": [
     {
@@ -650,6 +650,17 @@
       "contract_name": "지원 Workflow 없음 안내",
       "transport_target": "message · message",
       "contract_summary": "지원하는 금융 Workflow와 일치하지 않는 요청에 대한 안내",
+      "source_document": "agent-ui-hitl-contract.md",
+      "source_section": "5.1장",
+      "contract_version": "0.9.0",
+      "status": "review"
+    },
+    "UI-WORKFLOW-CLARIFICATION": {
+      "contract_id": "UI-WORKFLOW-CLARIFICATION",
+      "contract_type": "ui_hitl",
+      "contract_name": "업무 확인 선택",
+      "transport_target": "component · option_select",
+      "contract_summary": "두 개 이상 가능한 업무 중 사용자가 수행할 업무를 선택",
       "source_document": "agent-ui-hitl-contract.md",
       "source_section": "5.1장",
       "contract_version": "0.9.0",
@@ -1952,9 +1963,10 @@
           "input_state_keys": [],
           "output_state_keys": [
             "workflow_match_outcome",
-            "matched_workflow_id"
+            "matched_workflow_id",
+            "workflow_clarification_candidates"
           ],
-          "route_summary": "matched → dispatch_matched_workflow | no_match → emit_no_matching_workflow",
+          "route_summary": "matched → dispatch_matched_workflow | ambiguous → request_workflow_clarification | no_match → emit_no_matching_workflow",
           "validation_result": "OK"
         },
         {
@@ -2034,6 +2046,29 @@
           "output_state_keys": [],
           "route_summary": "항상 → END",
           "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "step_order": 7,
+          "step_id": "request_workflow_clarification",
+          "step_name": "업무 확인 요청",
+          "step_purpose": "두 개 이상의 업무 가능성이 있을 때 사용자에게 어떤 업무인지 선택받고 Backend가 검증한 결과를 기다린다.",
+          "interaction_mode": "webhook_then_resume",
+          "tool_id": "request_component_input",
+          "contract_id": "UI-WORKFLOW-CLARIFICATION",
+          "step_risk_level": "R1",
+          "status": "review",
+          "notes": "Backend가 선택된 workflow_id를 검증한 뒤 Agent를 resume",
+          "external_action": "component · option_select",
+          "input_state_keys": [
+            "workflow_clarification_candidates"
+          ],
+          "output_state_keys": [
+            "workflow_clarification_outcome",
+            "selected_workflow_id"
+          ],
+          "route_summary": "selected → dispatch_matched_workflow | cancelled → END",
+          "validation_result": "OK"
         }
       ],
       "routes": [
@@ -2067,9 +2102,36 @@
         {
           "workflow_id": "wf_global_agent_entry",
           "from_step_id": "match_workflow",
+          "route_name": "업무 확인 필요",
+          "condition_description": "workflow_match_outcome=ambiguous로 둘 이상의 업무 후보가 있는 경우",
+          "to_step_id": "request_workflow_clarification",
+          "status": "review",
+          "notes": null
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "from_step_id": "match_workflow",
           "route_name": "일치 Workflow 없음",
           "condition_description": "workflow_match_outcome=no_match인 경우",
           "to_step_id": "emit_no_matching_workflow",
+          "status": "review",
+          "notes": null
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "from_step_id": "request_workflow_clarification",
+          "route_name": "업무 선택 완료",
+          "condition_description": "workflow_clarification_outcome=selected로 사용자가 업무를 선택한 경우",
+          "to_step_id": "dispatch_matched_workflow",
+          "status": "review",
+          "notes": "선택된 workflow_id로 하위 Workflow를 실행"
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "from_step_id": "request_workflow_clarification",
+          "route_name": "업무 선택 취소",
+          "condition_description": "workflow_clarification_outcome=cancelled인 경우",
+          "to_step_id": "END",
           "status": "review",
           "notes": null
         },
@@ -2189,6 +2251,48 @@
           "sensitive": false,
           "log_policy": "allow",
           "notes": "completed, failed"
+        },
+        {
+          "schema_scope": "workflow",
+          "workflow_id": "wf_global_agent_entry",
+          "state_key": "workflow_clarification_candidates",
+          "data_type": "array",
+          "nullable": true,
+          "default_value": "null",
+          "description": "업무 확인 시 사용자에게 제시하는 후보 Workflow 목록",
+          "retention_scope": "interaction",
+          "clear_when": "선택 완료 또는 Workflow 종료",
+          "sensitive": false,
+          "log_policy": "allow",
+          "notes": "Workflow Catalog에 등록된 업무 Workflow ID만 포함"
+        },
+        {
+          "schema_scope": "workflow",
+          "workflow_id": "wf_global_agent_entry",
+          "state_key": "workflow_clarification_outcome",
+          "data_type": "string",
+          "nullable": true,
+          "default_value": "null",
+          "description": "업무 확인 선택 또는 취소 결과",
+          "retention_scope": "interaction",
+          "clear_when": "Route 결정 또는 Workflow 종료",
+          "sensitive": false,
+          "log_policy": "allow",
+          "notes": "selected, cancelled"
+        },
+        {
+          "schema_scope": "workflow",
+          "workflow_id": "wf_global_agent_entry",
+          "state_key": "selected_workflow_id",
+          "data_type": "string",
+          "nullable": true,
+          "default_value": "null",
+          "description": "사용자가 업무 확인에서 선택한 Workflow 식별자",
+          "retention_scope": "workflow",
+          "clear_when": "하위 Workflow 실행 완료 또는 Workflow 종료",
+          "sensitive": false,
+          "log_policy": "allow",
+          "notes": "Workflow Catalog에 등록된 업무 Workflow만 허용"
         }
       ],
       "step_data_mappings": [
@@ -2238,6 +2342,17 @@
         },
         {
           "workflow_id": "wf_global_agent_entry",
+          "step_id": "match_workflow",
+          "direction": "output",
+          "state_key": "workflow_clarification_candidates",
+          "contract_field_path": null,
+          "required_at_step": false,
+          "mapping_description": "업무 후보가 둘 이상일 때 사용자에게 제시할 후보 Workflow 목록을 저장한다.",
+          "notes": "ambiguous일 때 필수",
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
           "step_id": "dispatch_matched_workflow",
           "direction": "input",
           "state_key": "matched_workflow_id",
@@ -2268,6 +2383,39 @@
           "mapping_description": "전역 정책 차단 안내 데이터를 Webhook Payload로 전달한다.",
           "notes": "내부 정책 세부 사유 제외",
           "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "step_id": "request_workflow_clarification",
+          "direction": "input",
+          "state_key": "workflow_clarification_candidates",
+          "contract_field_path": "webhook.metadata.ui.payload.options",
+          "required_at_step": true,
+          "mapping_description": "후보 Workflow 목록을 선택 UI Payload로 전달한다.",
+          "notes": "각 후보는 workflow_id와 표시명을 포함",
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "step_id": "request_workflow_clarification",
+          "direction": "output",
+          "state_key": "workflow_clarification_outcome",
+          "contract_field_path": "resume.value.option_selection_outcome",
+          "required_at_step": true,
+          "mapping_description": "Backend가 검증한 업무 선택 또는 취소 결과를 저장한다.",
+          "notes": "selected, cancelled",
+          "validation_result": "OK"
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "step_id": "request_workflow_clarification",
+          "direction": "output",
+          "state_key": "selected_workflow_id",
+          "contract_field_path": "resume.value.option",
+          "required_at_step": false,
+          "mapping_description": "사용자가 선택한 Workflow ID를 저장한다.",
+          "notes": "selected일 때 필수",
+          "validation_result": "OK"
         }
       ],
       "contract_mappings": [
@@ -2293,6 +2441,14 @@
           "interaction_mode": "webhook",
           "contract_id": "UI-COMMON-ERROR",
           "transport_target": "error · error_message",
+          "contract_version": "0.9.0"
+        },
+        {
+          "workflow_id": "wf_global_agent_entry",
+          "step_id": "request_workflow_clarification",
+          "interaction_mode": "webhook_then_resume",
+          "contract_id": "UI-WORKFLOW-CLARIFICATION",
+          "transport_target": "component · option_select",
           "contract_version": "0.9.0"
         }
       ]

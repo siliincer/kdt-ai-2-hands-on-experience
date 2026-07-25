@@ -1,8 +1,9 @@
-"""워크플로우 라우팅(분류기·검증기 분리) 검증.
+"""워크플로우 라우팅(분류기·검증기 분리 + 결정론 Resolution) 검증.
 
-conftest가 OPENAI_API_KEY를 제거하므로 별도 stub이 없으면 분류기/검증기 LLM은
-실패하고 deterministic_fallback(강가드 + 키워드 규칙)이 동작한다. match_workflow는
-route_workflow를 감싸 workflow_id만 반환하는 하위호환 래퍼다.
+결정론 키워드 폴백은 제거됐다. conftest가 OPENAI_API_KEY를 제거하므로 stub 없이
+LLM을 호출하면 실패하고, route_workflow는 status="failed"로 안전 종료한다.
+자연어 의미 판단은 stub으로 분류기·검증기 결과를 주입해 검증하고, resolution
+정책은 순수 함수로 검증한다.
 """
 
 from __future__ import annotations
@@ -14,8 +15,8 @@ from agent.workflow_routing import (
     WorkflowVerification,
     _build_catalog,
     _load_choices,
-    extract_routing_signals,
     resolve_workflow,
+    route_workflow,
 )
 
 # ── 카탈로그 재료 ────────────────────────────────────────────────────────────
@@ -25,7 +26,6 @@ def test_choices_include_manifest_example_utterances():
     choices = {wid: example for wid, _, _, example in _load_choices()}
     assert "보내줘" in choices["wf_external_transfer"]
     assert "잔액" in choices["wf_balance_inquiry"]
-    assert "계좌끼리" in choices["wf_internal_transfer"]
 
 
 def test_build_catalog_format_and_size():
@@ -38,147 +38,119 @@ def test_build_catalog_format_and_size():
     assert _build_catalog((("wf_x", "이름", "설명", ""),)) == "- wf_x: 이름 — 설명"
 
 
-# ── 결정론 폴백 (LLM 실패 경로, conftest가 키 제거) ──────────────────────────
+# ── resolve_workflow 정책 (순수 함수, LLM 불필요) ──────────────────────────
 
 
-def test_account_list_keywords_match():
-    assert match_workflow("내 계좌 목록 보여줘") == "wf_account_list"
-
-
-def test_transaction_history_keywords_match():
-    assert match_workflow("지난주 거래 내역 보여줘") == "wf_transaction_history"
-
-
-def test_period_summary_keywords_match():
-    assert match_workflow("이번 달 얼마 썼어?") == "wf_period_amount_summary"
-
-
-def test_balance_keywords_match_balance_inquiry():
-    assert match_workflow("잔액 얼마야?") == "wf_balance_inquiry"
-
-
-def test_transfer_keywords_match_external_transfer():
-    assert match_workflow("김철수한테 5만원 보내줘") == "wf_external_transfer"
-
-
-def test_own_account_transfer_matches_internal_transfer():
-    assert match_workflow("생활비통장으로 10만원 이체해줘") == "wf_internal_transfer"
-
-
-def test_own_account_transfer_with_send_verbs_matches_internal():
-    assert match_workflow("제 계좌끼리의 송금 해줘") == "wf_internal_transfer"
-    assert match_workflow("내 계좌끼리 5만원 송금해줘") == "wf_internal_transfer"
-    assert match_workflow("내 통장끼리 돈 좀 옮겨줘") == "wf_internal_transfer"
-    assert match_workflow("내 계좌로 10만원 송금해줘") == "wf_internal_transfer"
-
-
-def test_bare_send_verbs_still_default_to_external():
-    assert match_workflow("5만원 송금해줘") == "wf_external_transfer"
-
-
-def test_compact_account_list_phrase_matches_account_list():
-    assert match_workflow("계좌목록 보여줘") == "wf_account_list"
-
-
-def test_income_phrase_matches_amount_summary():
-    assert match_workflow("이번달 얼마 들어왔어?") == "wf_period_amount_summary"
-
-
-def test_unrelated_input_matches_nothing():
-    assert match_workflow("오늘 날씨 어때") is None
-
-
-# ── 강가드가 조회·설정 신호에 양보(과잉 포섭 완화) ──────────────────────────
-
-
-def test_fallback_guard_yields_to_setting_signal():
-    """폴백에서도 '부계좌 + 이체동사'가 설정 신호와 겹치면 본인이체로 확정하지 않는다."""
-    # "나가게 해"는 이체 동사가 아니라 기본계좌 설정 키워드로 폴백해야 한다.
-    assert match_workflow("이제부터 신한 부계좌에서 나가게 해줘") == "wf_set_default_account"
-
-
-def test_fallback_guard_yields_to_alias_signal():
-    assert match_workflow("하나 부계좌를 비상금이라고 불러줘") == "wf_set_account_alias"
-
-
-# ── extract_routing_signals ─────────────────────────────────────────────────
-
-
-def test_signals_detect_setting_over_transfer():
-    s = extract_routing_signals("이제부터 신한 부계좌에서 나가게 해줘")
-    assert s.has_own_account_marker is True
-    assert s.has_persistent_setting_expression is True
-    assert s.has_person_marker is False
-
-
-def test_signals_detect_amount_and_destination():
-    s = extract_routing_signals("생활비통장으로 5만원 옮겨줘")
-    assert s.has_amount_expression is True
-    assert s.has_destination_expression is True
-
-
-def test_signals_detect_person_marker():
-    s = extract_routing_signals("민수에게 3만원 보내줘")
-    assert s.has_person_marker is True
-
-
-# ── resolve_workflow (순수 함수) ────────────────────────────────────────────
-
-
-def test_resolve_accept_keeps_primary():
-    c = WorkflowClassification(primary_workflow_id="wf_external_transfer", status="resolved")
-    v = WorkflowVerification(verdict="accept", reason_code="VALID")
-    r = resolve_workflow(c, v)
-    assert r.status == "resolved"
-    assert r.workflow_id == "wf_external_transfer"
-    assert r.source == "classifier_verified"
-
-
-def test_resolve_reject_setting_correction_is_adopted():
-    """조회·설정형으로의 수정은 검증기 제안을 채택한다."""
-    c = WorkflowClassification(primary_workflow_id="wf_internal_transfer", status="resolved")
-    v = WorkflowVerification(
-        verdict="reject",
-        corrected_workflow_id="wf_set_default_account",
-        reason_code="ACTION_MISMATCH",
+def _c(primary, status="resolved", alts=None):
+    return WorkflowClassification(
+        primary_workflow_id=primary,
+        alternative_workflow_ids=alts or [],
+        status=status,
     )
-    r = resolve_workflow(c, v)
-    assert r.status == "resolved"
-    assert r.workflow_id == "wf_set_default_account"
-    assert r.source == "verifier_corrected"
 
 
-def test_resolve_execution_conflict_requires_confirmation():
-    """실행형(transfer) 간 충돌은 자동 채택하지 않고 ambiguous로 보류한다."""
-    c = WorkflowClassification(primary_workflow_id="wf_internal_transfer", status="resolved")
-    v = WorkflowVerification(
-        verdict="reject",
-        corrected_workflow_id="wf_external_transfer",
-        reason_code="INTERNAL_EXTERNAL_CONFLICT",
+def _v(verdict, corrected=None, reason="VALID"):
+    return WorkflowVerification(verdict=verdict, corrected_workflow_id=corrected, reason_code=reason)
+
+
+def test_accept_keeps_primary():
+    r = resolve_workflow(_c("wf_balance_inquiry"), _v("accept"))
+    assert (r.status, r.workflow_id, r.source) == ("resolved", "wf_balance_inquiry", "classifier_verified")
+
+
+def test_query_to_query_correction_is_adopted():
+    r = resolve_workflow(
+        _c("wf_transaction_history"),
+        _v("reject", "wf_period_amount_summary", "ACTION_MISMATCH"),
     )
-    r = resolve_workflow(c, v)
+    assert (r.status, r.workflow_id, r.source) == ("resolved", "wf_period_amount_summary", "verifier_corrected")
+
+
+def test_query_correction_blocked_on_insufficient_evidence():
+    r = resolve_workflow(
+        _c("wf_transaction_history"),
+        _v("reject", "wf_period_amount_summary", "INSUFFICIENT_EVIDENCE"),
+    )
+    assert r.status == "ambiguous"
+
+
+def test_execution_conflict_is_ambiguous():
+    r = resolve_workflow(
+        _c("wf_internal_transfer"),
+        _v("reject", "wf_external_transfer", "INTERNAL_EXTERNAL_CONFLICT"),
+    )
     assert r.status == "ambiguous"
     assert set(r.candidates) == {"wf_internal_transfer", "wf_external_transfer"}
-    assert r.source == "classifier_verifier_conflict"
 
 
-def test_resolve_ambiguous_verdict():
-    c = WorkflowClassification(
-        primary_workflow_id="wf_set_default_account",
-        alternative_workflow_ids=["wf_internal_transfer"],
-        status="resolved",
+def test_transfer_to_setting_correction_is_ambiguous():
+    """교차 타입 수정(실행형→설정형)은 자동 채택하지 않고 사용자 확인으로 보류."""
+    r = resolve_workflow(
+        _c("wf_internal_transfer"),
+        _v("reject", "wf_set_default_account", "ACTION_MISMATCH"),
     )
-    v = WorkflowVerification(verdict="ambiguous", reason_code="INSUFFICIENT_EVIDENCE")
-    r = resolve_workflow(c, v)
+    assert r.status == "ambiguous"
+    assert set(r.candidates) == {"wf_internal_transfer", "wf_set_default_account"}
+
+
+def test_setting_to_setting_correction_is_ambiguous():
+    r = resolve_workflow(
+        _c("wf_set_account_alias"),
+        _v("reject", "wf_set_default_account", "ACTION_MISMATCH"),
+    )
     assert r.status == "ambiguous"
 
 
-# ── route_workflow 통합 (분류기·검증기 stub 주입) ───────────────────────────
+def test_invalid_primary_fails():
+    r = resolve_workflow(_c("wf_bogus"), _v("accept"))
+    assert (r.status, r.source, r.reason_code) == ("failed", "invalid_classifier_output", "INVALID_CLASSIFIER_OUTPUT")
+
+
+def test_reject_same_workflow_fails():
+    r = resolve_workflow(
+        _c("wf_internal_transfer"),
+        _v("reject", "wf_internal_transfer", "ACTION_MISMATCH"),
+    )
+    assert (r.status, r.source, r.reason_code) == ("failed", "invalid_verifier_output", "INVALID_VERIFIER_OUTPUT")
+
+
+def test_reject_without_correction_is_ambiguous():
+    r = resolve_workflow(_c("wf_internal_transfer"), _v("reject", None, "ACTION_MISMATCH"))
+    assert r.status == "ambiguous"
+
+
+def test_verifier_ambiguous_is_ambiguous():
+    r = resolve_workflow(_c("wf_set_default_account"), _v("ambiguous", None, "INSUFFICIENT_EVIDENCE"))
+    assert r.status == "ambiguous"
+
+
+def test_classifier_ambiguous_stays_ambiguous_even_on_accept():
+    r = resolve_workflow(
+        _c("wf_set_default_account", status="ambiguous", alts=["wf_internal_transfer"]),
+        _v("accept"),
+    )
+    assert r.status == "ambiguous"
+    assert r.source == "classifier_ambiguous"
+
+
+def test_classifier_no_match_stays_no_match():
+    r = resolve_workflow(_c(None, status="no_match"), _v("accept"))
+    assert (r.status, r.source) == ("no_match", "classifier_no_match")
+
+
+def test_no_match_with_correction_becomes_ambiguous():
+    r = resolve_workflow(
+        _c(None, status="no_match"),
+        _v("reject", "wf_balance_inquiry", "ACTION_MISMATCH"),
+    )
+    assert r.status == "ambiguous"
+    assert r.candidates == ["wf_balance_inquiry"]
+
+
+# ── route_workflow / match_workflow (stub 주입) ─────────────────────────────
 
 
 class _StubLlm:
-    """schema 타입에 따라 분류/검증 결과를 반환하는 stub."""
-
     def __init__(self, classification=None, verification=None):
         self._classification = classification
         self._verification = verification
@@ -194,56 +166,69 @@ class _StubLlm:
         return self._verification
 
 
-def test_route_verifier_corrects_setting_over_transfer(monkeypatch):
-    """분류기가 본인이체로 오분류해도 검증기가 기본계좌 설정으로 교정한다."""
-    classification = WorkflowClassification(
-        primary_workflow_id="wf_internal_transfer",
-        alternative_workflow_ids=["wf_set_default_account"],
-        evidence_phrases=["부계좌"],
-        status="resolved",
-    )
-    verification = WorkflowVerification(
-        verdict="reject",
-        corrected_workflow_id="wf_set_default_account",
-        reason_code="ACTION_MISMATCH",
-    )
+def test_route_verifier_corrects_query(monkeypatch):
     monkeypatch.setattr(
         wr,
         "get_llm",
-        lambda *a, **k: _StubLlm(classification=classification, verification=verification),
+        lambda *a, **k: _StubLlm(
+            classification=_c("wf_transaction_history"),
+            verification=_v("reject", "wf_period_amount_summary", "ACTION_MISMATCH"),
+        ),
     )
-    assert match_workflow("이제부터 신한 부계좌에서 나가게 해줘") == "wf_set_default_account"
+    assert match_workflow("이번 달 스타벅스에서 얼마 썼어?") == "wf_period_amount_summary"
 
 
-def test_route_execution_conflict_falls_to_none(monkeypatch):
-    """실행형 충돌은 ambiguous → match_workflow는 None(안전 폴백)."""
-    classification = WorkflowClassification(
-        primary_workflow_id="wf_internal_transfer",
-        status="resolved",
-    )
-    verification = WorkflowVerification(
-        verdict="reject",
-        corrected_workflow_id="wf_external_transfer",
-        reason_code="INTERNAL_EXTERNAL_CONFLICT",
-    )
+def test_route_accept_returns_primary(monkeypatch):
     monkeypatch.setattr(
         wr,
         "get_llm",
-        lambda *a, **k: _StubLlm(classification=classification, verification=verification),
+        lambda *a, **k: _StubLlm(classification=_c("wf_external_transfer"), verification=_v("accept")),
+    )
+    assert match_workflow("민수에게 3만원 보내줘") == "wf_external_transfer"
+
+
+def test_route_execution_conflict_is_none(monkeypatch):
+    """실행형 충돌은 ambiguous → match_workflow는 None(HITL은 그래프에서 처리)."""
+    monkeypatch.setattr(
+        wr,
+        "get_llm",
+        lambda *a, **k: _StubLlm(
+            classification=_c("wf_internal_transfer"),
+            verification=_v("reject", "wf_external_transfer", "INTERNAL_EXTERNAL_CONFLICT"),
+        ),
     )
     assert match_workflow("내 신한계좌에서 민수한테 3만원 보내줘") is None
 
 
-def test_route_accept_returns_primary(monkeypatch):
-    classification = WorkflowClassification(
-        primary_workflow_id="wf_external_transfer",
-        evidence_phrases=["민수에게", "보내줘"],
-        status="resolved",
-    )
-    verification = WorkflowVerification(verdict="accept", reason_code="VALID")
+def test_route_llm_failure_is_safe_failed():
+    """conftest가 OPENAI_API_KEY를 제거 → 분류기 LLM 실패 → failed → match None."""
+    r = route_workflow("민수에게 3만원 보내줘")
+    assert r.status == "failed"
+    assert r.source == "classifier_failed"
+    assert match_workflow("민수에게 3만원 보내줘") is None
+
+
+def test_null_string_primary_is_normalized_not_failed(monkeypatch):
+    """일부 모델(gemini)이 JSON null 대신 문자열 'null'을 채워도 failed가 아니라
+    ambiguous로 처리돼야 한다."""
     monkeypatch.setattr(
         wr,
         "get_llm",
-        lambda *a, **k: _StubLlm(classification=classification, verification=verification),
+        lambda *a, **k: _StubLlm(
+            classification=WorkflowClassification(primary_workflow_id="null", status="ambiguous"),
+            verification=_v("ambiguous", None, "INSUFFICIENT_EVIDENCE"),
+        ),
     )
-    assert match_workflow("민수에게 3만원 보내줘") == "wf_external_transfer"
+    r = route_workflow("신한 계좌로 해줘")
+    assert r.status == "ambiguous"
+    assert match_workflow("신한 계좌로 해줘") is None
+
+
+def test_verifier_disabled_uses_classifier(monkeypatch):
+    monkeypatch.setenv("WORKFLOW_VERIFIER_ENABLED", "false")
+    monkeypatch.setattr(
+        wr,
+        "get_llm",
+        lambda *a, **k: _StubLlm(classification=_c("wf_account_list")),
+    )
+    assert match_workflow("내 계좌 목록 보여줘") == "wf_account_list"
