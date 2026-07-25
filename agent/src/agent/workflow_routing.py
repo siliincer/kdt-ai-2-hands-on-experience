@@ -254,6 +254,16 @@ _CLASSIFIER_PROMPT = (
 )
 
 
+# 일부 모델(예 gemini)이 JSON null 대신 문자열 "null"/"none"을 채우는 것을 흡수한다.
+_NULL_PLACEHOLDERS = {"null", "none", "n/a", "na", "nil", ""}
+
+
+def _normalize_workflow_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return None if value.strip().lower() in _NULL_PLACEHOLDERS else value
+
+
 def classify_workflow(text: str) -> WorkflowClassification:
     """LLM으로 워크플로우 후보를 분류한다. 실패 시 예외를 그대로 올린다."""
     catalog = _build_catalog(_load_choices())
@@ -262,8 +272,10 @@ def classify_workflow(text: str) -> WorkflowClassification:
         WorkflowClassification,
         llm.invoke(_CLASSIFIER_PROMPT.format(catalog=catalog, text=text)),
     )
-    # 대안 ID만 유효성 필터(무효 primary는 resolve_workflow가 failed로 처리한다).
+    # "null" 문자열을 실제 null로 정규화하고, 대안 ID만 유효성 필터한다(무효
+    # primary는 resolve_workflow가 failed로 처리한다).
     valid = _valid_ids()
+    result.primary_workflow_id = _normalize_workflow_id(result.primary_workflow_id)
     result.alternative_workflow_ids = [w for w in result.alternative_workflow_ids if w in valid]
     return result
 
@@ -329,6 +341,7 @@ def verify_workflow(
             )
         ),
     )
+    result.corrected_workflow_id = _normalize_workflow_id(result.corrected_workflow_id)
     if result.corrected_workflow_id not in _valid_ids():
         result.corrected_workflow_id = None
     return result

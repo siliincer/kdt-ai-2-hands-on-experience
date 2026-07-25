@@ -208,6 +208,22 @@ def test_route_llm_failure_is_safe_failed():
     assert match_workflow("민수에게 3만원 보내줘") is None
 
 
+def test_null_string_primary_is_normalized_not_failed(monkeypatch):
+    """일부 모델(gemini)이 JSON null 대신 문자열 'null'을 채워도 failed가 아니라
+    ambiguous로 처리돼야 한다."""
+    monkeypatch.setattr(
+        wr,
+        "get_llm",
+        lambda *a, **k: _StubLlm(
+            classification=WorkflowClassification(primary_workflow_id="null", status="ambiguous"),
+            verification=_v("ambiguous", None, "INSUFFICIENT_EVIDENCE"),
+        ),
+    )
+    r = route_workflow("신한 계좌로 해줘")
+    assert r.status == "ambiguous"
+    assert match_workflow("신한 계좌로 해줘") is None
+
+
 def test_verifier_disabled_uses_classifier(monkeypatch):
     monkeypatch.setenv("WORKFLOW_VERIFIER_ENABLED", "false")
     monkeypatch.setattr(
