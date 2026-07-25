@@ -116,6 +116,8 @@ jobs:
             echo "COMPOSE_DATABASE_URL=postgresql://app:${db_password}@postgres:5432/financial_agent"
             echo "JWT_SECRET_KEY=$(openssl rand -hex 32)"
             echo "AGENT_WEBHOOK_SECRET=$(openssl rand -hex 32)"
+            echo "AGENT_SERVICE_TOKEN=$(openssl rand -hex 32)"
+            echo "BACKEND_SERVICE_TOKEN=$AGENT_SERVICE_TOKEN"
           } > .env.ec2-ci
       - name: Validate EC2 environment
         run: python3 scripts/validate_ec2_env.py --env-file .env.ec2-ci
