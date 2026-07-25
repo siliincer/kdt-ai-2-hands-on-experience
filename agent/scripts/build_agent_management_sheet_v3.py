@@ -707,6 +707,12 @@ GLOBAL_UI_CONTRACT_DEFINITIONS = [
         "message · message",
         "지원하는 금융 Workflow와 일치하지 않는 요청에 대한 안내",
     ),
+    (
+        "UI-WORKFLOW-CLARIFICATION",
+        "업무 확인 선택",
+        "component · option_select",
+        "두 개 이상 가능한 업무 중 사용자가 수행할 업무를 선택",
+    ),
 ]
 
 UI_CONTRACT_ROWS.extend(
@@ -756,8 +762,8 @@ GLOBAL_STEP_DEFINITIONS = [
         "업무별 세부 입력값은 하위 Workflow에서 추출",
         "",
         "",
-        "workflow_match_outcome, matched_workflow_id",
-        "matched → dispatch_matched_workflow | no_match → emit_no_matching_workflow",
+        "workflow_match_outcome, matched_workflow_id, workflow_clarification_candidates",
+        "matched → dispatch_matched_workflow | ambiguous → request_workflow_clarification | no_match → emit_no_matching_workflow",
     ),
     (
         3,
@@ -818,6 +824,21 @@ GLOBAL_STEP_DEFINITIONS = [
         "",
         "",
         "항상 → END",
+    ),
+    (
+        7,
+        "request_workflow_clarification",
+        "업무 확인 요청",
+        "두 개 이상의 업무 가능성이 있을 때 사용자에게 어떤 업무인지 선택받고 Backend가 검증한 결과를 기다린다.",
+        "webhook_then_resume",
+        "request_component_input",
+        "UI-WORKFLOW-CLARIFICATION",
+        "R1",
+        "Backend가 선택된 workflow_id를 검증한 뒤 Agent를 resume",
+        "component · option_select",
+        "workflow_clarification_candidates",
+        "workflow_clarification_outcome, selected_workflow_id",
+        "selected → dispatch_matched_workflow | cancelled → END",
     ),
 ]
 
@@ -881,9 +902,30 @@ GLOBAL_ROUTE_DEFINITIONS = [
     ),
     (
         "match_workflow",
+        "업무 확인 필요",
+        "workflow_match_outcome=ambiguous로 둘 이상의 업무 후보가 있는 경우",
+        "request_workflow_clarification",
+        "",
+    ),
+    (
+        "match_workflow",
         "일치 Workflow 없음",
         "workflow_match_outcome=no_match인 경우",
         "emit_no_matching_workflow",
+        "",
+    ),
+    (
+        "request_workflow_clarification",
+        "업무 선택 완료",
+        "workflow_clarification_outcome=selected로 사용자가 업무를 선택한 경우",
+        "dispatch_matched_workflow",
+        "선택된 workflow_id로 하위 Workflow를 실행",
+    ),
+    (
+        "request_workflow_clarification",
+        "업무 선택 취소",
+        "workflow_clarification_outcome=cancelled인 경우",
+        "END",
         "",
     ),
     (
@@ -4817,6 +4859,42 @@ GLOBAL_SCHEMA_DEFINITIONS = [
         "allow",
         "completed, failed",
     ),
+    (
+        "workflow_clarification_candidates",
+        "array",
+        "true",
+        "null",
+        "업무 확인 시 사용자에게 제시하는 후보 Workflow 목록",
+        "interaction",
+        "선택 완료 또는 Workflow 종료",
+        "false",
+        "allow",
+        "Workflow Catalog에 등록된 업무 Workflow ID만 포함",
+    ),
+    (
+        "workflow_clarification_outcome",
+        "string",
+        "true",
+        "null",
+        "업무 확인 선택 또는 취소 결과",
+        "interaction",
+        "Route 결정 또는 Workflow 종료",
+        "false",
+        "allow",
+        "selected, cancelled",
+    ),
+    (
+        "selected_workflow_id",
+        "string",
+        "true",
+        "null",
+        "사용자가 업무 확인에서 선택한 Workflow 식별자",
+        "workflow",
+        "하위 Workflow 실행 완료 또는 Workflow 종료",
+        "false",
+        "allow",
+        "Workflow Catalog에 등록된 업무 Workflow만 허용",
+    ),
 ]
 
 SCHEMA_ROWS.extend(
@@ -6586,6 +6664,15 @@ GLOBAL_MAPPING_DEFINITIONS = [
         "matched일 때 필수",
     ),
     (
+        "match_workflow",
+        "output",
+        "workflow_clarification_candidates",
+        "",
+        "false",
+        "업무 후보가 둘 이상일 때 사용자에게 제시할 후보 Workflow 목록을 저장한다.",
+        "ambiguous일 때 필수",
+    ),
+    (
         "dispatch_matched_workflow",
         "input",
         "matched_workflow_id",
@@ -6611,6 +6698,33 @@ GLOBAL_MAPPING_DEFINITIONS = [
         "true",
         "전역 정책 차단 안내 데이터를 Webhook Payload로 전달한다.",
         "내부 정책 세부 사유 제외",
+    ),
+    (
+        "request_workflow_clarification",
+        "input",
+        "workflow_clarification_candidates",
+        "webhook.metadata.ui.payload.options",
+        "true",
+        "후보 Workflow 목록을 선택 UI Payload로 전달한다.",
+        "각 후보는 workflow_id와 표시명을 포함",
+    ),
+    (
+        "request_workflow_clarification",
+        "output",
+        "workflow_clarification_outcome",
+        "resume.value.option_selection_outcome",
+        "true",
+        "Backend가 검증한 업무 선택 또는 취소 결과를 저장한다.",
+        "selected, cancelled",
+    ),
+    (
+        "request_workflow_clarification",
+        "output",
+        "selected_workflow_id",
+        "resume.value.option",
+        "false",
+        "사용자가 선택한 Workflow ID를 저장한다.",
+        "selected일 때 필수",
     ),
 ]
 
@@ -10527,7 +10641,7 @@ def validate_workbook(path: Path) -> None:
         for row in range(2, steps.max_row + 1)
     ]
     expected_step_counts = {
-        "wf_global_agent_entry": 6,
+        "wf_global_agent_entry": 7,
         "wf_account_list": 4,
         "wf_balance_inquiry": 7,
         "wf_transaction_history": 9,

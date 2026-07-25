@@ -31,11 +31,12 @@ def test_manifest_contains_canonical_workflows_and_contracts() -> None:
     manifest = _load_manifest()
 
     assert len(manifest["workflows"]) == 9
-    assert len(manifest["contracts"]) == 50
+    assert len(manifest["contracts"]) == 51
     assert "wf_global_agent_entry" in manifest["workflows"]
     assert "wf_external_transfer" in manifest["workflows"]
     assert "API-EXTERNAL-TRANSFER-EXECUTE" in manifest["contracts"]
     assert "UI-RECIPIENT-SELECT" in manifest["contracts"]
+    assert "UI-WORKFLOW-CLARIFICATION" in manifest["contracts"]
 
 
 def test_manifest_uses_current_hitl_contract() -> None:
