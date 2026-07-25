@@ -62,6 +62,29 @@ def _contract_graph_factory(
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_workflow_routing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """라우팅은 분류기·검증기 LLM에 의존하므로, 실행 통합 테스트에서는 발화→
+    워크플로우를 고정한다(라우팅 로직은 test_workflow_matcher.py가 검증한다).
+    """
+    import agent.workflows.contract_agent as contract_agent_module
+    from agent.workflow_routing import WorkflowResolution
+
+    def _fake_route(text: str) -> WorkflowResolution:
+        lowered = text or ""
+        if any(marker in lowered for marker in ("에게", "한테", "송금", "보내")):
+            workflow_id = "wf_external_transfer"
+        else:
+            workflow_id = "wf_account_list"
+        return WorkflowResolution(
+            status="resolved",
+            workflow_id=workflow_id,
+            source="classifier_verified",
+        )
+
+    monkeypatch.setattr(contract_agent_module, "route_workflow", _fake_route)
+
+
 @pytest.mark.asyncio
 async def test_contract_graph_registers_every_business_workflow() -> None:
     async with create_workflow_testbed(
