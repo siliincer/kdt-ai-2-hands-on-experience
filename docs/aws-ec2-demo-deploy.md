@@ -68,14 +68,44 @@ sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.
 않는다. 외부 시연에서 실제 인증 흐름을 사용하기 전에 CloudFront 기본
 도메인과 HTTPS를 적용한다.
 
+## LLM 요건 (라우팅 정확도 — 데모 정상 작동의 전제)
+
+워크플로우 라우팅(분류기 + 검증기)은 **충분히 강한 LLM을 전제**로 한다. 모델이
+약하면 정상 발화도 오분류되거나 되묻기(ambiguous)로 빠져 데모가 사실상 동작하지
+않는다. 아래는 데모 7개 발화(계좌목록/전체잔액/기간지출/별칭/타인송금/기본계좌/
+거래내역)를 모델별로 라우팅한 실측 결과다.
+
+| Provider / 모델 | 검증기 | 데모 라우팅 | 판정 |
+|-----------------|:---:|:---:|------|
+| OpenAI (배포 기본) / Vertex gemini | ON | 7/7 | 정상 |
+| Ollama qwen2.5:**7b** | ON | 7/7 | 정상 |
+| Ollama qwen2.5:**3b** | ON | **1/7** | 사실상 불가(정상 분류도 무조건 되묻기) |
+| Ollama qwen2.5:**3b** | OFF | 6/7 | 모호 발화 안전성 저하 감수 시만 |
+
+**두 가지 배포 필수 조건:**
+
+1. **`LLM_PROVIDER=openai`이면 `OPENAI_API_KEY`가 반드시 있어야 한다.** 라우팅은
+   LLM 실패 시 규칙 기반으로 강제 확정하지 않고 **안전 종료(status=failed)**한다
+   (금융 안전성). 즉 키가 없거나 LLM이 죽으면 모든 요청이 "처리 못함"이 된다.
+   과거의 "LLM 실패 시 규칙 fallback" 동작은 신형 라우팅에서 제거됐다.
+2. **Ollama로 데모하려면 최소 `qwen2.5:7b` 이상**을 쓴다. `qwen2.5:3b`는 분류기는
+   맞추지만 검증기가 정상 분류까지 무조건 reject해 못 쓴다. 부득이 저사양이면
+   `WORKFLOW_VERIFIER_ENABLED=false`로 검증기를 끄되(6/7 회복), 모호 발화를 강제
+   확정하는 안전성 저하를 감수해야 한다.
+
+자세한 지표·근거는 `docs/routing-refactor-benchmark.md`(검증기 모델 민감도) 참조.
+
 ## Ollama policy
 
 Ollama는 로컬 개발 머신에서만 실행한다. EC2에는 Ollama 서버나 모델을 올리지 않는다.
 
-다만 배포 가능한 코드와 환경변수에는 Ollama provider를 포함한다. 즉,
-`LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` 설정은 레포에 남기되,
-EC2 데모 환경에서는 기본적으로 `LLM_PROVIDER=openai` 또는 LLM 실패 시 규칙 기반
-fallback 경로로 동작하게 둔다.
+따라서 **EC2 데모는 `LLM_PROVIDER=openai`로 동작하며, `OPENAI_API_KEY` 설정이
+데모 작동의 전제다**(위 LLM 요건 참조). EC2에서 Ollama를 쓰려면 별도 Ollama
+서버와 7b+ 모델(약 4.7GB, RAM 8GB+ 권장)을 직접 올려야 하며, 이는 위 "EC2에
+Ollama를 올리지 않는다" 방침과 배치되므로 권장하지 않는다.
+
+배포 가능한 코드와 환경변수에는 Ollama provider를 포함한다
+(`LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`은 레포에 남긴다).
 
 로컬 Docker 컨테이너에서 호스트 Ollama를 사용할 때:
 
