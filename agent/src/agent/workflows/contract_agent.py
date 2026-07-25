@@ -55,6 +55,7 @@ from agent.workflows.transaction_history import (
 from agent.workflows.workflow_support import config_context as _config_context
 from agent.workflows.workflow_support import new_input_request_id as _new_input_request_id
 from agent.workflows.workflow_support import publish_event
+from agent.workflows.workflow_support import required_input_request_id as _required_input_request_id
 from agent.workflows.workflow_support import resume_data_update as _resume_update
 from agent.workflows.workflow_support import resume_state_data as _resume_data
 from agent.workflows.workflow_support import state_data as _state_data
@@ -131,7 +132,7 @@ def build_contract_agent_graph(
         config: RunnableConfig,
     ) -> dict[str, Any]:
         data = _state_data(state)
-        input_request_id = data.get("input_request_id")
+        input_request_id = _required_input_request_id(data)
         candidates = [c for c in (data.get("workflow_clarification_candidates") or []) if c in workflow_graphs]
         event = dependencies.webhook_builder.need_input(
             chat_session_id=_config_context(config, "chat_session_id"),
