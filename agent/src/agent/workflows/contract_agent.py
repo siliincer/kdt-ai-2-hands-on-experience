@@ -19,7 +19,7 @@ from agent.runtime import (
 )
 from agent.state import AgentState
 from agent.tools.contract_registry import ContractToolRegistry
-from agent.workflow_matcher import match_workflow
+from agent.workflow_routing import route_workflow
 from agent.workflows.account_list import (
     AccountListDependencies,
     build_account_list_graph,
@@ -88,11 +88,15 @@ def build_contract_agent_graph(
         }
 
     async def match_contract_workflow(state: AgentState) -> dict[str, Any]:
-        workflow_id = await asyncio.to_thread(
-            match_workflow,
+        # 분류기·검증기 분리 파이프라인. resolved(검증 통과 또는 조회·설정 수정)만
+        # 워크플로우로 진입시키고, ambiguous·no_match·failed는 안전 폴백으로
+        # no_match 처리한다(라우팅 단계 사용자 재확인은 후속 작업).
+        resolution = await asyncio.to_thread(
+            route_workflow,
             str(state.get("user_input") or ""),
         )
-        if workflow_id not in workflow_graphs:
+        workflow_id = resolution.workflow_id if resolution.status == "resolved" else None
+        if not workflow_id or workflow_id not in workflow_graphs:
             return {
                 "workflow_id": GLOBAL_WORKFLOW_ID,
                 "current_step_id": "match_workflow",
