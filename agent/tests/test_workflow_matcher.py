@@ -8,9 +8,12 @@ LLM을 호출하면 실패하고, route_workflow는 status="failed"로 안전 �
 
 from __future__ import annotations
 
+from typing import Literal
+
 import agent.workflow_routing as wr
 from agent.workflow_matcher import match_workflow
 from agent.workflow_routing import (
+    VerificationReasonCode,
     WorkflowClassification,
     WorkflowVerification,
     _build_catalog,
@@ -41,7 +44,11 @@ def test_build_catalog_format_and_size():
 # ── resolve_workflow 정책 (순수 함수, LLM 불필요) ──────────────────────────
 
 
-def _c(primary, status="resolved", alts=None):
+def _c(
+    primary: str | None,
+    status: Literal["resolved", "ambiguous", "no_match"] = "resolved",
+    alts: list[str] | None = None,
+) -> WorkflowClassification:
     return WorkflowClassification(
         primary_workflow_id=primary,
         alternative_workflow_ids=alts or [],
@@ -49,7 +56,11 @@ def _c(primary, status="resolved", alts=None):
     )
 
 
-def _v(verdict, corrected=None, reason="VALID"):
+def _v(
+    verdict: Literal["accept", "reject", "ambiguous"],
+    corrected: str | None = None,
+    reason: VerificationReasonCode = "VALID",
+) -> WorkflowVerification:
     return WorkflowVerification(verdict=verdict, corrected_workflow_id=corrected, reason_code=reason)
 
 
