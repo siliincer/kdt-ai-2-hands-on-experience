@@ -98,6 +98,15 @@ def main():
         "structure": structure,
         "provider": os.getenv("LLM_PROVIDER", "openai"),
         "model": os.getenv("OLLAMA_MODEL") or os.getenv("LLM_MODEL") or "(default)",
+        "verifier": (
+            "n/a"
+            if structure == "legacy"
+            else (
+                "off"
+                if os.getenv("WORKFLOW_VERIFIER_ENABLED", "true").strip().lower() in ("false", "0", "no", "off")
+                else "on"
+            )
+        ),
         "n": len(rows),
         "clear_acc": _acc({"clear", "colloquial"}),
         "overcapture_acc": _acc({"overcapture"}),
