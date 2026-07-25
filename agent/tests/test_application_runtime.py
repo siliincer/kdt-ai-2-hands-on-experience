@@ -62,6 +62,29 @@ def _contract_graph_factory(
     )
 
 
+@pytest.fixture(autouse=True)
+def _stub_workflow_routing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """라우팅은 분류기·검증기 LLM에 의존하므로, 실행 통합 테스트에서는 발화→
+    워크플로우를 고정한다(라우팅 로직은 test_workflow_matcher.py가 검증한다).
+    """
+    import agent.workflows.contract_agent as contract_agent_module
+    from agent.workflow_routing import WorkflowResolution
+
+    def _fake_route(text: str) -> WorkflowResolution:
+        lowered = text or ""
+        if any(marker in lowered for marker in ("에게", "한테", "송금", "보내")):
+            workflow_id = "wf_external_transfer"
+        else:
+            workflow_id = "wf_account_list"
+        return WorkflowResolution(
+            status="resolved",
+            workflow_id=workflow_id,
+            source="classifier_verified",
+        )
+
+    monkeypatch.setattr(contract_agent_module, "route_workflow", _fake_route)
+
+
 @pytest.mark.asyncio
 async def test_contract_graph_registers_every_business_workflow() -> None:
     async with create_workflow_testbed(
@@ -338,3 +361,122 @@ async def test_nested_graph_delivers_resume_to_recipient_selection() -> None:
     assert state["route_key"] == "cancelled"
     assert state["data"]["recipient_selection_outcome"] == "cancelled"
     backend.assert_all_responses_used()
+
+
+def _force_ambiguous_routing(
+    monkeypatch: pytest.MonkeyPatch,
+    candidates: list[str],
+) -> None:
+    import agent.workflows.contract_agent as contract_agent_module
+    from agent.workflow_routing import WorkflowResolution
+
+    monkeypatch.setattr(
+        contract_agent_module,
+        "route_workflow",
+        lambda text: WorkflowResolution(
+            status="ambiguous",
+            candidates=candidates,
+            source="classifier_verifier_conflict",
+            reason_code="ACTION_MISMATCH",
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_routing_clarification_cancel_ends_safely(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """라우팅이 ambiguous면 사용자 확인(option_select)을 요청하고, 취소 시 안전 종료."""
+    _force_ambiguous_routing(monkeypatch, ["wf_internal_transfer", "wf_set_default_account"])
+
+    backend = MockBackend()
+    # clarification need_input + 취소 후 no_match 안내 = webhook 2회.
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "message_clarify_1"})
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "message_clarify_2"})
+
+    async with create_workflow_testbed(
+        _config(),
+        graph_factory=_contract_graph_factory,
+        transport=httpx.MockTransport(backend.handler),
+        thread_id="thread_clarify_cancel",
+    ) as testbed:
+        waiting = await testbed.start(
+            message="신한 부계좌에서 나가게 해줘",
+            request_id="req_clarify_start",
+            chat_session_id="chat_123",
+            execution_context_id="exec_123",
+        )
+        assert waiting.pending_interaction is not None
+
+        completed = await testbed.resume_input(
+            agent_thread_id=waiting.agent_thread_id,
+            request_id="req_clarify_resume",
+            chat_session_id="chat_123",
+            execution_context_id="exec_123",
+            input_request_id=waiting.pending_interaction["input_request_id"],
+            value={"option_selection_outcome": "cancelled", "option": None},
+        )
+        state = await testbed.state(waiting.agent_thread_id)
+
+    assert waiting.status == "waiting"
+    assert completed.status == "completed"
+    assert state["data"]["workflow_clarification_outcome"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_routing_clarification_selection_enters_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """사용자가 후보를 선택하면 해당 워크플로우로 진입해 실행된다."""
+    _force_ambiguous_routing(monkeypatch, ["wf_account_list", "wf_balance_inquiry"])
+
+    backend = MockBackend()
+    backend.add_success(
+        "GET",
+        "/api/v1/agent-tools/accounts",
+        {
+            "accounts": [
+                {
+                    "account_id": "acc_001",
+                    "bank_name": "토스뱅크",
+                    "account_alias": "생활비 계좌",
+                    "account_type": "checking",
+                    "masked_account_number": "1000-***-1234",
+                    "currency": "KRW",
+                    "is_default": True,
+                    "status": "active",
+                }
+            ]
+        },
+    )
+    # clarification need_input + 선택된 워크플로우의 결과 emit = webhook 2회.
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "message_clarify_select_1"})
+    backend.add_success("POST", "/api/v1/webhooks/agent", {"message_id": "message_clarify_select_2"})
+
+    async with create_workflow_testbed(
+        _config(),
+        graph_factory=_contract_graph_factory,
+        transport=httpx.MockTransport(backend.handler),
+        thread_id="thread_clarify_select",
+    ) as testbed:
+        waiting = await testbed.start(
+            message="내 계좌 관련해서 뭐 좀",
+            request_id="req_clarify_select_start",
+            chat_session_id="chat_123",
+            execution_context_id="exec_123",
+        )
+        assert waiting.pending_interaction is not None
+
+        completed = await testbed.resume_input(
+            agent_thread_id=waiting.agent_thread_id,
+            request_id="req_clarify_select_resume",
+            chat_session_id="chat_123",
+            execution_context_id="exec_123",
+            input_request_id=waiting.pending_interaction["input_request_id"],
+            value={"option_selection_outcome": "selected", "option": "wf_account_list"},
+        )
+        timeline = backend.exchange_timeline(include_payload=True)
+
+    assert completed.status == "completed"
+    assert "/api/v1/agent-tools/accounts" in [item["path"] for item in timeline]
+    assert timeline[-1]["request"]["metadata"]["workflow_id"] == "wf_account_list"

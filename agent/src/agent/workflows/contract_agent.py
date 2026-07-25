@@ -19,7 +19,7 @@ from agent.runtime import (
 )
 from agent.state import AgentState
 from agent.tools.contract_registry import ContractToolRegistry
-from agent.workflow_matcher import match_workflow
+from agent.workflow_routing import route_workflow, workflow_name
 from agent.workflows.account_list import (
     AccountListDependencies,
     build_account_list_graph,
@@ -53,7 +53,12 @@ from agent.workflows.transaction_history import (
     build_transaction_history_graph,
 )
 from agent.workflows.workflow_support import config_context as _config_context
+from agent.workflows.workflow_support import new_input_request_id as _new_input_request_id
 from agent.workflows.workflow_support import publish_event
+from agent.workflows.workflow_support import required_input_request_id as _required_input_request_id
+from agent.workflows.workflow_support import resume_data_update as _resume_update
+from agent.workflows.workflow_support import resume_state_data as _resume_data
+from agent.workflows.workflow_support import state_data as _state_data
 
 GLOBAL_WORKFLOW_ID = "wf_global_agent_entry"
 
@@ -88,22 +93,82 @@ def build_contract_agent_graph(
         }
 
     async def match_contract_workflow(state: AgentState) -> dict[str, Any]:
-        workflow_id = await asyncio.to_thread(
-            match_workflow,
+        # 분류기·검증기 분리 파이프라인. resolved면 워크플로우로 진입하고,
+        # ambiguous면 라우팅 단계 사용자 확인(clarification)으로, failed·no_match는
+        # 안전 종료한다.
+        resolution = await asyncio.to_thread(
+            route_workflow,
             str(state.get("user_input") or ""),
         )
-        if workflow_id not in workflow_graphs:
+        if resolution.status == "resolved" and resolution.workflow_id in workflow_graphs:
+            return {
+                "workflow_id": resolution.workflow_id,
+                "current_step_id": "match_workflow",
+                "route_key": "matched",
+                "status": "matched",
+            }
+        candidates = [c for c in resolution.candidates if c in workflow_graphs]
+        if resolution.status == "ambiguous" and len(candidates) >= 2:
             return {
                 "workflow_id": GLOBAL_WORKFLOW_ID,
                 "current_step_id": "match_workflow",
-                "route_key": "no_match",
-                "status": "no_match",
+                "route_key": "clarify",
+                "status": "running",
+                "data": {
+                    "input_request_id": _new_input_request_id(),
+                    "workflow_clarification_candidates": candidates,
+                },
             }
+        # failed·no_match·후보 부족 ambiguous → 안전 종료(지원 없음 안내).
+        return {
+            "workflow_id": GLOBAL_WORKFLOW_ID,
+            "current_step_id": "match_workflow",
+            "route_key": "no_match",
+            "status": "no_match",
+        }
+
+    async def request_workflow_clarification(
+        state: AgentState,
+        config: RunnableConfig,
+    ) -> dict[str, Any]:
+        data = _state_data(state)
+        input_request_id = _required_input_request_id(data)
+        candidates = [c for c in (data.get("workflow_clarification_candidates") or []) if c in workflow_graphs]
+        event = dependencies.webhook_builder.need_input(
+            chat_session_id=_config_context(config, "chat_session_id"),
+            workflow_id=GLOBAL_WORKFLOW_ID,
+            step_id="request_workflow_clarification",
+            input_request_id=input_request_id,
+            ui_contract_id="UI-WORKFLOW-CLARIFICATION",
+            ui_type="option_select",
+            content="요청하신 업무를 확인해 주세요.",
+            payload={
+                "title": "요청하신 업무를 확인해 주세요.",
+                "options": [{"value": wid, "label": workflow_name(wid)} for wid in candidates],
+                "actions": ["select", "cancel"],
+            },
+        )
+        resumed = _resume_data(state, dependencies.interaction_runtime, event)
+        outcome = resumed.get("workflow_clarification_outcome")
+        selected = resumed.get("selected_workflow_id")
+        if outcome == "selected" and selected in workflow_graphs:
+            route_key = cast(str, selected)
+            workflow_id = cast(str, selected)
+            status = "running"
+        elif outcome == "cancelled":
+            route_key = "cancelled"
+            workflow_id = GLOBAL_WORKFLOW_ID
+            status = "completed"
+        else:
+            route_key = "no_match"
+            workflow_id = GLOBAL_WORKFLOW_ID
+            status = "no_match"
         return {
             "workflow_id": workflow_id,
-            "current_step_id": "match_workflow",
-            "route_key": "matched",
-            "status": "matched",
+            "current_step_id": "request_workflow_clarification",
+            "route_key": route_key,
+            "status": status,
+            "data": _resume_update(resumed, input_request_id=None),
         }
 
     async def emit_global_blocked(
@@ -145,6 +210,7 @@ def build_contract_agent_graph(
     graph = StateGraph(AgentState)
     graph.add_node("run_global_guardrail", run_global_guardrail)
     graph.add_node("match_workflow", match_contract_workflow)
+    graph.add_node("request_workflow_clarification", request_workflow_clarification)
     graph.add_node("emit_global_blocked", emit_global_blocked)
     graph.add_node("emit_no_matching_workflow", emit_no_matching_workflow)
     for workflow_id, workflow_graph in workflow_graphs.items():
@@ -164,6 +230,17 @@ def build_contract_agent_graph(
         _matched_workflow_route,
         {
             **{workflow_id: workflow_id for workflow_id in workflow_graphs},
+            "clarify": "request_workflow_clarification",
+            "no_match": "emit_no_matching_workflow",
+        },
+    )
+    # 사용자가 후보 중 하나를 선택하면 해당 워크플로우로, 취소·오류면 안전 종료.
+    graph.add_conditional_edges(
+        "request_workflow_clarification",
+        _clarified_workflow_route,
+        {
+            **{workflow_id: workflow_id for workflow_id in workflow_graphs},
+            "cancelled": "emit_no_matching_workflow",
             "no_match": "emit_no_matching_workflow",
         },
     )
@@ -258,6 +335,16 @@ def _route_key(state: AgentState) -> str:
 
 
 def _matched_workflow_route(state: AgentState) -> str:
+    if str(state.get("route_key") or "") == "clarify":
+        return "clarify"
+    workflow_id = str(state.get("workflow_id") or "")
+    return workflow_id if workflow_id != GLOBAL_WORKFLOW_ID else "no_match"
+
+
+def _clarified_workflow_route(state: AgentState) -> str:
+    route_key = str(state.get("route_key") or "")
+    if route_key in ("cancelled", "no_match"):
+        return route_key
     workflow_id = str(state.get("workflow_id") or "")
     return workflow_id if workflow_id != GLOBAL_WORKFLOW_ID else "no_match"
 
