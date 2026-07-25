@@ -1,181 +1,106 @@
-# KDT AI 2 Hands-on Experience
+# AI Financial Copilot Sandbox
 
-KDT 생성형 AI 2기 실무 프로젝트 저장소입니다.
+사용자의 자연어 금융 요청("박서연에게 5만원 보내줘", "이번 달 소비 분석해줘")을 받아 **Backend
+Gateway → AI Agent → Mock Financial Service** 가 협력해 처리하는 **가짜 돈(Fake Money) 금융 AI Agent
+플랫폼**입니다. 실제 금융망 없이 생성형 AI 금융 에이전트의 대화형 UX·HITL 승인·안전장치를 실험하기 위해
+만들었습니다. (KDT 생성형 AI 2기 팀 프로젝트)
 
-현재 README는 `기본 구조 개발` 단계 기준으로 작성되었습니다. 각 담당자는 본인 파트의 기술 스택, 실행 방법, 주요 기능, 테스트 방법을 정리해 주세요.
+> 문서·커밋·이슈는 한국어로 작성합니다.
 
-## 프로젝트 개요
+## 주요 기능
 
-AI Financial Copilot Sandbox는 실제 금융 거래가 아닌 Fake Money 환경에서 동작하는 금융 AI Agent 플랫폼입니다.
+- **자연어 금융 대화** — 단일 채팅 화면(assistant-ui)에서 잔액 조회·거래내역·소비 분석·카드·송금을
+  말풍선 카드로 처리
+- **타인송금 / 본인 계좌 간 이체** — 다단계 HITL(수취인 선택 → 승인 → 추가 인증)로 안전하게 실행
+- **HITL 승인 게이트** — 돈이 움직이는 액션은 반드시 사용자 확인(승인/수정/취소)을 거침
+- **실시간 스트리밍** — Agent 진행 이벤트를 SSE(Redis Streams 브리지)로 실시간 렌더
+- **기본 출금 계좌 / 별칭 설정**, 슬래시 명령 `/add_account <은행명>` 으로 계좌 추가
+- **장애 복구 인프라** — 외부 호출 재시도(Tenacity) + 실패 시 DLQ(Redis Stream), 멱등키로 중복 이체 방지
+- **관측(Observability)** — OpenTelemetry 분산추적(Tempo) + 메트릭(Prometheus) + 대시보드(Grafana)
+- **보안** — 보안 응답 헤더(secure), 서비스 간 토큰 인증, PII 마스킹, gitleaks/Trivy 스캔
 
-기본 목표는 사용자의 자연어 금융 요청을 받아 Backend Gateway, AI Agent, Mock Financial Service가 협력하여 안전하게 처리하는 구조를 만드는 것입니다.
+<!-- 데모 화면/GIF: 준비되면 docs/assets/ 에 넣고 아래 주석을 해제하세요.
+![데모](docs/assets/demo.gif)
+-->
 
-## 현재 개발 단계
+## 사용 기술 스택
 
-현재 단계에서는 비즈니스 기능 완성보다 프로젝트 기본 구조를 우선 구성합니다.
+| 영역 | 기술 |
+| --- | --- |
+| **Frontend** | React 19, Vite 8, TypeScript 6, TanStack Query 5, Zustand 5, Tailwind CSS v4, assistant-ui (Feature-Sliced Design) |
+| **Backend Gateway** | Python 3.11, FastAPI 0.115, SQLAlchemy 2.0(async), Alembic, Pydantic v2, redis-py 5, secure 2, Tenacity |
+| **AI Agent** | Python 3.11, LangGraph, LangChain(OpenAI·Vertex AI·Ollama), FastAPI |
+| **Mock Financial Service** | Python 3.11, FastAPI, SQLAlchemy, SQLite (복식부기 원장) |
+| **데이터/인프라** | PostgreSQL 16, Redis 7(cache·stream), nginx 1.27, Docker Compose, uv workspace |
+| **관측** | OpenTelemetry, Grafana Tempo, Prometheus, Grafana |
 
-- 서비스 디렉터리 구조 정의
-- 환경변수 템플릿 정리
-- uv 기반 Python workspace 구성
-- Docker Compose 기반 실행 구조 준비
-- GitHub Issue/PR 템플릿 구성
-- DevSecOps 보안 규칙 문서화
+서비스 포트: Backend `8000` · Agent `8001` · Mock Financial `8002` · Frontend(dev) `5173` · nginx `8080`.
+
+## 시작 가이드 (설치 및 실행)
+
+### 1. 공통 사전 준비
+
+```bash
+# 저장소 클론 후 루트에서
+conda env create -f environment.yml
+conda activate kdt-ai-2-hands-on-experience
+
+uv sync                       # Python workspace(agent·backend·mock-financial-service) 의존성
+uv run pre-commit install
+
+cp .env.example .env          # 환경변수 템플릿 복사(실제 키/토큰은 커밋 금지)
+```
+
+### 2. 한 번에 실행 (Docker Compose)
+
+```bash
+docker compose up -d --build  # postgres·redis·backend·agent·mock-financial·nginx
+docker compose ps
+```
+
+### 3. 개별 개발 실행
+
+인프라(Postgres·Redis)만 컨테이너로 띄우고 각 서비스는 로컬에서 실행합니다.
+
+```bash
+docker compose -f docker-compose.dev.yml up -d   # postgres, redis (+관측 스택)
+
+# 각 서비스 실행 명령·환경변수·테스트는 서브 README 참고
+```
+
+- Frontend → [`frontend/README.md`](frontend/README.md) (`npm ci && npm run dev`)
+- Backend Gateway → [`backend/README.md`](backend/README.md)
+- AI Agent → [`agent/README.md`](agent/README.md)
+- Mock Financial Service → [`mock-financial-service/README.md`](mock-financial-service/README.md)
+- 관측(트레이스/메트릭/대시보드) → [`observability/README.md`](observability/README.md)
 
 ## 디렉터리 구조
 
 ```text
 .
-├── frontend/
-├── backend/
-├── agent/
-├── mock-financial-service/
-├── docs/
-├── nginx/
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   └── workflows/
-├── pyproject.toml
-├── uv.lock
-├── docker-compose.yml
-├── docker-compose.override.yml
-├── .env.example
-└── README.md
+├── frontend/                 # React 채팅 UI (실제 프론트엔드)
+├── backend/                  # FastAPI Backend Gateway
+├── agent/                    # LangGraph 금융 Agent
+├── mock-financial-service/   # 계정계(원장) + 정보계(analytics)
+├── observability/            # OpenTelemetry / Tempo / Prometheus / Grafana 설정
+├── nginx/                    # 리버스 프록시 설정
+├── docs/                     # 보안 규칙·운영 가이드 등 문서
+├── AI_CONTEXT/               # 세션 로그·트러블슈팅 정리
+├── docker-compose.yml        # 전체 서비스
+├── docker-compose.dev.yml    # 개발용 인프라(+관측)
+├── pyproject.toml            # uv workspace 루트
+└── .env.example
 ```
 
-## 담당 영역
+## 협업 규칙 (요약)
 
-### Frontend
-
-담당자 작성 예정
-
-### Backend
-
-담당자 작성 예정
-
-### AI Agent
-
-담당자 작성 예정
-
-### Mock Financial Service
-
-담당자 작성 예정
-
-### DevSecOps
-
-DevSecOps는 팀 전체가 동일한 방식으로 개발, 실행, 검증할 수 있도록 기본 실행 환경과 운영 규칙을 관리합니다.
-
-담당한 부분:
-
-- `.env.example` 환경변수 템플릿
-- `docs/security-rules.md` 보안 규칙
-- `docs/local-development.md` 로컬 실행 명령 초안
-- `.dockerignore` Docker 빌드 제외 규칙
-- 루트 `uv` workspace 및 Python 서비스 의존성 관리 기준
-- Conda, uv, pre-commit 기반 개발환경 세팅
-- 서비스별 기본 디렉터리 README
-- GitHub Issue/PR 템플릿 구조
-- Docker Compose, CI, 보안 스캔, 모니터링 확장 기반 관리
-
-## 환경변수
-
-로컬 개발 시 `.env.example`을 복사해 `.env`를 생성합니다.
-
-```bash
-cp .env.example .env
-```
-
-실제 API key, 토큰, 비밀번호는 Git에 커밋하지 않습니다.
-
-자세한 규칙은 `docs/security-rules.md`를 참고합니다.
-
-## 로컬 실행
-
-현재는 기본 구조 개발 단계이므로 전체 서비스 실행은 아직 준비 중입니다.
-
-Python 서비스 의존성은 `uv`로 관리합니다.
-
-```bash
-conda env create -f environment.yml
-conda activate kdt-ai-2-hands-on-experience
-uv sync
-uv run pre-commit install
-```
-
-Docker Compose 실행 명령 초안:
-
-```bash
-docker compose up -d --build
-docker compose ps
-```
-
-각 서비스 코드와 Dockerfile이 추가된 뒤 실행 가능하도록 구성할 예정입니다.
-
-## Docker 구성 계획
-
-현재는 Docker Compose 파일과 서비스 디렉터리 구조를 먼저 준비합니다. 각 서비스 코드가 들어온 뒤 서비스별 Dockerfile과 실행 명령을 확정합니다.
+- **커밋**: `type: 제목 (#이슈번호)` — `feat`·`fix`·`refactor`·`chore`·`test`·`docs`·`style`
+- **PR**: `.github/pull_request_template.md` 8개 섹션 양식
+- **이슈**: `.github/ISSUE_TEMPLATE/` (Bug·Feature·Refactor·Test)
+- **AI 에이전트 규칙**: [`AGENTS.md`](AGENTS.md) — 커밋/PR 무단 실행 금지, 검증 후 보고, 한국어+영어+숫자만
+- **보안 규칙**: [`docs/security-rules.md`](docs/security-rules.md) — `.env*`/키 커밋 금지, PII 마스킹
 
 ## 문서
 
-- `docs/security-rules.md`: 보안 규칙
-- `docs/local-development.md`: 로컬 개발 명령 초안
-- `docs/README.md`: 문서 디렉터리 안내
-
-팀원별 상세 문서는 각 담당자가 추가 작성해 주세요.
-
-## 협업 규칙
-
-### Issue
-
-이슈는 `.github/ISSUE_TEMPLATE/`의 템플릿을 사용합니다.
-
-- Bug
-- Feature
-- Refactor
-- Test
-
-### Pull Request
-
-PR은 `.github/pull_request_template.md` 양식을 사용합니다.
-
-작업 내용, 실제 걸린 시간, 테스트 여부, 리뷰 요청 사항을 작성합니다.
-
-### Commit Message
-
-커밋 메시지는 아래 형식을 따릅니다.
-
-```text
-type: 제목 (#이슈번호)
-
-- 본문
-```
-
-사용 가능한 type:
-
-- `feat`: 새로운 기능 추가
-- `fix`: 버그 수정
-- `refactor`: 코드 구조 개선
-- `chore`: 설정/빌드 수정
-- `test`: 테스트 코드
-- `docs`: 문서
-- `style`: 코드 포매팅/스타일 변경
-
-예시:
-
-```text
-docs: 기본 README 작성 (#1)
-
-- 기본 구조 개발 단계 기준 README 작성
-- DevSecOps 담당 범위와 팀원 작성 예정 영역 구분
-```
-
-## 팀원 작성 요청
-
-각 담당자는 아래 내용을 본인 파트에 맞게 채워 주세요.
-
-- 사용 기술 스택
-- 주요 기능
-- 실행 방법
-- 환경변수
-- 테스트 방법
-- 현재 진행 상황
-- DevSecOps와 협의가 필요한 포트, Health Check, 외부 API 의존성
+- [`AGENTS.md`](AGENTS.md) · [`CLAUDE.md`](CLAUDE.md) — 저장소 규칙 / AI 코딩 가이드
+- [`docs/`](docs/README.md) — 보안 규칙, 로컬 개발 가이드
