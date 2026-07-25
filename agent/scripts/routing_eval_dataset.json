@@ -1,0 +1,22 @@
+[
+  {"category": "clear", "text": "민수에게 3만원 보내줘", "expected": "wf_external_transfer"},
+  {"category": "clear", "text": "박서연한테 오만원 쏴줘", "expected": "wf_external_transfer"},
+  {"category": "clear", "text": "내 신한계좌에서 하나 부계좌로 5만원 옮겨줘", "expected": "wf_internal_transfer"},
+  {"category": "clear", "text": "내 계좌끼리 10만원 이체해줘", "expected": "wf_internal_transfer"},
+  {"category": "clear", "text": "기본 출금계좌를 신한 부계좌로 바꿔줘", "expected": "wf_set_default_account"},
+  {"category": "clear", "text": "하나 부계좌를 비상금 통장이라고 불러줘", "expected": "wf_set_account_alias"},
+  {"category": "clear", "text": "내 계좌 목록 보여줘", "expected": "wf_account_list"},
+  {"category": "clear", "text": "세 계좌에 각각 얼마 있어?", "expected": "wf_balance_inquiry"},
+  {"category": "clear", "text": "생활비 계좌 최근 거래내역 보여줘", "expected": "wf_transaction_history"},
+  {"category": "clear", "text": "이번 달 스타벅스에서 얼마 썼어?", "expected": "wf_period_amount_summary"},
+  {"category": "colloquial", "text": "내 돈 지금 얼마 남았는지 알려줘", "expected": "wf_balance_inquiry"},
+  {"category": "colloquial", "text": "요즘 카드값 어디에 제일 많이 나갔지?", "expected": "wf_period_amount_summary"},
+  {"category": "overcapture", "text": "이제부터 신한 부계좌에서 나가게 해줘", "expected": "wf_set_default_account"},
+  {"category": "overcapture", "text": "신한 부계좌를 비상금이라고 불러줘", "expected": "wf_set_account_alias"},
+  {"category": "overcapture", "text": "신한 부계좌에 얼마 있어?", "expected": "wf_balance_inquiry"},
+  {"category": "overcapture", "text": "부계좌 거래내역 보여줘", "expected": "wf_transaction_history"},
+  {"category": "ambiguous", "text": "신한 계좌로 해줘", "expected": "ambiguous"},
+  {"category": "ambiguous", "text": "계좌 관련해서 뭘 할 수 있어?", "expected": "ambiguous"},
+  {"category": "ambiguous", "text": "그거 좀 처리해줘", "expected": "ambiguous"},
+  {"category": "ambiguous", "text": "부계좌 좀 어떻게 해봐", "expected": "ambiguous"}
+]
