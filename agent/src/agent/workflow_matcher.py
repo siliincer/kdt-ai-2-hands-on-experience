@@ -1,218 +1,23 @@
-"""Workflow Matching.
+"""Workflow Matching (하위호환 얇은 래퍼).
 
-사용자 입력을 분석해 실행할 workflow_id를 결정한다.
-LLM 의도 분류를 사용하고, 후보 목록은 관리시트 V3 계약 Manifest에서 읽는다.
-LLM 호출 실패 시 키워드 규칙으로 폴백한다.
+실제 라우팅 로직은 workflow_routing.route_workflow로 이동했다(분류기·검증기
+분리 파이프라인). 이 모듈은 기존 호출부·테스트 호환을 위해 workflow_id만
+반환하는 match_workflow를 유지한다. 신규 코드는 route_workflow를 직접 사용해
+resolution(ambiguous/candidates/source)까지 소비하라.
 """
 
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import cast
-
-from pydantic import BaseModel, Field
-
-from agent.llm import get_llm
-from agent.workflow_contracts import WorkflowContractStore
-
-# 폴백용 키워드 규칙(LLM 실패나 null·무효 분류 시 사용)
-# LLM 미사용(키 없음) 시 폴백. 위에서부터 먼저 매칭되는 규칙이 이긴다.
-# LLM 경로는 계약 Manifest의 example_utterances로 분류하므로, 이 키워드는 그 보조판이다.
-#
-# 순서 규칙: 구체적인(다른 워크플로우와 안 겹치는) 키워드를 위에,
-# "통장"/"잔액"처럼 범용적인 키워드는 맨 아래에 둔다. "통장"은 거의 모든
-# 계좌 관련 발화에 등장하므로 balance_inquiry를 맨 뒤(다른 게 하나도
-# 안 걸렸을 때만 잡히는 catch-all)로 둬야 한다.
-#
-# 이체 규칙 3분할: 사람 표지(에게/한테)가 있으면 타인송금, 본인 계좌 신호가
-# 있으면 본인이체, 둘 다 없는 "송금/보내"는 타인송금이 기본값이다. 과거처럼
-# "송금/보내"를 맨 앞에 두면 "내 계좌끼리 송금" 같은 본인이체 발화가 전부
-# 타인송금으로 오분류된다. 트레이드오프: "엄마 통장으로 보내줘"는 이 폴백에서
-# 본인이체로 가지만, 에게/한테 없는 대인 표현은 드물고 LLM 경로가 처리한다.
-_KEYWORD_RULES = [
-    (("에게", "한테"), "wf_external_transfer"),
-    (
-        (
-            "계좌끼리",
-            "통장끼리",
-            "부계좌",
-            "옮겨",
-            "본인 계좌",
-            "내 계좌로",
-            "통장으로",
-            "계좌 간",
-            "이체",
-        ),
-        "wf_internal_transfer",
-    ),
-    (("송금", "보내"), "wf_external_transfer"),
-    (
-        ("기본", "출금 계좌로", "나가게 해"),
-        "wf_set_default_account",
-    ),
-    (
-        ("별칭", "라고 해", "라 해", "라고 불러", "라 불러", "이름 붙"),
-        "wf_set_account_alias",
-    ),
-    (
-        (
-            "계좌 목록",
-            "계좌목록",
-            "계좌 뭐",
-            "무슨 계좌",
-            "어떤 계좌",
-            "계좌 다 보",
-            "계좌 확인",
-            "계좌를 보여",
-            "계좌 보여",
-            "내 계좌",
-        ),
-        "wf_account_list",
-    ),
-    (
-        ("거래내역", "거래 내역", "결제 내역", "이용 내역", "사용 내역", "입출금 내역"),
-        "wf_transaction_history",
-    ),
-    (
-        (
-            "얼마 썼",
-            "얼마 쓴",
-            "지출",
-            "소비",
-            "얼마 들어",
-            "얼마 받",
-            "수입",
-            "입금 얼마",
-        ),
-        "wf_period_amount_summary",
-    ),
-    # 가장 범용적인 규칙 — 위 어느 것도 안 걸렸을 때만 잔액조회로 (catch-all)
-    (("잔액", "통장", "얼마 있어", "얼마야"), "wf_balance_inquiry"),
-]
-
-
-@lru_cache(maxsize=1)
-def _load_workflow_choices() -> tuple[tuple[str, str, str, str], ...]:
-    """(workflow_id, name, description, example_utterance) 목록.
-
-    global 타입은 제외한다. 실행 Workflow와 같은 V3 Manifest의 catalog만 사용하며
-    Steps와 Routes는 LLM에 전달하지 않는다.
-    """
-    store = WorkflowContractStore()
-    choices: list[tuple[str, str, str, str]] = []
-    for workflow_id in store.workflow_ids():
-        catalog = store.get_workflow(workflow_id)["catalog"]
-        if catalog.get("workflow_type") == "global":
-            continue
-        choices.append(
-            (
-                workflow_id,
-                str(catalog.get("workflow_name") or ""),
-                str(catalog.get("description") or ""),
-                str(catalog.get("example_utterances") or ""),
-            )
-        )
-    return tuple(choices)
-
-
-def _build_catalog(choices: tuple[tuple[str, str, str, str], ...]) -> str:
-    """매칭 프롬프트용 워크플로우 카탈로그 (한 줄씩).
-
-    계약의 example_utterances를 few-shot 예시로 함께 넣어 분류 정확도를
-    높인다. 예시가 없으면 괄호를 생략한다.
-    """
-    lines = []
-    for wid, name, desc, example in choices:
-        line = f"- {wid}: {name} — {desc}"
-        if example:
-            line += f' (예: "{example}")'
-        lines.append(line)
-    return "\n".join(lines)
-
-
-class _IntentResult(BaseModel):
-    """의도 분류 결과."""
-
-    workflow_id: str | None = Field(
-        None,
-        description="발화에 가장 알맞은 워크플로우 id. 해당하는 것이 없으면 null.",
-    )
-
-
-# 본인 계좌 간 이체의 결정적 가드. LLM이 "송금/보내" 표현에 끌려 타인송금으로
-# 오분류하는 것을 막기 위해 강한 본인 계좌 신호가 있으면 LLM보다 먼저 확정한다.
-# "내 계좌로"처럼 목적지 표지로 좁혀 "내 계좌에서 홍길동 계좌로 송금" 같은
-# 타인송금 발화는 오탈취하지 않는다.
-_PERSON_MARKERS = ("에게", "한테")
-_OWN_ACCOUNT_MARKERS = (
-    "계좌끼리",
-    "통장끼리",
-    "본인 계좌",
-    "내 계좌로",
-    "내 통장으로",
-    "부계좌",
-    "계좌 간",
-)
-_TRANSFER_VERBS = ("이체", "옮겨", "송금", "보내")
-
-
-def _is_own_account_transfer(text: str) -> bool:
-    """사람 표지 없이 본인 계좌 신호와 이체 동사가 함께 있으면 본인이체다.
-
-    "내역"이 있으면 이체 실행이 아니라 조회 발화("계좌 간 이체 내역")이므로
-    가드를 적용하지 않는다.
-    """
-    if "내역" in text:
-        return False
-    if any(marker in text for marker in _PERSON_MARKERS):
-        return False
-    if not any(marker in text for marker in _OWN_ACCOUNT_MARKERS):
-        return False
-    return any(verb in text for verb in _TRANSFER_VERBS)
-
-
-def _match_by_keyword(text: str) -> str | None:
-    """규칙 기반 폴백."""
-    for keywords, workflow_id in _KEYWORD_RULES:
-        if any(keyword in text for keyword in keywords):
-            return workflow_id
-    return None
+from agent.workflow_routing import route_workflow
 
 
 def match_workflow(user_input: str) -> str | None:
-    """입력에 매칭되는 workflow_id를 반환한다. 없으면 None.
+    """입력에 매칭되는 workflow_id를 반환한다. 확정 못 하면 None.
 
-    강한 본인이체 신호는 결정적으로 먼저 확정하고, 그 외에는 LLM으로 후보
-    워크플로우 중 하나로 분류한다. LLM 호출이 실패하거나 null·무효 id를
-    반환하면 키워드 규칙으로 폴백한다.
+    ambiguous·no_match·failed는 전부 None으로 낮춘다(하위호환). 라우팅의
+    세부 상태가 필요하면 workflow_routing.route_workflow를 사용하라.
     """
-    text = user_input or ""
-    if _is_own_account_transfer(text):
-        return "wf_internal_transfer"
-
-    choices = _load_workflow_choices()
-    valid_ids = {c[0] for c in choices}
-
-    try:
-        catalog = _build_catalog(choices)
-        llm = get_llm().with_structured_output(_IntentResult)
-        result = cast(
-            _IntentResult,
-            llm.invoke(
-                "너는 은행 상담 라우터다. 사용자 발화를 아래 워크플로우 중 "
-                "하나로 분류해라. 해당하는 것이 없으면 workflow_id를 null로 둬라. "
-                "본인 소유 계좌 사이의 자금 이동(부계좌·다른 내 계좌 포함)은 "
-                "'송금'이나 '보내' 표현이 있어도 wf_internal_transfer로 분류해라. "
-                "다른 사람(수취인)에게 보내는 경우에만 wf_external_transfer다.\n\n"
-                f"[워크플로우 목록]\n{catalog}\n\n"
-                f"[발화]\n{text}"
-            ),
-        )
-        workflow_id = result.workflow_id
-        if workflow_id in valid_ids:
-            return workflow_id
-        # LLM이 정상 응답했지만 null이나 무효 id를 반환한 경우에도 키워드
-        # 폴백을 태운다(예외일 때만 폴백하면 "내 계좌로 이체"가 미매칭된다).
-        return _match_by_keyword(text)
-    except Exception:
-        return _match_by_keyword(text)
+    resolution = route_workflow(user_input)
+    if resolution.status == "resolved":
+        return resolution.workflow_id
+    return None
