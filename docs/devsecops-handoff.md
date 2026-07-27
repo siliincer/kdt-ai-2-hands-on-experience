@@ -173,20 +173,6 @@ Red Team 자동화는 `security/redteam/`에서 관리한다.
 - `security/redteam/SCENARIO_DESIGN.md`
 - `agent/docs/guardrail-devsecops-handoff.md`
 
-## 프로젝트 종료 후 비용 정리
-
-프로젝트 종료 후 다음 리소스는 "중지"가 아니라 실제 과금 종료 여부를 확인한다.
-
-1. EC2 App / Model 인스턴스 종료(Terminate)
-2. EC2 종료 후 남은 EBS Volume 확인 및 불필요 볼륨 삭제
-3. Elastic IP disassociate 후 release
-4. RDS 삭제 및 manual snapshot / retained automated backup 확인
-5. NAT Gateway, Load Balancer, ECR, S3, CloudWatch Logs, AWS Backup recovery point 존재 여부 확인
-6. Cost Explorer에서 프로젝트 사용 기간을 `Service` 기준으로 집계
-
-VPC, Subnet, Route Table, Security Group, IAM Role 자체는 존재만으로 일반적인 시간당 compute 비용이 발생하는 리소스는
-아니지만, 다른 프로젝트와 공유하는지 확인한 뒤 정리한다.
-
 ## 팀 공유 요약
 
 - 최종 시연은 App EC2와 Model EC2를 분리한 구조로 검증했다.
