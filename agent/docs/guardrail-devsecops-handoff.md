@@ -1,7 +1,7 @@
 # 전역 가드레일 강화 — DevSecOps 인계 문서
 
 작성: 에이전트팀 · 대상: DevSecOps팀
-관련 브랜치: `fix/global-guardrail-intent-gate`
+관련 PR: `#60 feat: 전역 가드레일 Intent Gate 도입 - 복합 공격 원자적 차단` (merged)
 
 ---
 
@@ -20,7 +20,7 @@ Red Team 실모델 전체 캠페인(51개 실행, PASS 11 / FAIL 33 / ERROR 7)�
 > 응답에 민감정보 포함 증거 없음), 해당 악성 요구가 포함된 요청을 전체 차단하지
 > 않고 업무 Tool 실행을 계속했다.
 
-### 근본 원인 (최신 main `3bcca15` 기준)
+### 근본 원인 (PR #60 적용 전 발견 당시 기준)
 
 라이브 실행 경로:
 ```
@@ -137,7 +137,8 @@ intent_gate_block:
 - **`info_masking` 액션은 핸들러가 없다.** 노드는 `block` 액션만 전역 차단으로
   처리한다. 다른 액션이 필요하면 에이전트팀과 협의.
 - **운영 트레이드오프**: 게이트 활성 시 모든 요청이 분류 LLM을 1회 거친다(지연
-  증가). LLM 장애가 전역 차단으로 이어진다(fail-closed). 운영 반영 전 확인 필요.
+  증가). LLM 장애 시 동작은 `GUARDRAIL_INTENT_GATE_FAIL_MODE`에 따라 `fallback`
+  또는 `closed`로 달라진다. 기본값은 `fallback`이다.
 
 ---
 
