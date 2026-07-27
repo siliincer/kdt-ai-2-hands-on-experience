@@ -76,12 +76,19 @@ def get_llm(temperature: float = 0.0, model: str | None = None) -> BaseChatModel
         # vertex 미사용 환경에서 import 비용/의존 문제를 피하려고 지연 import
         from langchain_google_vertexai import ChatVertexAI
 
-        return ChatVertexAI(
-            model=resolved_model,
-            temperature=temperature,
-            project=os.getenv("GOOGLE_CLOUD_PROJECT") or None,
-            location=os.getenv("VERTEX_LOCATION", "us-central1"),
-        )
+        vertex_kwargs: dict[str, object] = {
+            "model": resolved_model,
+            "temperature": temperature,
+            "project": os.getenv("GOOGLE_CLOUD_PROJECT") or None,
+            "location": os.getenv("VERTEX_LOCATION", "us-central1"),
+        }
+        # gemini-2.5 계열은 기본 추론(thinking) 모드가 켜져 있어 워크플로우 분류·검증
+        # 같은 단순 태스크에도 5~6초가 걸린다. 라우팅/추출은 추론이 불필요한
+        # 분류·구조화 태스크이므로 thinking을 꺼 지연을 크게 줄인다(재현성 위한
+        # temperature=0.0은 유지). gemini 계열에만 유효한 파라미터라 조건부로 넣는다.
+        if resolved_model.startswith("gemini"):
+            vertex_kwargs["thinking_budget"] = 0
+        return ChatVertexAI(**vertex_kwargs)
 
     if provider == "ollama":
         # Ollama 미사용 환경에서 import 비용/의존 문제를 피하려고 지연 import

@@ -93,11 +93,19 @@ def main():
             return None
         return round(100.0 * sum(_correct(r) for r in subset) / len(subset), 1)
 
+    provider = os.getenv("LLM_PROVIDER", "openai")
+    # provider별 실제 모델을 표시한다(vertex인데 .env의 OLLAMA_MODEL을 잘못 읽지 않도록).
+    if provider == "ollama":
+        model_label = os.getenv("OLLAMA_MODEL") or "qwen2.5:3b"
+    elif provider == "vertex":
+        model_label = os.getenv("LLM_MODEL") or "gemini-2.5-flash"
+    else:
+        model_label = os.getenv("LLM_MODEL") or "gpt-4o-mini"
     summary = {
         "label": label,
         "structure": structure,
-        "provider": os.getenv("LLM_PROVIDER", "openai"),
-        "model": os.getenv("OLLAMA_MODEL") or os.getenv("LLM_MODEL") or "(default)",
+        "provider": provider,
+        "model": model_label,
         "verifier": (
             "n/a"
             if structure == "legacy"
