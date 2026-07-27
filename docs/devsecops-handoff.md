@@ -1,214 +1,197 @@
 # DevSecOps handoff
 
-이 문서는 현재 DevSecOps 관점에서 확인된 배포/연결 상태와 팀 공유 사항을 정리한다.
-프로젝트는 아직 개발 중이며, 아래 내용은 "현재 존재하는 기능이 배포 환경에서
-서로 붙을 수 있는지"를 확인한 결과다.
+이 문서는 최종 시연 시점에 DevSecOps 관점에서 확인한 배포·연결·보안 상태와 프로젝트 종료 후 정리 기준을
+기록한다. Production 운영 구성이 아니라 Fake Money 기반 팀 데모를 위한 검증 환경이다.
 
 ## 결론
 
-- EC2 단일 서버 + Docker Compose 방식으로 시연 가능한 배포선을 확인했다.
-- frontend, nginx, backend, agent, postgres, redis가 한 서버에서 함께 실행되는 것을
-  확인했다.
-- 현재 Backend 채팅은 `mock_agent_driver`를 사용한다. Agent 컨테이너는 독립
-  실행되지만 frontend -> backend 제품 요청 경로에는 아직 연결되지 않았다.
-- 외부 IP에서는 frontend와 backend만 공개한다. Agent API는 EC2 내부에서만
-  접근한다.
-- 비용 최소화를 위해 현재 EC2는 `stopped` 상태로 둔다.
-- 도메인은 구매하지 않는다. 시연 시에는 Elastic IP를 직접 사용한다.
-- Ollama는 로컬 전용으로 실행한다. EC2에는 Ollama 서버/모델을 올리지 않는다.
+- App EC2에서 frontend, nginx, backend, agent, postgres, redis, mock-financial-service를 Docker Compose로 실행했다.
+- Backend는 Docker 내부 서비스 이름을 통해 Agent(`http://agent-service:8001`)와
+  Mock Financial Service(`http://mock-financial-service:8002`)를 참조하도록 구성했다.
+- Backend → Mock Financial Service 내부 호출은 HTTP 200 응답까지 확인했다.
+- Agent의 LLM provider는 `ollama`로 구성했고, App EC2에서 사설망을 통해 별도 Model EC2의 Ollama를 호출했다.
+- 최종 확인된 배포 모델은 `exaone3.5:2.4b`이며 Model EC2 Ollama API는 `172.31.15.220:11434`에서 제공됐다.
+- 외부 진입점은 App EC2의 Nginx이며 Backend/Agent/Mock Financial/PostgreSQL 포트는 외부에 직접 공개하지 않는 것을 기준으로 한다.
+- Red Team은 실제 금융망이 아니라 로컬 Fake Money/Agent Testbed에서 수행하며 결과에는 민감정보 원문을 저장하지 않는다.
+- 프로젝트 종료 후 AWS 리소스는 재기동을 전제로 유지하지 않고 비용 발생 리소스부터 삭제·해제하는 것을 원칙으로 한다.
 
 ## AWS 리소스
 
-### EC2
+### App EC2
 
-- Instance ID: `i-07d75abca7ba7a423`
-- Type: `t4g.small`
-- OS: Amazon Linux 2023 ARM64
-- State: 평소에는 `stopped`
+최종 시연에서 확인한 App EC2 정보:
+
+- Private IP: `172.31.0.184`
 - Elastic IP: `15.164.26.234`
-- Security Group: `sg-01b29ee586e77a107`
-- SSH key: `~/.ssh/kdt-team3-ec2`
+- Security Group: `sg-01b29ee586e77a107` (`kdt-team3-ec2-sg`)
 - App path: `/opt/kdt-team3/app`
+- Compose: `docker-compose.yml` + `docker-compose.ec2.yml`
+- Nginx config: `nginx/ec2.conf`
 
-### Security group
+SSH key의 실제 파일은 사용자 로컬에서만 보관하고 서버나 Git 저장소에 복사하지 않는다.
 
-- `22/tcp`: 현재 관리자 IP만 허용
-- `80/tcp`: 전체 공개
-- `443/tcp`: HTTPS 미적용 상태이므로 인바운드 규칙 제거 완료
+### Model EC2
 
-### RDS
+최종 시연에서 확인한 Model EC2 정보:
 
-- DB instance: `kdt-team3-postgres`
-- Status: `stopped`
-- 현재 EC2 데모 배포에서는 RDS를 사용하지 않고, EC2 내부 PostgreSQL 컨테이너를 사용한다.
-- RDS는 `2026-07-15 10:45:02 KST`쯤 자동 재시작 예정이므로 사용하지 않으면 그 전에
-  다시 stop하거나 삭제 여부를 결정한다.
+- Private IP: `172.31.15.220`
+- Ollama API: `11434/tcp`
+- LLM provider: `ollama`
+- Model: `exaone3.5:2.4b`
+- Ollama metadata 기준 parameter size: 약 `2.7B`, quantization: `Q4_K_M`
+- 확인 당시 사양: 2 vCPU, 약 3.7 GiB RAM, NVIDIA GPU 없음
 
-### ECS/Fargate
+Model EC2의 `22/tcp`는 점프 호스트 역할을 하는 App EC2의 Security Group에서만 접근하도록 제한하는 구성을 권장한다.
+Ollama `11434/tcp`도 인터넷 전체가 아니라 App EC2에서 필요한 사설망 경로만 허용한다.
 
-- 이전에 Fargate 배포 가능성 검증은 완료했다.
-- 현재 실행 중인 ECS task는 없다.
-- 현재 시연 기준은 ECS가 아니라 EC2 + Docker Compose다.
+### PostgreSQL / RDS
 
-## EC2 배포 구조
+레포에는 EC2 Docker Compose용 PostgreSQL과 별도로 AWS RDS PostgreSQL 리소스가 존재했다.
+Backend가 실제로 사용하는 DB는 `DATABASE_URL`에 전달되는 `COMPOSE_DATABASE_URL` 값으로 결정된다.
 
-```text
-Elastic IP: 15.164.26.234
-  -> EC2
-    -> nginx:80
-      -> /            frontend/dist
-      -> /backendApi/ backend:8000
-    -> agent:8001     EC2 loopback/Docker 내부에서만 접근
-    -> postgres:5432  EC2 내부 컨테이너
-    -> redis:6379     EC2 내부 컨테이너
+따라서 문서에서 "Docker PostgreSQL과 RDS를 동시에 Backend가 사용한다"고 표현하지 않는다.
+최종 시연 DB 대상을 확인해야 하는 경우 Backend 컨테이너에서 `DATABASE_URL`의 hostname을 확인한다.
+
+```bash
+sudo docker exec kdt-backend \
+  python -c 'import os; from urllib.parse import urlsplit; print(urlsplit(os.environ["DATABASE_URL"]).hostname)'
 ```
 
-서버 안의 주요 파일:
+- `postgres` → Docker Compose PostgreSQL
+- `*.rds.amazonaws.com` → RDS PostgreSQL
 
-- `/opt/kdt-team3/app/docker-compose.yml`
-- `/opt/kdt-team3/app/docker-compose.ec2.yml`
-- `/opt/kdt-team3/app/nginx/ec2.conf`
-- `/opt/kdt-team3/app/.env`
-- `/opt/kdt-team3/app/frontend/dist`
+RDS를 더 이상 사용하지 않는 프로젝트 종료 단계에서는 Stop만으로 끝내지 않고 DB, snapshot, retained backup을 확인해
+보존 필요가 없는 비용 리소스를 삭제한다.
 
-`docker-compose.ec2.yml`과 `nginx/ec2.conf`는 레포에 포함한다. EC2에서는 nginx
-`80/tcp`를 공개한다. backend/agent/postgres/redis 포트는 `127.0.0.1` 바인딩이라
-외부에는 열리지 않는다.
+## 최종 시연 배포 구조
 
-현재 Backend 채팅은 `mock_agent_driver`로 UI/SSE 흐름을 만든다. 실제 LangGraph
-Agent 연결은 Backend가 Docker 내부의 `http://agent-service:8001`을 호출하고
-기존 SSE/webhook 흐름으로 결과를 중계하는 계약이 확정된 뒤 적용한다.
+```text
+Internet
+   |
+   v
+App EC2 (172.31.0.184)
+   |
+   +-- nginx :80
+   |     +-- /              -> frontend/dist
+   |     +-- /backendApi/   -> backend:8000
+   |
+   +-- backend:8000
+   |     +-- agent-service:8001
+   |     +-- mock-financial-service:8002
+   |     +-- postgres / RDS (DATABASE_URL에 따라 하나 선택)
+   |     +-- redis_cache / redis_stream
+   |
+   +-- agent:8001
+   |     +-- Ollama -> 172.31.15.220:11434
+   |
+   +-- mock-financial-service:8002
+   +-- postgres:5432
+   +-- redis_cache:6379
+   +-- redis_stream:6379
 
-EC2 재배포 전에 `/opt/kdt-team3/app/.env`에 `POSTGRES_PASSWORD`,
-`COMPOSE_DATABASE_URL`, `JWT_SECRET_KEY`, `AGENT_WEBHOOK_SECRET`을 설정해야 한다.
-EC2 Compose는 이 값이 비어 있으면 알려진 로컬 기본값으로 기동하지 않고 실패한다.
-`python3 scripts/validate_ec2_env.py --env-file .env`는 빈 값뿐 아니라 알려진
-placeholder, 짧은 secret, DB 비밀번호 불일치도 거부한다. 실제 EC2 `.env` 갱신은
-중지된 인스턴스를 다음 재배포 때 시작한 후 수행한다.
+Model EC2 (172.31.15.220)
+   +-- Ollama :11434
+       +-- exaone3.5:2.4b
+```
 
 ## 확인한 연결
 
-EC2를 켠 상태에서 아래를 확인했다.
+최종 시연 배포 과정에서 다음 항목을 확인했다.
 
 ```text
-GET /                  -> frontend 정적 페이지 응답
-GET /health            -> backend health 응답
-GET /nginx-health      -> ok
-GET /backendApi/       -> {"message":"안녕하세요!"}
-GET 127.0.0.1:8001/health -> Agent 내부 health 응답
+Nginx -> Backend health
+Backend -> Agent service URL 설정
+Backend -> Mock Financial Service HTTP 200
+App EC2 -> Model EC2 Ollama /api/tags 응답
+Agent container -> LLM_PROVIDER=ollama
+Agent container -> OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
-확인 명령:
+App EC2의 Agent 환경 확인:
 
 ```bash
-curl http://15.164.26.234/health
-curl http://15.164.26.234/nginx-health
-curl http://15.164.26.234/backendApi/
-curl http://127.0.0.1:8001/health
+sudo docker exec kdt-agent \
+  sh -c 'env | grep -E "^(LLM_PROVIDER|OLLAMA_BASE_URL|OLLAMA_MODEL|LLM_MODEL)="'
 ```
 
-## Ollama 정책
+Model EC2 Ollama 설치 모델 확인:
 
-Ollama는 로컬 개발/실험 전용이다.
+```bash
+curl -s http://172.31.15.220:11434/api/tags | python3 -m json.tool
+```
 
-- 로컬 머신에는 Ollama 서버와 모델을 둘 수 있다.
-- EC2에는 Ollama 서버나 모델을 설치하지 않는다.
-- 코드와 환경변수에는 Ollama provider를 포함한다.
-- EC2 데모는 `LLM_PROVIDER=openai` 또는 LLM 실패 시 규칙 기반 fallback 경로로 동작하게 둔다.
+## EC2 환경변수
 
-로컬 직접 실행:
+EC2의 `/opt/kdt-team3/app/.env`에는 실제 Secret을 Git에 커밋하지 않고 별도로 배치한다.
+Compose 배포 전 최소 다음 값을 검증한다.
 
 ```env
+POSTGRES_PASSWORD=
+COMPOSE_DATABASE_URL=
+JWT_SECRET_KEY=
+AGENT_WEBHOOK_SECRET=
+AGENT_SERVICE_TOKEN=
+BACKEND_SERVICE_TOKEN=
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_BASE_URL=http://172.31.15.220:11434
+OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
-로컬 Docker 컨테이너에서 호스트 Ollama 사용:
-
-```env
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=qwen2.5:3b
-```
-
-## 의도적으로 보류한 항목
-
-- 실제 Agent 제품 연결: Backend가 아직 `mock_agent_driver`를 사용하므로
-  Backend/AI 담당자가 내부 API와 SSE/webhook 계약을 확정할 때까지 구현하지 않는다.
-- readiness endpoint: `/health`는 liveness로 유지한다. DB/Redis 및 Agent provider
-  준비 상태 계약은 Backend/AI 담당자가 정한 뒤 `/ready`로 분리한다.
-- HTTPS: Fake Money와 테스트 계정만 사용하는 현재 데모에서는 HTTP 위험을
-  수용한다. 실제 사용자 인증을 공개하기 전에 CloudFront HTTPS, API/SSE 전달,
-  cache 비활성화와 origin 제한을 함께 검증한다.
-- 실제 EC2 `.env` 갱신: 비용 절감을 위해 인스턴스가 중지되어 있어 지금 시작하지
-  않는다. 다음 재배포 시작 시 secret 생성, 검증기 통과, Compose 기동 순서로 한다.
-
-## 비용 관리
-
-평소에는 EC2를 stop한다.
+검증:
 
 ```bash
-aws ec2 stop-instances \
-  --instance-ids i-07d75abca7ba7a423 \
-  --region ap-northeast-2 \
-  --profile kdt-team3-infra
-```
-
-EC2를 stop해도 남을 수 있는 비용:
-
-- EBS root volume: `vol-07152b79beb161283`
-- Elastic IP / public IPv4: `15.164.26.234`
-- RDS stopped 상태의 스토리지/백업/Secret
-
-## 시연 전 재기동
-
-```bash
-aws ec2 start-instances \
-  --instance-ids i-07d75abca7ba7a423 \
-  --region ap-northeast-2 \
-  --profile kdt-team3-infra
-```
-
-SSH 접속:
-
-```bash
-ssh -i ~/.ssh/kdt-team3-ec2 ec2-user@15.164.26.234
-```
-
-컨테이너 상태 확인:
-
-```bash
-cd /opt/kdt-team3/app
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml ps
-```
-
-필요 시 재빌드/재기동:
-
-```bash
-cd /opt/kdt-team3/app
-git pull
 python3 scripts/validate_ec2_env.py --env-file .env
-sudo docker run --rm -v "$PWD/frontend":/app -w /app node:24-alpine \
-  sh -c "npm ci && npm run build"
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml up -d --build
+sudo docker compose --env-file .env --profile agent \
+  -f docker-compose.yml -f docker-compose.ec2.yml config --quiet
 ```
 
-frontend만 다시 빌드해야 할 때:
+## Security boundary
 
-```bash
-cd /opt/kdt-team3/app/frontend
-sudo docker run --rm -v "$PWD":/app -w /app node:24-alpine sh -c "npm ci && npm run build"
-cd /opt/kdt-team3/app
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml up -d nginx
-```
+- Secret은 `.env` 또는 AWS/GitHub의 Secret 저장 기능으로 관리하고 Git에 커밋하지 않는다.
+- App EC2의 외부 공개 포트는 Nginx 진입점만 최소화한다.
+- Backend, Agent, PostgreSQL, Redis, Mock Financial Service는 인터넷에 직접 공개하지 않는다.
+- Model EC2는 Public API 서버로 사용하지 않고 App EC2에서 사설망으로 Ollama를 호출한다.
+- 실제 금융 정보가 아닌 Fake Money와 테스트 계정만 사용한다.
+- Red Team 결과에는 계좌번호·토큰·인증값 원문을 저장하지 않는다.
+- `0.0.0.0/0`의 광범위한 `All TCP`/SSH 규칙은 데모 종료 전후 정리한다.
+
+## Red Team / Guardrail 인계
+
+Red Team 자동화는 `security/redteam/`에서 관리한다.
+
+- 8개 Agent 업무 Workflow와 8개 보안 검사 방식을 분리해 관리한다.
+- Adaptive LLM이 공격 표현을 생성하고 deterministic rule이 최종 PASS/FAIL을 결정한다.
+- Reference Case는 실제 Tool 요청, Webhook, 상태, UI 계약을 비교한다.
+- `FAIL`은 보안 취약점 수와 동일하지 않으며 계약 불일치와 실제 경계 위반을 분리해 해석한다.
+- 실모델 캠페인에서 확인된 "정상 금융 요청 + 악성 지시"의 원자적 차단 실패는 Agent PR #60의 전역 Intent Gate로 보완됐다.
+- PR #60 회귀 확인: Intent Gate 35개 테스트, 핵심 복합공격/정상요청 8개, 전체 Agent 280개 테스트를 로컬에서 통과했다.
+
+관련 문서:
+
+- `security/redteam/README.md`
+- `security/redteam/WORKFLOW_COVERAGE.md`
+- `security/redteam/SCENARIO_DESIGN.md`
+- `agent/docs/guardrail-devsecops-handoff.md`
+
+## 프로젝트 종료 후 비용 정리
+
+프로젝트 종료 후 다음 리소스는 "중지"가 아니라 실제 과금 종료 여부를 확인한다.
+
+1. EC2 App / Model 인스턴스 종료(Terminate)
+2. EC2 종료 후 남은 EBS Volume 확인 및 불필요 볼륨 삭제
+3. Elastic IP disassociate 후 release
+4. RDS 삭제 및 manual snapshot / retained automated backup 확인
+5. NAT Gateway, Load Balancer, ECR, S3, CloudWatch Logs, AWS Backup recovery point 존재 여부 확인
+6. Cost Explorer에서 프로젝트 사용 기간을 `Service` 기준으로 집계
+
+VPC, Subnet, Route Table, Security Group, IAM Role 자체는 존재만으로 일반적인 시간당 compute 비용이 발생하는 리소스는
+아니지만, 다른 프로젝트와 공유하는지 확인한 뒤 정리한다.
 
 ## 팀 공유 요약
 
-- 시연 주소는 EC2가 켜져 있을 때 `http://15.164.26.234`다.
-- HTTPS 적용 전에는 Fake Money와 테스트 계정만 사용하고 실제 자격증명은
-  입력하지 않는다.
-- Agent `8001` API는 외부에 공개하지 않는다.
-- 평소에는 비용 절감을 위해 EC2를 꺼둔다.
-- EC2를 켜면 같은 Elastic IP로 다시 접근할 수 있다.
-- Ollama는 로컬 전용이며, EC2 배포 런타임에는 포함하지 않는다.
+- 최종 시연은 App EC2와 Model EC2를 분리한 구조로 검증했다.
+- 배포 Agent는 Ollama를 사용했고 최종 확인 모델은 `exaone3.5:2.4b`였다.
+- Backend에서 Mock Financial Service 내부 연결은 HTTP 200까지 확인했다.
+- Backend DB는 `DATABASE_URL` 하나로 선택되며 Docker PostgreSQL과 RDS를 동시에 사용하는 구조로 문서화하지 않는다.
+- Automated Red Team은 로컬 Fake Money/Testbed 경계에서만 실행한다.
+- 프로젝트 종료 후 AWS 문서는 재현용으로 남기되 실제 비용 리소스는 삭제·해제한다.
