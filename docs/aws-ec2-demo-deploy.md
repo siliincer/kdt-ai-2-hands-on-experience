@@ -1,17 +1,31 @@
 # AWS EC2 demo deploy
 
-이 문서는 시연용 EC2 배포 상태와 재기동 절차를 정리한다. Production 운영 구성이
-아니며, 팀 데모를 위해 단일 EC2에서 Docker Compose로 전체 스택을 실행한다.
+이 문서는 **최종 시연 당시** AWS EC2 배포 구조와 재현·검증 절차를 정리한다.
+Production 운영 구성이 아니며, Fake Money 기반 금융 AI Agent 데모를 위한 환경이다.
+프로젝트 종료 후 실제 AWS 리소스가 삭제되어도 본 문서는 최종 시연 아키텍처 기록으로 유지한다.
 
-## 현재 구조
+## 최종 구조
 
-- EC2: `i-07d75abca7ba7a423` (`t4g.small`, Amazon Linux 2023 ARM64)
+### App EC2
+
+- Private IP: `172.31.0.184`
 - Elastic IP: `15.164.26.234`
 - Security Group: `sg-01b29ee586e77a107`
-- SSH key: `~/.ssh/kdt-team3-ec2`
 - App path: `/opt/kdt-team3/app`
-- Compose override: `docker-compose.ec2.yml`
+- Compose: `docker-compose.yml` + `docker-compose.ec2.yml`
 - Nginx config: `nginx/ec2.conf`
+
+App EC2는 frontend, nginx, backend, agent, postgres, redis, mock-financial-service를 Docker Compose로 실행한다.
+
+### Model EC2
+
+- Private IP: `172.31.15.220`
+- Ollama port: `11434`
+- 최종 확인 모델: `exaone3.5:2.4b`
+- Ollama metadata: 약 `2.7B`, `Q4_K_M`
+- 확인 당시: 2 vCPU, 약 3.7 GiB RAM, NVIDIA GPU 없음
+
+Agent는 App EC2에서 사설망을 통해 Model EC2의 Ollama를 호출한다.
 
 ## Routing
 
@@ -21,152 +35,175 @@
 - `/backendApi/`: backend (`backend:8000`)
 - `/backendApi/api/v1/sse/`: backend SSE (buffering disabled)
 
-EC2에서는 `docker-compose.ec2.yml`로 nginx의 `80/tcp`를 공개한다. 기본 compose의
-backend/agent/postgres/redis 포트는 `127.0.0.1`에만 바인딩되어 외부에는 열리지
-않는다.
+EC2에서는 `docker-compose.ec2.yml`로 nginx의 `80/tcp`를 공개한다.
+Backend/Agent/PostgreSQL/Mock Financial Service는 외부 인터넷에 직접 공개하지 않는 것을 기본 경계로 한다.
 
-Agent API는 인증을 제공하는 backend를 우회하지 않도록 Nginx에서 외부로
-공개하지 않는다. 직접 상태 확인이 필요하면 EC2 내부에서
-`curl http://127.0.0.1:8001/health`를 실행한다.
+Backend 내부 서비스 연결:
 
-현재 Backend 채팅은 `mock_agent_driver`를 사용하므로 Agent 컨테이너는 제품 요청
-경로와 아직 연결되지 않았다. Backend/AI 담당자가 내부 Agent API와 SSE/webhook
-중계 계약을 확정하기 전까지 Agent는 독립 실행·검증 상태로 취급한다.
+```text
+backend -> http://agent-service:8001
+backend -> http://mock-financial-service:8002
+agent   -> http://172.31.15.220:11434 (Ollama)
+```
+
+Backend → Mock Financial Service는 실제 EC2 Compose 환경에서 HTTP 200 응답까지 확인했다.
+
+## Database boundary
+
+레포의 EC2 Compose에는 PostgreSQL 컨테이너가 포함되어 있고, AWS에는 별도 RDS PostgreSQL 리소스도 구성됐다.
+Backend는 둘을 동시에 사용하는 것이 아니라 `DATABASE_URL` 한 개의 대상만 사용한다.
+EC2 override에서는 `COMPOSE_DATABASE_URL` 값을 Backend의 `DATABASE_URL`로 전달한다.
+
+최종 실행 DB host 확인:
+
+```bash
+sudo docker exec kdt-backend \
+  python -c 'import os; from urllib.parse import urlsplit; print(urlsplit(os.environ["DATABASE_URL"]).hostname)'
+```
+
+- `postgres`이면 EC2 Compose PostgreSQL
+- RDS hostname이면 RDS PostgreSQL
+
+DB target을 확인하지 않은 상태에서 아키텍처 문서에 두 DB를 동시에 실사용 DB처럼 표시하지 않는다.
 
 ## Required EC2 environment
 
-EC2의 `/opt/kdt-team3/app/.env`에는 아래 값을 반드시 설정한다. 실제 값은 Git에
-커밋하지 않는다. 하나라도 비어 있으면 EC2 Compose는 기본 secret으로 실행하지
-않고 즉시 실패한다.
+EC2의 `/opt/kdt-team3/app/.env`에는 실제 값을 별도로 설정하고 Git에 커밋하지 않는다.
 
 ```env
 POSTGRES_PASSWORD=
-COMPOSE_DATABASE_URL=postgresql://app:<POSTGRES_PASSWORD>@postgres:5432/financial_agent
+COMPOSE_DATABASE_URL=
 JWT_SECRET_KEY=
 AGENT_WEBHOOK_SECRET=
+AGENT_SERVICE_TOKEN=
+BACKEND_SERVICE_TOKEN=
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://172.31.15.220:11434
+OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
-현재 Backend는 `DATABASE_URL`을 사용하므로 DB 비밀번호가 URL에도 들어간다.
-`POSTGRES_PASSWORD`와 URL의 비밀번호는 같은 값이어야 한다.
-
-각 secret은 `openssl rand -hex 32` 등으로 별도 생성하고, 재배포 전에 값 자체를
-출력하지 않는 검증기를 실행한다.
+배포 전 검증:
 
 ```bash
 python3 scripts/validate_ec2_env.py --env-file .env
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml \
-  config --quiet
+sudo docker compose --env-file .env --profile agent \
+  -f docker-compose.yml -f docker-compose.ec2.yml config --quiet
 ```
 
-현재 EC2는 비용 절감을 위해 중지한 상태이므로 실제 서버 `.env` 갱신은 다음
-재배포 시작 시 수행한다. 검증기 통과 전에는 서비스를 기동하지 않는다.
+## LLM / Ollama
 
-## HTTP demo boundary
+최종 AWS 데모는 Ollama를 로컬 전용으로 제한하지 않고 **별도 Model EC2**에 배치해 사용했다.
+App EC2 Agent 환경에서 다음 값을 확인했다.
 
-현재 Elastic IP 진입점은 HTTP 전용이다. HTTPS를 적용하기 전까지는 테스트
-계정과 Fake Money 데이터만 사용하고, 실제 비밀번호·토큰·개인정보를 입력하지
-않는다. 외부 시연에서 실제 인증 흐름을 사용하기 전에 CloudFront 기본
-도메인과 HTTPS를 적용한다.
-
-## LLM 요건 (라우팅 정확도 — 데모 정상 작동의 전제)
-
-워크플로우 라우팅(분류기 + 검증기)은 **충분히 강한 LLM을 전제**로 한다. 모델이
-약하면 정상 발화도 오분류되거나 되묻기(ambiguous)로 빠져 데모가 사실상 동작하지
-않는다. 아래는 데모 7개 발화(계좌목록/전체잔액/기간지출/별칭/타인송금/기본계좌/
-거래내역)를 모델별로 라우팅한 실측 결과다.
-
-| Provider / 모델 | 검증기 | 데모 라우팅 | 판정 |
-|-----------------|:---:|:---:|------|
-| OpenAI (배포 기본) / Vertex gemini | ON | 7/7 | 정상 |
-| Ollama qwen2.5:**7b** | ON | 7/7 | 정상 |
-| Ollama qwen2.5:**3b** | ON | **1/7** | 사실상 불가(정상 분류도 무조건 되묻기) |
-| Ollama qwen2.5:**3b** | OFF | 6/7 | 모호 발화 안전성 저하 감수 시만 |
-
-**두 가지 배포 필수 조건:**
-
-1. **`LLM_PROVIDER=openai`이면 `OPENAI_API_KEY`가 반드시 있어야 한다.** 라우팅은
-   LLM 실패 시 규칙 기반으로 강제 확정하지 않고 **안전 종료(status=failed)**한다
-   (금융 안전성). 즉 키가 없거나 LLM이 죽으면 모든 요청이 "처리 못함"이 된다.
-   과거의 "LLM 실패 시 규칙 fallback" 동작은 신형 라우팅에서 제거됐다.
-2. **Ollama로 데모하려면 최소 `qwen2.5:7b` 이상**을 쓴다. `qwen2.5:3b`는 분류기는
-   맞추지만 검증기가 정상 분류까지 무조건 reject해 못 쓴다. 부득이 저사양이면
-   `WORKFLOW_VERIFIER_ENABLED=false`로 검증기를 끄되(6/7 회복), 모호 발화를 강제
-   확정하는 안전성 저하를 감수해야 한다.
-
-자세한 지표·근거는 `docs/routing-refactor-benchmark.md`(검증기 모델 민감도) 참조.
-
-## Ollama policy
-
-Ollama는 로컬 개발 머신에서만 실행한다. EC2에는 Ollama 서버나 모델을 올리지 않는다.
-
-따라서 **EC2 데모는 `LLM_PROVIDER=openai`로 동작하며, `OPENAI_API_KEY` 설정이
-데모 작동의 전제다**(위 LLM 요건 참조). EC2에서 Ollama를 쓰려면 별도 Ollama
-서버와 7b+ 모델(약 4.7GB, RAM 8GB+ 권장)을 직접 올려야 하며, 이는 위 "EC2에
-Ollama를 올리지 않는다" 방침과 배치되므로 권장하지 않는다.
-
-배포 가능한 코드와 환경변수에는 Ollama provider를 포함한다
-(`LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`은 레포에 남긴다).
-
-로컬 Docker 컨테이너에서 호스트 Ollama를 사용할 때:
-
-```env
+```text
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_BASE_URL=http://172.31.15.220:11434
+OLLAMA_MODEL=exaone3.5:2.4b
 ```
 
-로컬에서 직접 실행할 때:
-
-```env
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:3b
-```
-
-## Restart for demo
-
-EC2는 비용 절감을 위해 평소에는 `stopped` 상태로 둔다.
+설치 모델 확인:
 
 ```bash
-aws ec2 start-instances \
-  --instance-ids i-07d75abca7ba7a423 \
-  --region ap-northeast-2 \
-  --profile kdt-team3-infra
+curl -s http://172.31.15.220:11434/api/tags | python3 -m json.tool
 ```
 
-기동 후 확인:
+메모리에 현재 로드된 모델 확인:
 
 ```bash
-ssh -i ~/.ssh/kdt-team3-ec2 ec2-user@15.164.26.234
+curl -s http://172.31.15.220:11434/api/ps | python3 -m json.tool
+```
+
+`/api/ps`의 `models: []`는 설치 모델이 없다는 의미가 아니라 현재 메모리에 로드된 모델이 없다는 의미다.
+설치 여부는 `/api/tags`로 확인한다.
+
+### 모델 크기 제약
+
+확인 당시 Model EC2는 약 3.7 GiB RAM, GPU 없음이었다.
+따라서 `exaone3.5:2.4b`보다 큰 7B급 모델은 단순 교체 전에 EC2 메모리/CPU 또는 GPU 사양을 먼저 검토해야 한다.
+로컬에서 더 큰 모델이 잘 동작하더라도 동일한 성능이 현재 Model EC2에서 보장되는 것은 아니다.
+
+## Deploy / restart
+
+레포를 갱신한 뒤 Compose 설정을 검증하고 필요한 서비스를 재빌드한다.
+
+```bash
 cd /opt/kdt-team3/app
-sudo docker compose --profile agent -f docker-compose.yml -f docker-compose.ec2.yml ps
+git pull --ff-only origin main
+
+python3 scripts/validate_ec2_env.py --env-file .env
+sudo docker compose --env-file .env --profile agent \
+  -f docker-compose.yml -f docker-compose.ec2.yml config --quiet
+
+sudo docker compose --env-file .env --profile agent \
+  -f docker-compose.yml -f docker-compose.ec2.yml \
+  up -d --build mock-financial-service backend agent nginx
+```
+
+상태 확인:
+
+```bash
+sudo docker compose --env-file .env --profile agent \
+  -f docker-compose.yml -f docker-compose.ec2.yml ps
+
+curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8001/health
+curl http://127.0.0.1:8002/openapi.json
 ```
 
-외부 검증:
+Backend → Mock Financial Service 확인:
 
 ```bash
-curl http://15.164.26.234/health
-curl http://15.164.26.234/nginx-health
-curl http://15.164.26.234/backendApi/
+sudo docker exec kdt-backend python - <<'PY'
+import os
+import urllib.request
+url = os.environ["MOCK_FINANCIAL_SERVICE_URL"].rstrip("/") + "/openapi.json"
+with urllib.request.urlopen(url, timeout=5) as response:
+    print(response.status)
+PY
 ```
 
-## Stop after demo
+## Security boundary
 
-```bash
-aws ec2 stop-instances \
-  --instance-ids i-07d75abca7ba7a423 \
-  --region ap-northeast-2 \
-  --profile kdt-team3-infra
+- Agent API는 Backend 인증·승인 경계를 우회하는 외부 공개 API로 사용하지 않는다.
+- Model EC2 Ollama는 인터넷 공개 endpoint가 아니라 App EC2 사설망에서만 사용한다.
+- SSH key는 로컬 개발자 머신에만 보관한다.
+- 실제 Secret은 `.env.example`에 넣지 않는다.
+- 실제 사용자 금융정보 대신 Fake Money/Test data만 사용한다.
+- Security Group의 `All TCP 0.0.0.0/0`, `SSH 0.0.0.0/0` 같은 광범위 규칙은 제거하고 필요한 source/port만 허용한다.
+
+## Red Team verification
+
+Red Team 자체는 AWS 외부 공격이 아니라 `security/redteam/`의 승인된 로컬 Fake Money/Testbed 경계에서 실행한다.
+최신 Agent를 기준으로 Adaptive LLM과 Reference Case를 사용해 Prompt Injection, 민감정보 공개 요구,
+승인·인증·소유권 우회, Tool Governance, 대화 상태·감사 로그·다중 턴 공격을 검증한다.
+
+실모델 캠페인에서 확인된 복합 요청 원자적 차단 문제는 Agent PR #60의 Intent Gate로 보완됐다.
+로컬 검증에서는 Intent Gate 35개, 핵심 복합 공격/정상 요청 8개, 전체 Agent 280개 테스트가 통과했다.
+
+## Project shutdown / cost
+
+프로젝트가 종료된 뒤에는 EC2를 단순 Stop 상태로 장기간 유지하지 않는다.
+아래 항목을 순서대로 확인한다.
+
+1. App EC2 / Model EC2 Terminate
+2. 남은 EBS `available` volume 삭제 여부 확인
+3. Elastic IP disassociate + release
+4. RDS 삭제, manual snapshot / retained backup 확인
+5. NAT Gateway / Load Balancer 존재 여부 확인
+6. ECR / S3 / CloudWatch Logs / AWS Backup recovery point 확인
+7. Cost Explorer에서 사용 기간 `Unblended cost`를 `Service` 기준으로 집계
+
+Cost Explorer 반영에는 지연이 있을 수 있으므로 최종 삭제 직후 금액과 다음 날 금액이 다를 수 있다.
+
+## Final demo summary
+
+```text
+Internet
+   -> App EC2 / Nginx
+       -> Backend
+           -> Agent
+               -> Model EC2 / Ollama / exaone3.5:2.4b
+           -> Mock Financial Service
+           -> PostgreSQL target selected by DATABASE_URL
+           -> Redis cache / stream
 ```
-
-## Cost notes
-
-EC2를 stop하면 인스턴스 실행 비용은 멈춘다. 남을 수 있는 비용은 다음과 같다.
-
-- EBS root volume: `vol-07152b79beb161283`
-- Elastic IP / public IPv4: `15.164.26.234`
-- RDS `kdt-team3-postgres` stopped 상태의 스토리지/백업/Secret
-
-RDS는 `2026-07-15 10:45:02 KST`쯤 자동 재시작 예정이므로, 사용하지 않으면 그 전에
-다시 stop하거나 삭제 여부를 결정한다.
