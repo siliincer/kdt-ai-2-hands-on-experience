@@ -20,15 +20,23 @@ from ..utils.is_dev import is_dev
 from .load_environment_var import settings
 from .request_context import get_request_id
 
-_LOG_FORMAT = "%(asctime)s %(levelname)-8s [%(name)s] [req=%(request_id)s] %(message)s"
+_LOG_FORMAT = "%(asctime)s %(levelname)-8s [%(name)s] [req=%(request_id)s] [trace=%(trace_id)s] %(message)s"
 _APP_LOG_FILENAME = "app.log"
 
 
 class RequestIdFilter(logging.Filter):
-    """현재 요청 스코프의 X-Request-Id 를 레코드에 주입한다(없으면 '-')."""
+    """요청 스코프의 X-Request-Id 와 현재 스팬의 trace_id 를 레코드에 주입한다(없으면 '-').
+
+    trace_id 를 함께 남기면 로그 한 줄에서 Tempo 트레이스로 바로 찾아갈 수 있다.
+    OTel 이 꺼져 있거나 미설치면 '-' 가 되어 기존 동작과 같다.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = get_request_id() or "-"
+        # 순환 import 방지를 위해 호출 시점에 가져온다(observability → settings → 이 모듈).
+        from .observability import get_trace_id
+
+        record.trace_id = get_trace_id() or "-"
         return True
 
 

@@ -29,6 +29,8 @@ backend = { workspace = true }
 financial-service = { workspace = true }
 
 [dependency-groups]
+# 분산추적(선택). 설치: uv sync --group otel  /  해제: uv sync
+otel = ["backend[otel]"]
 dev = [
     "deptry>=0.25.1",
     "ipykernel>=7.3.0",

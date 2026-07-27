@@ -24,6 +24,24 @@ class Settings(BaseSettings):
         description="로테이션 백업 파일 개수(~7일치 보존 근사).",
     )
 
+    # 분산추적(OpenTelemetry → Tempo). 기본 꺼짐 — 켤 때만 계측이 붙는다.
+    OTEL_ENABLED: bool = Field(
+        default=False,
+        description="OpenTelemetry 트레이싱 활성화. false 면 완전 no-op.",
+    )
+    OTEL_SERVICE_NAME: str = Field(
+        default="backend-gateway",
+        description="트레이스에 기록할 서비스 이름(Tempo/Grafana 에서 이 이름으로 검색).",
+    )
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = Field(
+        default="http://localhost:4317",
+        description="OTLP gRPC 수집 엔드포인트(dev: 호스트에서 Tempo 컨테이너 포트).",
+    )
+    OTEL_SAMPLE_RATIO: float = Field(
+        default=1.0,
+        description="운영 샘플링 비율(0.0~1.0). 개발은 항상 전량 수집.",
+    )
+
     # Database Configuration
     POSTGRES_DB: str = Field(default="financial_agent")
     POSTGRES_USER: str = Field(default="myuser")

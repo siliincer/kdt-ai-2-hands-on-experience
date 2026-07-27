@@ -1,0 +1,20 @@
+# Prometheus 스크레이프 설정.
+# 근거: https://prometheus.io/docs/prometheus/latest/getting_started/
+#
+# backend 는 이미 /metrics 를 노출한다(core/config.py 의 Instrumentator → main.py:configure_app).
+# dev 에서 backend 는 호스트에서 뜨므로 컨테이너에서는 host.docker.internal 로 접근한다
+# (docker-compose.dev.yml 의 extra_hosts 로 리눅스에서도 동작하게 매핑).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "backend-gateway"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
