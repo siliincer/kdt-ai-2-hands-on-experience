@@ -17,10 +17,12 @@ Gateway → AI Agent → Mock Financial Service** 가 협력해 처리하는 **�
 - **기본 출금 계좌 / 별칭 설정**, 슬래시 명령 `/add_account <은행명>` 으로 계좌 추가
 - **장애 복구 인프라** — 외부 호출 재시도(Tenacity) + 실패 시 DLQ(Redis Stream), 멱등키로 중복 이체 방지
 - **관측(Observability)** — OpenTelemetry 분산추적(Tempo) + 메트릭(Prometheus) + 대시보드(Grafana)
-- **보안 / DevSecOps** — 서비스 간 토큰 인증, PII 마스킹, GitHub Actions CI, gitleaks·Trivy·CodeQL 검사,
-  Docker Compose 기반 통합 실행과 AWS EC2 시연 배포
-- **Automated Red Team** — Prompt Injection, 승인·인증·소유권 우회, 데이터 기밀성, Tool Governance,
-  대화 상태·감사 로그·다단계 공격을 Adaptive LLM 입력과 Agent Reference Case로 검증
+- **보안** — 보안 응답 헤더(secure), 서비스 간 토큰 인증, PII 마스킹, 전역 Intent Gate,
+  gitleaks/Trivy/CodeQL 검사
+- **보안 회귀 검증** — Adaptive LLM 기반 Red Team으로 Prompt Injection, 승인·인증·소유권 우회,
+  데이터 기밀성, Tool Governance, 대화 상태·감사 로그·다단계 공격을 검증
+- **배포** — Docker Compose 기반 통합 실행과 AWS EC2 시연 환경을 구성하고,
+  App EC2의 Agent가 사설망을 통해 Model EC2의 Ollama를 호출하도록 구성
 
 <!-- 데모 화면/GIF: 준비되면 docs/assets/ 에 넣고 아래 주석을 해제하세요.
 ![데모](docs/assets/demo.gif)
@@ -35,8 +37,7 @@ Gateway → AI Agent → Mock Financial Service** 가 협력해 처리하는 **�
 | **AI Agent** | Python 3.11, LangGraph, LangChain(OpenAI·Vertex AI·Ollama), FastAPI |
 | **Mock Financial Service** | Python 3.11, FastAPI, SQLAlchemy, SQLite (복식부기 원장) |
 | **데이터/인프라** | PostgreSQL 16, Redis 7(cache·stream), nginx 1.27, Docker Compose, AWS EC2, uv workspace |
-| **DevSecOps / Security** | GitHub Actions, gitleaks, Trivy, CodeQL, 서비스 간 토큰, 환경변수/Secret 분리 |
-| **Red Team** | Adaptive LLM 공격 생성, Reference Case, deterministic evaluator, JSON/Markdown report |
+| **보안/검증** | GitHub Actions, gitleaks, Trivy, CodeQL, Adaptive LLM Red Team, Reference Case |
 | **관측** | OpenTelemetry, Grafana Tempo, Prometheus, Grafana |
 
 서비스 포트: Backend `8000` · Agent `8001` · Mock Financial `8002` · Frontend(dev) `5173` · nginx `8080`.
@@ -59,11 +60,11 @@ cp .env.example .env          # 환경변수 템플릿 복사(실제 키/토큰�
 ### 2. 한 번에 실행 (Docker Compose)
 
 ```bash
-docker compose up -d --build  # postgres·redis·backend·agent·mock-financial·nginx
+docker compose up -d --build  # postgres·redis·backend·mock-financial·nginx
 docker compose ps
 ```
 
-Agent profile을 명시적으로 포함하는 통합 실행은 다음과 같이 사용합니다.
+Agent까지 포함해 실행할 때는 profile을 활성화합니다.
 
 ```bash
 docker compose --profile agent up -d --build
@@ -83,11 +84,8 @@ docker compose -f docker-compose.dev.yml up -d   # postgres, redis (+관측 스�
 - Backend Gateway → [`backend/README.md`](backend/README.md)
 - AI Agent → [`agent/README.md`](agent/README.md)
 - Mock Financial Service → [`mock-financial-service/README.md`](mock-financial-service/README.md)
-- Automated Red Team → [`security/redteam/README.md`](security/redteam/README.md)
-- Security 문서 인덱스 → [`security/README.md`](security/README.md)
+- Red Team 보안 검증 → [`security/redteam/README.md`](security/redteam/README.md)
 - 관측(트레이스/메트릭/대시보드) → [`observability/README.md`](observability/README.md)
-- AWS 시연 배포 → [`docs/aws-ec2-demo-deploy.md`](docs/aws-ec2-demo-deploy.md)
-- DevSecOps 정리 → [`docs/devsecops-handoff.md`](docs/devsecops-handoff.md)
 
 ## 디렉터리 구조
 
@@ -98,10 +96,10 @@ docker compose -f docker-compose.dev.yml up -d   # postgres, redis (+관측 스�
 ├── agent/                    # LangGraph 금융 Agent
 ├── mock-financial-service/   # 계정계(원장) + 정보계(analytics)
 ├── security/
-│   └── redteam/              # Adaptive LLM 기반 자동 Red Team / 보안 회귀
+│   └── redteam/              # Adaptive LLM 기반 보안 회귀 / Reference Case
 ├── observability/            # OpenTelemetry / Tempo / Prometheus / Grafana 설정
 ├── nginx/                    # 리버스 프록시 설정
-├── docs/                     # 보안 규칙·배포·운영 가이드
+├── docs/                     # 보안 규칙·배포·운영 가이드 등 문서
 ├── AI_CONTEXT/               # 세션 로그·트러블슈팅 정리
 ├── docker-compose.yml        # 전체 서비스
 ├── docker-compose.dev.yml    # 개발용 인프라(+관측)
@@ -121,4 +119,8 @@ docker compose -f docker-compose.dev.yml up -d   # postgres, redis (+관측 스�
 ## 문서
 
 - [`AGENTS.md`](AGENTS.md) · [`CLAUDE.md`](CLAUDE.md) — 저장소 규칙 / AI 코딩 가이드
-- [`docs/`](docs/README.md) — 배포·DevSecOps·보안·운영 문서 인덱스
+- [`docs/`](docs/README.md) — 보안 규칙, 배포·운영 가이드
+- [`docs/aws-ec2-demo-deploy.md`](docs/aws-ec2-demo-deploy.md) — 최종 AWS EC2 시연 구조와 검증 절차
+- [`docs/devsecops-handoff.md`](docs/devsecops-handoff.md) — 최종 배포·연결·보안 상태 정리
+- [`security/redteam/README.md`](security/redteam/README.md) — Automated Red Team 실행·판정·리포트 가이드
+- [`security/redteam/WORKFLOW_COVERAGE.md`](security/redteam/WORKFLOW_COVERAGE.md) — Workflow별 보안 검증 커버리지
