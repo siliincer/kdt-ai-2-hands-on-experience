@@ -39,12 +39,13 @@ cells have fixture evidence; 19 read cells also pass the global entry.
 - `pyproject.toml`
 - `uv.lock`
 
-````bash
+```bash
 git log -1 --format=%H -- \
   agent/src \
   agent/pyproject.toml \
   pyproject.toml \
   uv.lock
+```
 
 `runner/agent_reference.py` and `test_agent_reference_integration.py` replace the
 temporary preview script with a repository-owned regression path. The latest Agent
@@ -117,7 +118,7 @@ and this consumer in the same integration window. Run:
 ```bash
 uv run pytest security/redteam/tests/test_agent_integration.py -q
 uv run pytest security/redteam/tests -q
-````
+```
 
 The current supported contract is config version `1`, scenario version `1`, and
 scenario type `adaptive_attack`.

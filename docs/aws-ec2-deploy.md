@@ -1,5 +1,8 @@
 # AWS EC2 Deploy
 
+> **Archive / 방향성 초안**: 최종 시연 배포의 실제 구조와 검증 결과는
+> [`docs/aws-ec2-demo-deploy.md`](./aws-ec2-demo-deploy.md)를 기준으로 한다.
+>
 > 현재 실제 시연 배포 상태와 재기동 절차는
 > [`docs/aws-ec2-demo-deploy.md`](./aws-ec2-demo-deploy.md)를 기준으로 한다.
 > 이 문서는 ECR/자동 배포까지 확장할 때 참고할 방향성 초안이다.
