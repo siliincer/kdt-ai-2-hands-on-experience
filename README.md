@@ -1,5 +1,7 @@
 # AI Financial Copilot Sandbox
 
+[현준수 담당 범위 · DevSecOps·레드팀](docs/JUNSOO_CONTRIBUTION.md)
+
 사용자의 자연어 금융 요청("박서연에게 5만원 보내줘", "이번 달 소비 분석해줘")을 받아 **Backend
 Gateway → AI Agent → Mock Financial Service** 가 협력해 처리하는 **가짜 돈(Fake Money) 금융 AI Agent
 플랫폼**입니다. 실제 금융망 없이 생성형 AI 금융 에이전트의 대화형 UX·HITL 승인·안전장치를 실험하기 위해
